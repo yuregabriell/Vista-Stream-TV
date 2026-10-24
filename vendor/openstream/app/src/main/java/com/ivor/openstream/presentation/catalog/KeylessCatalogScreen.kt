@@ -2,6 +2,11 @@ package com.ivor.openstream.presentation.catalog
 
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -59,7 +64,17 @@ fun KeylessCatalogScreen(
     val player = state.playing
 
     if (player != null) {
-        KeylessOnlinePlayer(player, onClose = viewModel::closePlayer)
+        // Full-window dialog lives above the parent navigation scaffold. The Home
+        // bottom bar and its tabs can no longer cover the seek bar or player buttons.
+        Dialog(
+            onDismissRequest = viewModel::closePlayer,
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            KeylessOnlinePlayer(player, onClose = viewModel::closePlayer)
+        }
         return
     }
     if (chosen != null) {
@@ -71,6 +86,9 @@ fun KeylessCatalogScreen(
             servers = state.servers,
             resolving = state.resolving,
             resolved = state.resolveFinished,
+            providersChecked = state.resolvedProviders,
+            providersTotal = state.totalProviders,
+            failedProviders = state.failedProviders,
             onBack = viewModel::closeDetails,
             onEpisode = viewModel::chooseEpisode,
             onResolve = viewModel::findStreams,
@@ -177,6 +195,9 @@ private fun KeylessTitleDetails(
     servers: List<VideoServer>,
     resolving: Boolean,
     resolved: Boolean,
+    providersChecked: Int,
+    providersTotal: Int,
+    failedProviders: List<String>,
     onBack: () -> Unit,
     onEpisode: (Int, Int) -> Unit,
     onResolve: () -> Unit,
@@ -228,9 +249,17 @@ private fun KeylessTitleDetails(
             Text(if (resolving) " A procurar streams online..." else " Encontrar fontes online")
         }
         if (resolving) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if (resolving || resolved) {
+            Text(
+                "Fontes consultadas: $providersChecked / $providersTotal • Streams encontrados: ${servers.size}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         if (resolved && servers.isEmpty()) {
             Text(
                 "Nenhuma extensão instalada ofereceu um vídeo HTTP compatível para este título. " +
+                "Algumas fontes exigem um ID TMDB/IMDb válido; sem ele não apresentamos links fictícios. " +
                 "Adiciona uma fonte Stremio com streams diretos, ou escolhe outro título.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -247,8 +276,14 @@ private fun KeylessTitleDetails(
 private fun KeylessOnlinePlayer(server: VideoServer, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current
+    var status by remember(server.id) { mutableIntStateOf(Player.STATE_IDLE) }
+    var errorMessage by remember(server.id) { mutableStateOf<String?>(null) }
+    var attempted by remember(server.id) { mutableIntStateOf(0) }
     val player = remember(server.id, server.url) {
         val httpFactory = DefaultHttpDataSource.Factory()
+            .setConnectTimeoutMs(15_000)
+            .setReadTimeoutMs(20_000)
+            .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(server.headers)
         val dataSource = DefaultDataSource.Factory(context, httpFactory)
         ExoPlayer.Builder(context)
@@ -272,7 +307,8 @@ private fun KeylessOnlinePlayer(server: VideoServer, onClose: () -> Unit) {
                             .build()
                     }.getOrNull()
                 }
-                val media = MediaItem.Builder().setUri(server.url)
+                val media = MediaItem.Builder()
+                    .setUri(server.url)
                     .setSubtitleConfigurations(subtitles)
                     .apply { if (mime != null) setMimeType(mime) }
                     .build()
@@ -281,17 +317,96 @@ private fun KeylessOnlinePlayer(server: VideoServer, onClose: () -> Unit) {
                     .setPreferredAudioLanguages("pt-BR", "pt-PT", "pt")
                     .setPreferredTextLanguages("pt-BR", "pt-PT", "pt")
                     .build()
-                prepare()
-                playWhenReady = true
             }
     }
-    DisposableEffect(player) { onDispose { player.release() } }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(next: Int) {
+                status = next
+                if (next == Player.STATE_READY) errorMessage = null
+            }
+            override fun onPlayerError(error: PlaybackException) {
+                errorMessage = when (error.errorCode) {
+                    PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
+                        "A fonte rejeitou o pedido HTTP. O link pode ter expirado."
+                    PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE ->
+                        "A fonte devolveu uma página web, não um vídeo reproduzível."
+                    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+                    PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ->
+                        "Não foi possível receber o vídeo da fonte."
+                    PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED ->
+                        "O formato devolvido pela fonte está inválido."
+                    else -> "Erro no vídeo: " + error.errorCodeName
+                }
+            }
+        }
+        player.addListener(listener)
+        player.prepare()
+        player.playWhenReady = true
+        onDispose {
+            player.removeListener(listener)
+            player.release()
+        }
+    }
+    LaunchedEffect(player, status, attempted) {
+        if (status == Player.STATE_BUFFERING || status == Player.STATE_IDLE) {
+            delay(20_000)
+            if (status != Player.STATE_READY && errorMessage == null) {
+                errorMessage = "Esta fonte não começou a reproduzir. Experimenta outra fonte."
+            }
+        }
+    }
     Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Black)) {
         AndroidView(
-            factory = { PlayerView(it).apply { this.player = player; useController = true } },
-            modifier = Modifier.fillMaxSize()
+            factory = {
+                PlayerView(it).apply {
+                    this.player = player
+                    useController = true
+                    controllerShowTimeoutMs = 3500
+                }
+            },
+            modifier = Modifier.fillMaxSize(),
+            update = { view -> if (view.player !== player) view.player = player }
         )
-        FilledTonalIconButton(onClick = onClose, modifier = Modifier.align(Alignment.TopStart).padding(12.dp)) {
+        if (status == Player.STATE_BUFFERING && errorMessage == null) {
+            Column(
+                Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                CircularProgressIndicator()
+                Spacer(Modifier.height(12.dp))
+                Text("A carregar vídeo...", color = androidx.compose.ui.graphics.Color.White)
+            }
+        }
+        errorMessage?.let { problem ->
+            Column(
+                modifier = Modifier.align(Alignment.Center)
+                    .padding(24.dp)
+                    .background(
+                        androidx.compose.ui.graphics.Color(0xEF10121A),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)
+                    )
+                    .padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("Não foi possível reproduzir", color = androidx.compose.ui.graphics.Color.White,
+                    style = MaterialTheme.typography.titleLarge)
+                Text(problem, color = androidx.compose.ui.graphics.Color.White)
+                Button(onClick = {
+                    errorMessage = null
+                    status = Player.STATE_BUFFERING
+                    attempted++
+                    player.prepare()
+                    player.playWhenReady = true
+                }) { Text("Tentar novamente") }
+                OutlinedButton(onClick = onClose) { Text("Escolher outra fonte") }
+            }
+        }
+        FilledTonalIconButton(
+            onClick = onClose,
+            modifier = Modifier.align(Alignment.TopStart).padding(24.dp)
+        ) {
             Icon(Icons.Default.ArrowBack, contentDescription = "Fechar vídeo")
         }
     }
