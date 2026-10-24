@@ -131,7 +131,9 @@ class KeylessCatalogViewModel @Inject constructor(
                     season = _state.value.season,
                     episode = _state.value.episode
                 )
-                streams.resolveServers(identity).collect { resolution ->
+                // On explicit "Encontrar fontes online", search *all* enabled compatible
+                // providers instead of stopping early when the first link appears.
+                streams.resolveServers(identity, includeFallbacks = true).collect { resolution ->
                     if (_state.value.selected?.sourceId == item.sourceId) {
                         _state.value = _state.value.copy(
                             servers = resolution.servers.filter {
