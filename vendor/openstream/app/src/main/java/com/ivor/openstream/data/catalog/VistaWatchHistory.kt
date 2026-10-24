@@ -23,6 +23,12 @@ class VistaWatchHistory @Inject constructor(@ApplicationContext context: Context
         )
     }
 
+    fun lastEpisode(id: String): Pair<Int, Int>? {
+        val season = prefs.getInt("$id:lastSeason", 0)
+        val episode = prefs.getInt("$id:lastEpisode", 0)
+        return if (season > 0 && episode > 0) season to episode else null
+    }
+
     fun write(id: String, season: Int, episode: Int, positionMs: Long, durationMs: Long) {
         if (positionMs < 10_000L || durationMs <= 0L) return
         val position = if (positionMs >= durationMs * 95 / 100) 0L else positionMs
@@ -30,6 +36,8 @@ class VistaWatchHistory @Inject constructor(@ApplicationContext context: Context
         prefs.edit()
             .putLong("$key:position", position)
             .putLong("$key:duration", durationMs)
+            .putInt("$id:lastSeason", season)
+            .putInt("$id:lastEpisode", episode)
             .apply()
     }
 }

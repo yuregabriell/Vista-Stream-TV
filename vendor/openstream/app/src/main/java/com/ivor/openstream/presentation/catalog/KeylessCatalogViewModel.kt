@@ -89,10 +89,14 @@ class KeylessCatalogViewModel @Inject constructor(
     fun select(item: KeylessTitle) {
         resolutionJob?.cancel()
         episodeJob?.cancel()
+        val last = history.lastEpisode(item.sourceId)
+        val startSeason = last?.first ?: 1
+        val startEpisode = last?.second ?: 1
         _state.value = _state.value.copy(
-            selected = item, episodes = emptyList(), season = 1, episode = 1,
+            selected = item, episodes = emptyList(), season = startSeason, episode = startEpisode,
             resolving = true, servers = emptyList(), playing = null, resolveFinished = false,
-            savedProgressMs = history.read(item.sourceId, 1, 1).takeIf { it.canResume }?.positionMs ?: 0L,
+            savedProgressMs = history.read(item.sourceId, startSeason, startEpisode)
+                .takeIf { it.canResume }?.positionMs ?: 0L,
             resumePositionMs = 0L,
             resolvedProviders = 0, totalProviders = 0, failedProviders = emptyList()
         )
