@@ -22,6 +22,6 @@ data class GithubAssetDto(
 )
 
 interface GithubApi {
-    @GET("repos/yuregabriell/Vista-Stream-TV/releases/latest")
-    suspend fun getLatestRelease(): GithubReleaseDto
+    @GET("repos/yuregabriell/Vista-Stream-TV/releases?per_page=100")
+    suspend fun getReleases(): List<GithubReleaseDto>
 }
