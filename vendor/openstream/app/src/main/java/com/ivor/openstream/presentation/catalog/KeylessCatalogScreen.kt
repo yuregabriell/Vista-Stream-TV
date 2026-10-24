@@ -7,6 +7,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Brush
@@ -15,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -42,6 +44,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -81,9 +84,10 @@ fun KeylessCatalogScreen(
     var discover by rememberSaveable { mutableStateOf(false) }
     var genre by rememberSaveable { mutableStateOf("") }
     var year by rememberSaveable { mutableStateOf<Int?>(null) }
-    var genreMenu by remember { mutableStateOf(false) }
-    var yearMenu by remember { mutableStateOf(false) }
+    var showFilterPanel by remember { mutableStateOf(false) }
+    var showSortPanel by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     var listOrigin by remember { mutableStateOf(Offset.Zero) }
     var searchBounds by remember { mutableStateOf(Rect.Zero) }
     var currentUtcDay by remember { mutableLongStateOf(System.currentTimeMillis() / 86_400_000L) }
@@ -179,20 +183,58 @@ fun KeylessCatalogScreen(
     }
     val gridColumns = if (wideLayout) 4 else 2
     val browseRows = remember(browseItems, gridColumns) { browseItems.chunked(gridColumns) }
-    val genreOptions = if (category == "anime") listOf(
-        "Action" to "Ação", "Adventure" to "Aventura", "Comedy" to "Comédia",
-        "Drama" to "Drama", "Fantasy" to "Fantasia", "Mystery" to "Mistério",
-        "Romance" to "Romance", "Sci-Fi" to "Ficção científica",
-        "Slice of Life" to "Vida quotidiana", "Sports" to "Desporto",
-        "Supernatural" to "Sobrenatural", "Horror" to "Terror"
-    ) else listOf(
-        "Action" to "Ação", "Adventure" to "Aventura", "Animation" to "Animação",
-        "Comedy" to "Comédia", "Crime" to "Crime", "Documentary" to "Documentário",
-        "Drama" to "Drama", "Family" to "Família", "Fantasy" to "Fantasia",
-        "Horror" to "Terror", "Mystery" to "Mistério", "Romance" to "Romance",
-        "Sci-Fi" to "Ficção científica", "Thriller" to "Suspense", "War" to "Guerra"
-    )
+    val catalogListState = rememberLazyListState()
+    if (browsing) {
+        BackHandler(enabled = !searchFirst) {
+            category = "all"
+            discover = false
+            query = ""
+            viewModel.search("")
+            genre = ""
+            year = null
+            sort = "popular"
+            focusManager.clearFocus()
+            keyboard?.hide()
+        }
+    }
+    if (showFilterPanel && browsing) {
+        VistaBrowseFiltersDialog(
+            type = browseType, genre = genre, year = year,
+            onDismiss = { showFilterPanel = false },
+            onApply = { nextType, nextGenre, nextYear ->
+                category = nextType
+                discover = true
+                genre = nextGenre
+                year = nextYear
+                showFilterPanel = false
+            }
+        )
+    }
+    if (showSortPanel && browsing) {
+        VistaBrowseSortDialog(
+            selected = sort,
+            onDismiss = { showSortPanel = false },
+            onApply = { next -> sort = next; showSortPanel = false }
+        )
+    }
+    // Request the next page only near the end of the actual scroll viewport.
+    // This avoids fetching the entire remote catalog immediately on first render.
+    LaunchedEffect(browsing, state.browsePage, state.browseLoading, state.browseHasMore,
+        state.browseError, state.browseType, state.browseGenre, state.browseYear,
+        state.browseQuery) {
+        if (browsing && !state.browseLoading && state.browseHasMore &&
+            state.browseError == null && state.browseType.isNotBlank()) {
+            snapshotFlow {
+                val layout = catalogListState.layoutInfo
+                val last = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
+                last to layout.totalItemsCount
+            }.first { (last, total) -> total > 0 && last >= total - 4 }
+            viewModel.loadMore()
+        }
+    }
+
     LazyColumn(
+        state = catalogListState,
         modifier = modifier.fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
@@ -204,6 +246,7 @@ fun KeylessCatalogScreen(
                     )
                     if (!searchBounds.contains(down.position + listOrigin)) {
                         focusManager.clearFocus()
+                        keyboard?.hide()
                     }
                 }
             },
@@ -252,10 +295,10 @@ fun KeylessCatalogScreen(
                     imeAction = androidx.compose.ui.text.input.ImeAction.Search
                 ),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                    onSearch = { viewModel.search(query); focusManager.clearFocus(); discover = false }
+                    onSearch = { viewModel.search(query); focusManager.clearFocus(); keyboard?.hide(); discover = false }
                 ),
                 trailingIcon = {
-                    TextButton(onClick = { viewModel.search(query); focusManager.clearFocus(); discover = false }, enabled = query.isNotBlank()) {
+                    TextButton(onClick = { viewModel.search(query); focusManager.clearFocus(); keyboard?.hide(); discover = false }, enabled = query.isNotBlank()) {
                         Text("Buscar")
                     }
                 }
@@ -320,63 +363,32 @@ fun KeylessCatalogScreen(
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Box(Modifier.weight(1f)) {
-                            OutlinedButton(
-                                onClick = { genreMenu = true },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(genreOptions.firstOrNull { it.first == genre }?.second ?: "Género",
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(" ▾")
-                            }
-                            DropdownMenu(
-                                expanded = genreMenu,
-                                onDismissRequest = { genreMenu = false },
-                                modifier = Modifier.heightIn(max = 360.dp)
-                            ) {
-                                DropdownMenuItem(text = { Text("Todos os géneros") }, onClick = {
-                                    genre = ""; genreMenu = false
-                                })
-                                genreOptions.forEach { (value, label) ->
-                                    DropdownMenuItem(text = { Text(label) }, onClick = {
-                                        genre = value; genreMenu = false
-                                    })
-                                }
-                            }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showFilterPanel = true; focusManager.clearFocus(); keyboard?.hide() },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(13.dp)
+                        ) {
+                            Text("Filtros" + if (genre.isNotBlank() || year != null) " •" else "")
                         }
-                        Box(Modifier.weight(1f)) {
-                            OutlinedButton(
-                                onClick = { yearMenu = true },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(year?.toString() ?: "Ano")
-                                Text(" ▾")
-                            }
-                            DropdownMenu(
-                                expanded = yearMenu,
-                                onDismissRequest = { yearMenu = false },
-                                modifier = Modifier.heightIn(max = 360.dp)
-                            ) {
-                                DropdownMenuItem(text = { Text("Todos os anos") }, onClick = {
-                                    year = null; yearMenu = false
-                                })
-                                (2026 downTo 1980).forEach { value ->
-                                    DropdownMenuItem(text = { Text(value.toString()) }, onClick = {
-                                        year = value; yearMenu = false
-                                    })
-                                }
-                            }
+                        OutlinedButton(
+                            onClick = { showSortPanel = true; focusManager.clearFocus(); keyboard?.hide() },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(13.dp)
+                        ) {
+                            Text("Ordenar")
                         }
                     }
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(listOf("popular" to "Populares", "recent" to "Recentes", "alphabetical" to "A–Z")) { (id, label) ->
-                            FilterChip(
-                                selected = sort == id,
-                                onClick = { sort = id },
-                                label = { Text(label) }
-                            )
-                        }
+                    if (genre.isNotBlank() || year != null) {
+                        Text(
+                            listOfNotNull(genre.takeIf { it.isNotBlank() }, year?.toString())
+                                .joinToString("  •  "),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelMedium
+                        )
                     }
                 }
             }
@@ -598,16 +610,14 @@ fun KeylessCatalogScreen(
             }
             if (state.browseHasMore || state.browseLoading) {
                 item(key = "browse-more") {
-                    LaunchedEffect(state.browsePage, state.browseLoading, state.browseHasMore,
-                        state.browseType, state.browseGenre, state.browseYear, state.browseQuery) {
-                        if (!state.browseLoading && state.browseHasMore) viewModel.loadMore()
-                    }
                     Column(
                         Modifier.fillMaxWidth().padding(18.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         if (state.browseLoading) CircularProgressIndicator()
-                        else Text("Mais títulos", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        else OutlinedButton(onClick = viewModel::loadMore) {
+                            Text("Carregar mais títulos")
+                        }
                     }
                 }
             } else if (browseItems.isEmpty() && !state.loading) {
