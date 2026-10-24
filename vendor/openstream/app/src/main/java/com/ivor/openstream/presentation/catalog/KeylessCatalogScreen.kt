@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -113,91 +115,297 @@ fun KeylessCatalogScreen(
         return
     }
 
-    Column(modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(horizontal = 16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Vista Stream", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-            IconButton(onClick = viewModel::refresh) {
-                Icon(Icons.Default.Refresh, contentDescription = "Atualizar catálogo")
-            }
-            IconButton(onClick = onOpenSources) {
-                Icon(Icons.Default.Storefront, contentDescription = "Instalar fontes Stremio")
-            }
-        }
-        OutlinedTextField(
-            value = query, onValueChange = { query = it },
-            placeholder = { Text("Filmes, séries e animes") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            singleLine = true, modifier = Modifier.fillMaxWidth(),
-            trailingIcon = {
-                TextButton(onClick = { viewModel.search(query) }, enabled = query.isNotBlank()) {
-                    Text("Buscar")
+    // Home is vertically scrollable as a whole. Its bottom content inset reserves the
+    // space occupied by the floating navigation toolbar in AppNavigation.
+    // System status bar is accounted for before the first title or filter.
+    val recentFirst = remember(state.sections, category) {
+        state.sections.values.flatten().distinctBy { it.sourceId }
+            .filter { it.year != null }
+            .sortedWith(compareByDescending<KeylessTitle> { it.year ?: 0 }
+                .thenBy { it.title })
+    }
+    var sort by rememberSaveable { mutableStateOf("popular") }
+    val searching = query.isNotBlank() && state.query.isNotBlank() && query == state.query
+    val categoryItems = when (category) {
+        "movie" -> state.sections["movie"].orEmpty()
+        "series" -> state.sections["series"].orEmpty()
+        "anime" -> state.sections["anime"].orEmpty()
+        else -> state.sections.values.flatten().distinctBy { it.sourceId }
+    }
+    fun sorted(items: List<KeylessTitle>): List<KeylessTitle> = when (sort) {
+        "recent" -> items.sortedWith(compareByDescending<KeylessTitle> { it.year ?: 0 }.thenBy { it.title })
+        "alphabetical" -> items.sortedBy { it.title.lowercase() }
+        else -> items
+    }
+    val sections = if (searching) {
+        listOf("Resultados da pesquisa" to sorted(state.searchResults.filter {
+            category == "all" || it.type == category
+        }))
+    } else when (category) {
+        "movie" -> listOf(
+            "Filmes populares" to sorted(state.sections["movie"].orEmpty()),
+            "Filmes recentes" to state.sections["movie"].orEmpty().filter { it.year != null }
+                .sortedByDescending { it.year }
+        )
+        "series" -> listOf(
+            "Séries populares" to sorted(state.sections["series"].orEmpty()),
+            "Séries recentes" to state.sections["series"].orEmpty().filter { it.year != null }
+                .sortedByDescending { it.year }
+        )
+        "anime" -> listOf(
+            "Animes em alta" to sorted(state.sections["anime"].orEmpty()),
+            "Animes recentes" to state.sections["anime"].orEmpty().filter { it.year != null }
+                .sortedByDescending { it.year }
+        )
+        else -> listOf(
+            "Filmes populares" to sorted(state.sections["movie"].orEmpty()),
+            "Séries para descobrir" to sorted(state.sections["series"].orEmpty()),
+            "Animes em alta" to sorted(state.sections["anime"].orEmpty()),
+            "Adicionados recentemente ao catálogo" to recentFirst.take(24)
+        )
+    }
+    val wideLayout = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
+    val posterWidth = if (wideLayout) 178.dp else 138.dp
+    LazyColumn(
+        modifier = modifier.fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding(),
+        contentPadding = PaddingValues(top = 22.dp, bottom = 200.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item(key = "home-header") {
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(start = 22.dp, end = 16.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Vista Stream",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                    Text(
+                        "A tua biblioteca online",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = viewModel::refresh) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Atualizar catálogo")
+                }
+                IconButton(onClick = onOpenSources) {
+                    Icon(Icons.Default.Storefront, contentDescription = "Fontes e extensões")
                 }
             }
-        )
-        Spacer(Modifier.height(10.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for ((id,label) in listOf("all" to "Tudo", "movie" to "Filmes", "series" to "Séries", "anime" to "Animes")) {
-                item {
-                    FilterChip(selected = category == id, onClick = { category = id }, label = { Text(label) })
+        }
+        item(key = "home-search") {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = { Text("Filmes, séries e animes") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                singleLine = true,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Search
+                ),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                    onSearch = { viewModel.search(query) }
+                ),
+                trailingIcon = {
+                    TextButton(onClick = { viewModel.search(query) }, enabled = query.isNotBlank()) {
+                        Text("Buscar")
+                    }
+                }
+            )
+        }
+        item(key = "home-categories") {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(listOf(
+                    "all" to "Tudo",
+                    "movie" to "Filmes",
+                    "series" to "Séries",
+                    "anime" to "Animes"
+                )) { (id, label) ->
+                    FilterChip(
+                        selected = category == id,
+                        onClick = { category = id },
+                        label = { Text(label) }
+                    )
                 }
             }
         }
-        Text(
-            "Catálogo sem chave API · reprodução online quando houver fonte compatível",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(vertical = 8.dp)
-        )
-        if (state.loading || state.searching) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-        }
-        if (state.error != null) {
-            Text(state.error.orEmpty(), color = MaterialTheme.colorScheme.error)
-            OutlinedButton(onClick = viewModel::refresh) { Text("Tentar novamente") }
-        }
-        val sections = if (query.isNotBlank() && state.query.isNotBlank()) {
-            mapOf("Resultados" to state.searchResults.filter { category == "all" || it.type == category })
-        } else {
-            when (category) {
-                "all" -> linkedMapOf(
-                    "Filmes populares" to state.sections["movie"].orEmpty(),
-                    "Séries populares" to state.sections["series"].orEmpty(),
-                    "Animes em destaque" to state.sections["anime"].orEmpty()
+        item(key = "home-sort") {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(start = 22.dp, end = 20.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Ordenar",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                else -> mapOf((if (category == "movie") "Filmes" else if (category == "series") "Séries" else "Animes") to state.sections[category].orEmpty())
-            }
-        }
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 132.dp),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 120.dp, top = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            sections.forEach { (heading, titles) ->
-                item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
-                    Text(heading, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 14.dp, bottom = 8.dp))
-                }
-                items(titles, key = { it.sourceId }) { title ->
-                    Column(
-                        modifier = Modifier.fillMaxWidth().clickable { viewModel.select(title) },
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        AsyncImage(
-                            model = title.poster,
-                            contentDescription = title.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxWidth().aspectRatio(0.68f)
+                Spacer(Modifier.width(12.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(listOf("popular" to "Populares", "recent" to "Recentes", "alphabetical" to "A–Z")) { (id, label) ->
+                        FilterChip(
+                            selected = sort == id,
+                            onClick = { sort = id },
+                            label = { Text(label) }
                         )
-                        Text(title.title, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
-                        Text(title.year?.toString().orEmpty(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
+        }
+        if (state.loading || state.searching) {
+            item(key = "loading") { LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) }
+        }
+        if (state.error != null) {
+            item(key = "error") {
+                Column(Modifier.padding(horizontal = 22.dp)) {
+                    Text(state.error.orEmpty(), color = MaterialTheme.colorScheme.error)
+                    OutlinedButton(onClick = viewModel::refresh) { Text("Tentar novamente") }
+                }
+            }
+        }
+        if (!searching && category == "all" && !state.loading) {
+            val featured = state.sections["movie"].orEmpty().firstOrNull {
+                !it.background.isNullOrBlank() || !it.poster.isNullOrBlank()
+            } ?: categoryItems.firstOrNull()
+            if (featured != null) {
+                item(key = "featured") {
+                    Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(start = 22.dp, end = 22.dp, bottom = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Em destaque", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.weight(1f))
+                            Text("DESCUBRA", style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary)
+                        }
+                        Box(
+                            Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+                                .height(if (wideLayout) 320.dp else 235.dp)
+                                .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(18.dp))
+                                .clickable { viewModel.select(featured) }
+                        ) {
+                            AsyncImage(
+                                model = featured.background ?: featured.poster,
+                                contentDescription = featured.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            Box(
+                                Modifier.fillMaxSize().background(
+                                    Brush.verticalGradient(
+                                        listOf(Color.Black.copy(alpha = 0.04f),
+                                            Color.Black.copy(alpha = 0.25f),
+                                            Color.Black.copy(alpha = 0.95f))
+                                    )
+                                )
+                            )
+                            Column(
+                                Modifier.align(Alignment.BottomStart).padding(18.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(featured.title, color = Color.White,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold, maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    listOfNotNull(featured.year?.toString(), "Filme · Ver detalhes").joinToString("  •  "),
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        sections.forEachIndexed { index, (heading, titles) ->
+            if (titles.isNotEmpty()) {
+                item(key = "rail-$index") {
+                    Column(
+                        Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(start = 22.dp, end = 20.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                heading, style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f),
+                                maxLines = 1, overflow = TextOverflow.Ellipsis
+                            )
+                            if (category == "all" && !searching && index < 3) {
+                                val destination = listOf("movie", "series", "anime")[index]
+                                TextButton(onClick = { category = destination }) { Text("Ver mais") }
+                            }
+                        }
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(titles.take(45), key = { it.sourceId }) { title ->
+                                Column(
+                                    modifier = Modifier.width(posterWidth)
+                                        .clickable { viewModel.select(title) },
+                                    verticalArrangement = Arrangement.spacedBy(7.dp)
+                                ) {
+                                    AsyncImage(
+                                        model = title.poster ?: title.background,
+                                        contentDescription = title.title,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxWidth()
+                                            .aspectRatio(0.69f)
+                                            .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(12.dp))
+                                    )
+                                    Text(title.title, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.labelLarge, minLines = 2)
+                                    Text(
+                                        listOfNotNull(title.year?.toString(),
+                                            when (title.type) {
+                                                "movie" -> "Filme"
+                                                "anime" -> "Anime"
+                                                else -> "Série"
+                                            }).joinToString(" · "),
+                                        maxLines = 1,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (searching && state.searchResults.isEmpty() && !state.searching) {
+            item(key = "search-empty") {
+                Text(
+                    "Nenhum título encontrado. Experimenta outro nome.",
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 24.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        item(key = "end-spacer") {
+            Text(
+                "Catálogo atualizado a partir das fontes de metadados · Reprodução sujeita à disponibilidade",
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
