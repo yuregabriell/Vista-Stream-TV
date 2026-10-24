@@ -7,7 +7,7 @@ permissions:
   contents: write
 concurrency:
   group: vista-stream-main
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   android:
     runs-on: ubuntu-latest
