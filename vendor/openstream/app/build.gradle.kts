@@ -27,8 +27,11 @@ android {
         applicationId = "com.vistastream.tv"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.2.0-vista"
+        val vistaBuild = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull
+            ?.toIntOrNull()?.coerceAtLeast(1) ?: 7
+        versionCode = vistaBuild
+        versionName = "0.2.0-build.$vistaBuild"
+        buildConfigField("int", "VISTA_BUILD_NUMBER", "$vistaBuild")
 
         val localProperties = Properties()
         val localPropertiesFile = rootProject.file("local.properties")
