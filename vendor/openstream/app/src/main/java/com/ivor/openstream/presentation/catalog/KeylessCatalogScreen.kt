@@ -434,6 +434,7 @@ private fun KeylessTitleDetails(
     Column(
         Modifier.fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -622,7 +623,7 @@ private fun KeylessTitleDetails(
                     }
                 }
             }
-            Spacer(Modifier.height(110.dp))
+            Spacer(Modifier.height(166.dp))
         }
     }
 }
