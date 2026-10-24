@@ -2,6 +2,9 @@ package com.ivor.openstream.data.catalog
 
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,6 +25,22 @@ class VistaWatchHistory @Inject constructor(@ApplicationContext context: Context
             prefs.getLong("$key:duration", 0L)
         )
     }
+
+    fun rememberTitle(item: KeylessTitle) {
+        val ids = prefs.getStringSet("saved_title_ids", emptySet()).orEmpty().toMutableSet()
+        ids.add(item.sourceId)
+        prefs.edit()
+            .putString("title:${item.sourceId}", Json.encodeToString(item))
+            .putStringSet("saved_title_ids", ids)
+            .apply()
+    }
+
+    fun savedTitles(): List<KeylessTitle> =
+        prefs.getStringSet("saved_title_ids", emptySet()).orEmpty().mapNotNull { id ->
+            prefs.getString("title:$id", null)?.let { encoded ->
+                runCatching { Json.decodeFromString<KeylessTitle>(encoded) }.getOrNull()
+            }
+        }
 
     fun lastPlayedAt(id: String): Long = prefs.getLong("$id:lastPlayedAt", 0L)
 

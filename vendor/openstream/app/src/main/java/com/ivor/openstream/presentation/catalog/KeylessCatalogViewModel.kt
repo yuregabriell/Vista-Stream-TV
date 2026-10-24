@@ -39,7 +39,16 @@ data class KeylessCatalogState(
     val resolveFinished: Boolean = false,
     val resolvedProviders: Int = 0,
     val totalProviders: Int = 0,
-    val failedProviders: List<String> = emptyList()
+    val failedProviders: List<String> = emptyList(),
+    val browseItems: List<KeylessTitle> = emptyList(),
+    val browseType: String = "",
+    val browseQuery: String = "",
+    val browseGenre: String = "",
+    val browseYear: Int? = null,
+    val browsePage: Int = 0,
+    val browseLoading: Boolean = false,
+    val browseHasMore: Boolean = true,
+    val browseError: String? = null
 )
 
 @HiltViewModel
@@ -51,7 +60,8 @@ class KeylessCatalogViewModel @Inject constructor(
     val hasTmdbKey: Boolean get() = client.tmdbConfigured
 
     fun continueWatching(titles: List<KeylessTitle>): List<KeylessTitle> =
-        titles.filter { history.isInProgress(it.sourceId) }
+        (history.savedTitles() + titles).distinctBy { it.sourceId }
+            .filter { history.isInProgress(it.sourceId) }
             .sortedByDescending { history.lastPlayedAt(it.sourceId) }
             .take(20)
     private val _state = MutableStateFlow(KeylessCatalogState())
@@ -59,6 +69,68 @@ class KeylessCatalogViewModel @Inject constructor(
     private var job: Job? = null
     private var episodeJob: Job? = null
     private var resolutionJob: Job? = null
+    private var browseJob: Job? = null
+
+    /** Full-category paging independent of the Home preview rails. */
+    fun browse(type: String, query: String = "", genre: String = "", year: Int? = null) {
+        val current = _state.value
+        if (current.browseType == type && current.browseQuery == query &&
+            current.browseGenre == genre && current.browseYear == year) return
+        browseJob?.cancel()
+        _state.value = current.copy(
+            browseType = type, browseQuery = query, browseGenre = genre,
+            browseYear = year, browseItems = emptyList(), browsePage = 0,
+            browseHasMore = true, browseLoading = false, browseError = null
+        )
+        loadMore()
+    }
+
+    fun loadMore() {
+        val current = _state.value
+        if (current.browseType.isBlank() || current.browseLoading || !current.browseHasMore) return
+        browseJob?.cancel()
+        val type = current.browseType
+        val query = current.browseQuery
+        val genre = current.browseGenre
+        val year = current.browseYear
+        val page = current.browsePage + 1
+        _state.value = current.copy(browseLoading = true, browseError = null)
+        browseJob = viewModelScope.launch {
+            try {
+                val types = if (type == "all") listOf("movie", "series", "anime") else listOf(type)
+                val returned = types.map { kind ->
+                    async {
+                        runCatching {
+                            client.titles(kind, query = query, page = page, genre = genre, year = year)
+                        }.getOrDefault(emptyList())
+                    }
+                }.map { it.await() }
+                val results = returned.flatten().distinctBy { it.sourceId }
+                val sameQuery = _state.value.browseType == type &&
+                    _state.value.browseQuery == query &&
+                    _state.value.browseGenre == genre && _state.value.browseYear == year
+                if (sameQuery) {
+                    val more = returned.any { resultsByType ->
+                        resultsByType.size >= 24
+                    }
+                    _state.value = _state.value.copy(
+                        browseItems = (_state.value.browseItems + results).distinctBy { it.sourceId },
+                        browsePage = page,
+                        browseHasMore = more && page < 50,
+                        browseLoading = false
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _state.value = _state.value.copy(
+                    browseLoading = false,
+                    browseError = error.message ?: "Falha ao carregar mais títulos."
+                )
+            }
+        }
+    }
+
 
     init { loadCatalog(force = false) }
 
@@ -185,6 +257,7 @@ class KeylessCatalogViewModel @Inject constructor(
 
     fun play(server: VideoServer) {
         val title = _state.value.selected ?: return
+        history.rememberTitle(title)
         val saved = history.read(title.sourceId, _state.value.season, _state.value.episode)
         _state.value = _state.value.copy(
             playing = server, resolving = false,
