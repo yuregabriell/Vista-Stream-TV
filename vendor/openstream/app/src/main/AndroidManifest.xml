@@ -80,8 +80,6 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".brsources.BrCatalogActivity" android:exported="false" android:theme="@style/Theme.OpenStream" />
-
         <!-- Harvester Browser / Android share official Vista player.
              Only recognized video links and explicit playback commands are accepted. -->
         <activity

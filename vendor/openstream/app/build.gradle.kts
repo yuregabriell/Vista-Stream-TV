@@ -30,7 +30,7 @@ android {
         val vistaBuild = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull
             ?.toIntOrNull()?.coerceAtLeast(1) ?: 7
         versionCode = vistaBuild
-        versionName = "0.3.0-build.$vistaBuild"
+        versionName = "0.3.1-build.$vistaBuild"
         buildConfigField("int", "VISTA_BUILD_NUMBER", "$vistaBuild")
 
         val localProperties = Properties()
@@ -161,7 +161,6 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.kotlinx.serialization)
     implementation(libs.okhttp)
-    implementation("org.jsoup:jsoup:1.18.3")
     // Debug-only: verbose HTTP logging. Release uses a no-op (see
     // src/debug/.../LoggingInterceptorFactory.kt vs src/release/...).
     debugImplementation(libs.okhttp.logging.interceptor)

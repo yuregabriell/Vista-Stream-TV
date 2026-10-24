@@ -1,7 +1,4 @@
 package com.ivor.openstream.presentation.marketplace
-import android.content.Intent
-import com.ivor.openstream.brsources.BrCatalogActivity
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.border
@@ -51,7 +48,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LargeTopAppBar
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -81,6 +78,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -107,11 +105,10 @@ fun MarketplaceScreen(
     viewModel: MarketplaceViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
-    val brContext = LocalContext.current
     var selectedTab by rememberSaveable { mutableStateOf(MarketplaceTab.BROWSE) }
     var detailsFor by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     LaunchedEffect(state.message) {
         val message = state.message ?: return@LaunchedEffect
@@ -124,11 +121,14 @@ fun MarketplaceScreen(
         containerColor = MaterialTheme.colorScheme.surface,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            LargeTopAppBar(
+            TopAppBar(
                 title = {
                     Text(
                         text = stringResource(R.string.mk_title),
-                        style = MaterialTheme.typography.headlineLarge
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 },
                 navigationIcon = {
@@ -138,9 +138,6 @@ fun MarketplaceScreen(
                     )
                 },
                 actions = {
-                    Button(onClick = { brContext.startActivity(Intent(brContext, BrCatalogActivity::class.java)) }) {
-                        Text("Catálogo BR")
-                    }
                     IconButton(onClick = onSettingsClick) {
                         Icon(Icons.Default.Settings, contentDescription = "Abrir definições")
                     }
