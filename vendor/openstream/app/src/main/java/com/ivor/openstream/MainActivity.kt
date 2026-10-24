@@ -8,6 +8,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import com.ivor.openstream.presentation.update.VistaAutoUpdatePrompt
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Surface
@@ -118,16 +120,19 @@ class MainActivity : ComponentActivity() {
                 // Most screens draw their own background without a Scaffold, so this root
                 // Surface is what gives un-styled Text the theme's onBackground color.
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    if (tvMode) {
-                        TvNavigation()
-                    } else {
-                        AppNavigation(
-                            windowSizeClass = windowSizeClass.widthSizeClass,
-                            shortcutRequest = shortcutRequest,
-                            onShortcutHandled = { shortcutRequest = null },
-                            deepLinkRequest = deepLinkRequest,
-                            onDeepLinkHandled = { deepLinkRequest = null }
-                        )
+                    Box(Modifier.fillMaxSize()) {
+                        if (tvMode) {
+                            TvNavigation()
+                        } else {
+                            AppNavigation(
+                                windowSizeClass = windowSizeClass.widthSizeClass,
+                                shortcutRequest = shortcutRequest,
+                                onShortcutHandled = { shortcutRequest = null },
+                                deepLinkRequest = deepLinkRequest,
+                                onDeepLinkHandled = { deepLinkRequest = null }
+                            )
+                        }
+                        VistaAutoUpdatePrompt()
                     }
                 }
             }
