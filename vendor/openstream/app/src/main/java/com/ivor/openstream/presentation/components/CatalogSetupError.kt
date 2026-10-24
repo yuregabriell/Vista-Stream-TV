@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 fun CatalogSetupError(
     onRetry: () -> Unit,
     onSaveKey: (String) -> Boolean,
+    onOpenSources: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var key by rememberSaveable { mutableStateOf("") }
@@ -68,6 +69,11 @@ fun CatalogSetupError(
             ) { Text("Guardar e carregar catálogo") }
             OutlinedButton(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
                 Text("Tentar novamente")
+            }
+            if (onOpenSources != null) {
+                OutlinedButton(onClick = onOpenSources, modifier = Modifier.fillMaxWidth()) {
+                    Text("Definições e extensões")
+                }
             }
             Text("As fontes de reprodução podem ser configuradas em Definições → Extensões.",
                 style = MaterialTheme.typography.bodySmall)

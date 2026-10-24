@@ -132,7 +132,7 @@ fun HomeScreen(
         when (val state = uiState) {
             HomeUiState.Loading -> HomeSkeleton()
 
-            is HomeUiState.Error -> CatalogSetupError(onRetry = viewModel::refresh, onSaveKey = viewModel::configureCatalogKey)
+            is HomeUiState.Error -> CatalogSetupError(onRetry = viewModel::refresh, onSaveKey = viewModel::configureCatalogKey, onOpenSources = onSettingsClick)
 
             is HomeUiState.Success -> PullToRefreshBox(
                 isRefreshing = state.isRefreshing,
