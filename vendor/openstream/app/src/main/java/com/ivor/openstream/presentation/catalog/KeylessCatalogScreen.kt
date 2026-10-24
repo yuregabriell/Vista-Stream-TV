@@ -84,6 +84,8 @@ fun KeylessCatalogScreen(
                 resumePositionMs = state.resumePositionMs,
                 onProgress = viewModel::savePlayback,
                 onTryAlternative = { viewModel.nextSource(player) },
+                availableServers = state.servers,
+                onSelectSource = viewModel::play,
                 hasAlternative = state.servers.any { it.id != player.id && it.url != player.url },
                 onClose = viewModel::closePlayer
             )
@@ -393,6 +395,8 @@ private fun KeylessOnlinePlayer(
     episodeLabel: String,
     resumePositionMs: Long,
     onProgress: (Long, Long) -> Unit,
+    availableServers: List<VideoServer>,
+    onSelectSource: (VideoServer) -> Unit,
     hasAlternative: Boolean,
     onTryAlternative: () -> Unit,
     onClose: () -> Unit
@@ -403,6 +407,8 @@ private fun KeylessOnlinePlayer(
         episodeLabel = episodeLabel,
         resumePositionMs = resumePositionMs,
         onProgress = onProgress,
+        availableServers = availableServers,
+        onSelectSource = onSelectSource,
         hasAlternative = hasAlternative,
         onTryAlternative = onTryAlternative,
         onClose = onClose
