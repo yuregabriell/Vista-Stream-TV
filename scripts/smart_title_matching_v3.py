@@ -92,7 +92,8 @@ replacement=r'''        val queryField=field("Procurar outro nome (editável)",
         }
 '''
 s=s[:a]+replacement+s[b:]
-old='''val type=when(spinner.selectedItemPosition){1->"movie";2->"series";3->"anime";else->"video"}'''
+old='''val type=when(spinner.selectedItemPosition){
+                1->"movie";2->"series";3->"anime";else->"video"}'''
 assert old in s
 s=s.replace(old,old+'''
             val matchValid=matchedId>0 &&
