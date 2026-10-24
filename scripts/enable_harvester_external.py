@@ -218,9 +218,9 @@ c=c.replace('''            Text(
                     ?: "Vídeo online",''',
 '''            Text(
                 when(video.kind){
-                    "movie"->"Filme" + (if(video.year>0)" · \${video.year}" else "")
-                    "series"->"Série" + (if(video.season>0)" · T\${video.season}" else "") +
-                        (if(video.episode>0)" E\${video.episode}" else "")
+                    "movie"->"Filme" + (if(video.year>0)" · ${video.year}" else "")
+                    "series"->"Série" + (if(video.season>0)" · T${video.season}" else "") +
+                        (if(video.episode>0)" E${video.episode}" else "")
                     else->"Vídeo"
                 } + " · " + (runCatching { Uri.parse(video.url).host }.getOrNull() ?: "Online"),''',1)
 # optional cover display: coil is already dependency
