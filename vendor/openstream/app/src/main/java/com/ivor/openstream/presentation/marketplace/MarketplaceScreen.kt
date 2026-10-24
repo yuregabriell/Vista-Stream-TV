@@ -1,4 +1,7 @@
 package com.ivor.openstream.presentation.marketplace
+import android.content.Intent
+import com.ivor.openstream.brsources.BrCatalogActivity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.border
@@ -104,6 +107,7 @@ fun MarketplaceScreen(
     viewModel: MarketplaceViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val brContext = LocalContext.current
     var selectedTab by rememberSaveable { mutableStateOf(MarketplaceTab.BROWSE) }
     var detailsFor by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -134,6 +138,9 @@ fun MarketplaceScreen(
                     )
                 },
                 actions = {
+                    Button(onClick = { brContext.startActivity(Intent(brContext, BrCatalogActivity::class.java)) }) {
+                        Text("Catálogo BR")
+                    }
                     IconButton(onClick = onSettingsClick) {
                         Icon(Icons.Default.Settings, contentDescription = "Abrir definições")
                     }
