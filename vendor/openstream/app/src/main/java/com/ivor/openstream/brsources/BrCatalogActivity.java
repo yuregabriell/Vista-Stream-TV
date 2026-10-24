@@ -199,9 +199,7 @@ public final class BrCatalogActivity extends Activity {
       i.putExtra("com.vistastream.tv.extra.PAGE_URL",item.url);
       try{startActivity(i);}catch(Exception ex){status.setText("Não foi possível iniciar o player do VS: "+ex.getMessage());}
     }else {
-      HarvesterVistaBridge.open(this,stream.url,item.title,
-        stream.mime.contains("mpegurl")?"HLS":stream.mime.contains("dash")?"DASH":
-          stream.mime.contains("webm")?"WEBM":"MP4",item.url);
+      status.setText("Abra a fonte num player compatível.");
     }
   }
   @Override protected void onDestroy(){generation++;executor.shutdownNow();super.onDestroy();}
