@@ -6,7 +6,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: vista-stream-main
+  group: vista-stream-v2-release
   cancel-in-progress: true
 jobs:
   android:
