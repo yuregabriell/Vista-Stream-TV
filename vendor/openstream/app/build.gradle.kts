@@ -161,6 +161,7 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.kotlinx.serialization)
     implementation(libs.okhttp)
+    implementation("org.jsoup:jsoup:1.18.3")
     // Debug-only: verbose HTTP logging. Release uses a no-op (see
     // src/debug/.../LoggingInterceptorFactory.kt vs src/release/...).
     debugImplementation(libs.okhttp.logging.interceptor)
