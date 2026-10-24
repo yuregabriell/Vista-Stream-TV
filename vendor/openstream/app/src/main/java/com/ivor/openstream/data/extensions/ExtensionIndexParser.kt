@@ -65,7 +65,7 @@ class ExtensionIndexParser @Inject constructor() {
         val root = json.parseToJsonElement(raw)
         return when (root) {
             is JsonArray -> decodeEntries(root)
-            is JsonObject -> decodeEntries(root["extensions"] as? JsonArray)
+            is JsonObject -> decodeEntries((root["extensions"] ?: root["plugins"]) as? JsonArray)
             else -> emptyList()
         }
     }
@@ -131,12 +131,65 @@ class ExtensionIndexParser @Inject constructor() {
         const val STREMIO_PRIORITY = 40
     }
 
+    /**
+     * CloudStream plugin lists contain executable .cs3/.jar binaries, which are NOT
+     * compatible with Vista's declarative extension runtime. Import their public
+     * metadata for discovery only, with a disabled/unsupported engine. No code
+     * or plugin binaries are downloaded/executed.
+     */
     private fun decodeEntries(array: JsonArray?): List<ExtensionEntryDto> =
         array.orEmpty().mapNotNull { element ->
             runCatching {
-                json.decodeFromJsonElement(ExtensionEntryDto.serializer(), element)
+                val entry = element as? JsonObject ?: return@runCatching null
+                if ("internalName" in entry || "jarUrl" in entry) {
+                    cloudStreamEntry(entry)
+                } else {
+                    json.decodeFromJsonElement(ExtensionEntryDto.serializer(), entry)
+                }
             }.getOrNull()
         }
+
+    private fun cloudStreamEntry(entry: JsonObject): ExtensionEntryDto? {
+        fun field(key: String): String? = (entry[key] as? JsonPrimitive)?.contentOrNull
+        fun positiveInt(key: String, default: Int = 1) =
+            field(key)?.toIntOrNull()?.coerceAtLeast(1) ?: default
+        val identity = field("internalName")?.trim().orEmpty()
+        val name = field("name")?.trim().orEmpty().ifBlank { identity }
+        if (identity.isBlank() || name.isBlank()) return null
+        val authors = (entry["authors"] as? JsonArray).orEmpty().mapNotNull {
+            (it as? JsonPrimitive)?.contentOrNull
+        }
+        val types = (entry["tvTypes"] as? JsonArray).orEmpty().mapNotNull {
+            (it as? JsonPrimitive)?.contentOrNull
+        }
+        val unsafe = types.any { it.equals("NSFW", true) } ||
+            name.contains("18+") || name.contains("Adult", true)
+        if (unsafe) return null // Exclude adult plugins from the public family browsing directory.
+        val binaryUrl = field("url")?.takeIf { it.startsWith("https://") }.orEmpty()
+        val id = identity.lowercase().replace(Regex("[^a-z0-9-]+"), "-").trim('-')
+        if (id.isBlank()) return null
+        val language = field("language").orEmpty().ifBlank { "Multi" }
+        val description = listOfNotNull(
+            field("description")?.takeIf { it.isNotBlank() },
+            "CloudStream .cs3: disponível para consulta, mas não executável no Vista Stream."
+        ).joinToString(" — ")
+        return ExtensionEntryDto(
+            id = "cs3-$id",
+            name = name,
+            description = description,
+            version = field("version").orEmpty().ifBlank { "1" },
+            versionCode = positiveInt("version"),
+            apiVersion = positiveInt("apiVersion"),
+            authors = authors,
+            language = language,
+            iconUrl = field("iconUrl")?.takeIf { it.startsWith("https://") },
+            tags = (types.map { it.lowercase() } + listOf("cloudstream", "cs3")).distinct(),
+            status = field("status")?.toIntOrNull() ?: 1,
+            nsfw = false,
+            homepage = field("repositoryUrl")?.takeIf { it.startsWith("https://") },
+            engine = ExtensionEngineDto(type = "unsupported", endpoint = binaryUrl)
+        )
+    }
 
     private fun isStremioManifest(root: JsonObject): Boolean =
         "resources" in root && "id" in root && "extensions" !in root && "extensionLists" !in root

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SystemUpdateAlt
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -66,7 +67,7 @@ import com.ivor.openstream.presentation.marketplace.extensionSubtitle
  * Sources as a list and a detail pane. The list on the left switches between what is installed
  * (in search order, with the search mode above it) and the whole catalog; focusing a source shows
  * it on the right with its actions. Removing asks first in a centred panel. Adding a repository by
- * URL and searching need typed text and stay on the phone.
+ * URL and searching work with the Android TV on-screen keyboard.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -76,12 +77,14 @@ fun TvExtensionsScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
-    var showInstalled by remember { mutableStateOf(true) }
+    var showInstalled by remember { mutableStateOf(false) }
+    var showAddRepo by remember { mutableStateOf(false) }
+    var repoInput by remember { mutableStateOf("") }
     var selectedKey by remember { mutableStateOf<String?>(null) }
     var pendingRemove by remember { mutableStateOf<MarketplaceExtension?>(null) }
     var detailHasFocus by remember { mutableStateOf(false) }
 
-    val visible = if (showInstalled) state.installed else state.catalog.extensions
+    val visible = if (showInstalled) state.installed else state.results
     val selected = visible.firstOrNull { it.key == selectedKey } ?: visible.firstOrNull()
     val rowRequesters = remember { mutableMapOf<String, FocusRequester>() }
     fun rowRequester(key: String) = rowRequesters.getOrPut(key) { FocusRequester() }
@@ -108,6 +111,12 @@ fun TvExtensionsScreen(
                 supporting = state.message?.let { "$counts  ·  $it" } ?: counts,
                 actions = {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(onClick = { showAddRepo = true },
+                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                            Text("Adicionar fonte")
+                        }
                         OutlinedButton(
                             onClick = viewModel::refresh,
                             enabled = !state.catalog.isSyncing,
@@ -158,6 +167,15 @@ fun TvExtensionsScreen(
                                 onClick = { showInstalled = false }
                             )
                         }
+                    }
+                    if (!showInstalled) {
+                        androidx.compose.material3.OutlinedTextField(
+                            value = state.query,
+                            onValueChange = viewModel::setQuery,
+                            placeholder = { androidx.compose.material3.Text("Pesquisar extensões, pt-BR, animes...") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
+                        )
                     }
                     if (showInstalled && state.installed.size > 1) {
                         LazyRow(
@@ -241,6 +259,54 @@ fun TvExtensionsScreen(
                     }
                 }
             }
+        }
+
+        if (showAddRepo) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showAddRepo = false },
+                title = { androidx.compose.material3.Text("Adicionar repositório") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        androidx.compose.material3.OutlinedTextField(
+                            value = repoInput,
+                            onValueChange = { repoInput = it },
+                            label = { androidx.compose.material3.Text("URL JSON ou Stremio manifest.json") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        androidx.compose.material3.Text(
+                            "Fontes OpenStream e add-ons Stremio compatíveis podem funcionar no nosso player.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        androidx.compose.material3.TextButton(onClick = {
+                            viewModel.addRepo("https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json")
+                            showInstalled = false
+                            showAddRepo = false
+                        }) { androidx.compose.material3.Text("Ver CloudStream oficial (.cs3): só catálogo") }
+                        androidx.compose.material3.TextButton(onClick = {
+                            viewModel.addRepo("https://raw.githubusercontent.com/admknight/CloudstreamExtensions/master/repo.json")
+                            showInstalled = false
+                            showAddRepo = false
+                        }) { androidx.compose.material3.Text("Ver mega biblioteca (.cs3): só catálogo") }
+                    }
+                },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            viewModel.addRepo(repoInput)
+                            repoInput = ""
+                            showInstalled = false
+                            showAddRepo = false
+                        },
+                        enabled = repoInput.isNotBlank()
+                    ) { androidx.compose.material3.Text("Adicionar") }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { showAddRepo = false }) {
+                        androidx.compose.material3.Text("Cancelar")
+                    }
+                }
+            )
         }
 
         pendingRemove?.let { extension ->

@@ -132,6 +132,7 @@ private fun TvAppScaffold(navController: NavHostController) {
         ) {
             composable(TvDestination.HOME.route) {
                 TvHomeScreen(
+                    onOpenExtensions = { go(TvDestination.EXTENSIONS) },
                     onOpenTitle = { mediaType, id -> navController.navigate(TvRoutes.details(mediaType, id)) },
                     onPlay = { mediaType, id, season, episode ->
                         navController.navigate(TvRoutes.player(mediaType, id, season, episode))

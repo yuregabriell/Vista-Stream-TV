@@ -79,6 +79,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
@@ -118,7 +119,7 @@ sealed class Screen(
     data object Update : Screen("update")
     data object Settings : Screen("settings")
     data object VideoShaders : Screen("video_shaders")
-    data object Marketplace : Screen("marketplace")
+    data object Marketplace : Screen("marketplace", "Fontes", icon = Icons.Default.Storefront)
     data object Person : Screen("person/{personId}") {
         fun createRoute(personId: Int) = "person/$personId"
     }
@@ -164,7 +165,7 @@ fun AppNavigation(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    val bottomNavItems = listOf(Screen.Home, Screen.Search, Screen.WatchLater, Screen.Downloads, Screen.History)
+    val bottomNavItems = listOf(Screen.Home, Screen.Search, Screen.WatchLater, Screen.Marketplace, Screen.Downloads, Screen.History)
     val showBottomBar = currentDestination?.route in bottomNavItems.map { it.route }
     val isCompact = windowSizeClass == WindowWidthSizeClass.Compact
     val isOnPlayer = currentDestination?.route?.startsWith("player/") == true

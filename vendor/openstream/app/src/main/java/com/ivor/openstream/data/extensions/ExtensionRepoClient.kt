@@ -28,14 +28,15 @@ class ExtensionRepoClient @Inject constructor(
             needsConfigNote = context.getString(R.string.st_addon_needs_config)
         )
         val repo = parser.parseRepo(get(url), sourceUrl = url, strings = strings)
-        val linked = repo.extensionLists
+        val lists = (repo.extensionLists + repo.pluginLists).distinct()
+        val linked = lists
             .mapNotNull { RepoUrlNormalizer.normalize(it) }
             .flatMap { listUrl ->
                 runCatching { parser.parseExtensionList(get(listUrl)) }.getOrElse { emptyList() }
             }
 
         val entries = (repo.extensions + linked).distinctBy { it.id }
-        if (entries.isEmpty() && repo.extensionLists.isNotEmpty()) {
+        if (entries.isEmpty() && lists.isNotEmpty()) {
             throw IOException(context.getString(R.string.st_repo_lists_unreadable))
         }
 

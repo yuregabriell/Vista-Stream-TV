@@ -80,6 +80,7 @@ private fun AnimeDto.tvMediaType(): String = mediaType ?: if (isMovie) "movie" e
 fun TvHomeScreen(
     onOpenTitle: (mediaType: String, id: Int) -> Unit,
     onPlay: (mediaType: String, id: Int, season: Int, episode: Int) -> Unit,
+    onOpenExtensions: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
@@ -88,7 +89,7 @@ fun TvHomeScreen(
 
     when (val state = uiState) {
         HomeUiState.Loading -> TvLoading()
-        is HomeUiState.Error -> CatalogSetupError(onRetry = viewModel::refresh, onSaveKey = viewModel::configureCatalogKey)
+        is HomeUiState.Error -> CatalogSetupError(onRetry = viewModel::refresh, onSaveKey = viewModel::configureCatalogKey, onOpenSources = onOpenExtensions)
         is HomeUiState.Success -> {
             val featured = remember(state.hero) { state.hero.firstOrNull { it.backdropPath != null } }
             var focus by remember { mutableStateOf<HomeFocus?>(null) }

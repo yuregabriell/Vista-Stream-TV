@@ -497,6 +497,39 @@ private fun RepositoriesTab(
             contentPadding = PaddingValues(start = gutter, end = gutter, top = 16.dp, bottom = 48.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            item(key = "popular-repositories") {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = ExpressiveShapes.large,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text("Loja de repositórios", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(
+                            "O Vista já inclui as fontes OpenStream. Podes procurar extensões adicionais " +
+                                "em repositórios externos e instalar as compatíveis.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Button(onClick = {
+                            viewModel.addRepo("https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json")
+                        }) { Text("Explorar CloudStream oficial (.cs3)") }
+                        Button(onClick = {
+                            viewModel.addRepo("https://raw.githubusercontent.com/admknight/CloudstreamExtensions/master/repo.json")
+                        }) { Text("Explorar comunidade CloudStream (.cs3)") }
+                        Text(
+                            "Os .cs3 aparecem apenas como catálogo de referência. " +
+                                "O seu código não funciona diretamente no Vista. " +
+                                "Para instalar uma fonte compatível, utiliza um índice OpenStream ou URL Stremio manifest.json.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
             item {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),

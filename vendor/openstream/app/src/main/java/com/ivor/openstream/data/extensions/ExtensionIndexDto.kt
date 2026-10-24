@@ -23,6 +23,8 @@ data class ExtensionRepoDto(
     /** Indirection to one or more extension lists, as in CloudStream's `pluginLists`. */
     @SerialName("extensionLists")
     val extensionLists: List<String> = emptyList(),
+    /** CloudStream repo.json source list (read-only metadata until its runtime is ported). */
+    val pluginLists: List<String> = emptyList(),
     /** Inline catalog, so a single file can be a complete repository. */
     val extensions: List<ExtensionEntryDto> = emptyList()
 )
