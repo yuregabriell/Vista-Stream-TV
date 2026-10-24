@@ -1,0 +1,117 @@
+name: Vista Stream + Harvester Browser (single APK)
+on:
+  push:
+    branches: [vista-harvester-unified]
+    paths:
+      - scripts/integrate_harvester.py
+      - .github/workflows/vista-harvester-unified.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Restore pinned Harvester Browser v2.3
+        run: |
+          set -euo pipefail
+          git clone --quiet --depth 1 --branch harvester-browser-v23-safe-traffic \
+            https://github.com/yuregabrieldev/tiktok-feedback-helpers.git /tmp/harvester-source
+          cd /tmp/harvester-source
+          test "$(git rev-parse HEAD)" = "d4c4ebb7ae9613f525f02cd50a80f94454f48cc7"
+          cd "$GITHUB_WORKSPACE"
+          ln -s /tmp/harvester-source/harvester-browser harvester-browser
+          mkdir -p hb-v18 vista
+          cat harvester-browser/v1.4.0/payload*.txt | base64 --decode > /tmp/hb-v14.txz
+          echo "2676ef48fb053bf276281e08745f29e7c184658cd2edfa0bb2a084c7379af2a2  /tmp/hb-v14.txz" | sha256sum -c -
+          tar -xJf /tmp/hb-v14.txz -C hb-v18
+          echo "97e43ab4f90eb24f24afb373677f070b78c4cfe741ad79bdf50e0b1f232fb235  harvester-browser/v1.5.0/cast-patch.xz.b64" | sha256sum -c -
+          base64 -d harvester-browser/v1.5.0/cast-patch.xz.b64 | xz -d > /tmp/cast-v15.py
+          (cd hb-v18 && python3 /tmp/cast-v15.py)
+          (cd hb-v18 && python3 ../harvester-browser/v1.6.0/fix-cast.py)
+          (cd hb-v18 && python3 ../harvester-browser/v1.7.0/now-playing-cast.py)
+          (cd hb-v18 && python3 ../harvester-browser/v1.8.0/install-player.py)
+          (cd hb-v18 && python3 ../harvester-browser/v1.9.0/upgrade.py)
+          base64 -d harvester-browser/v2.0.0/vistacast-base.tar.xz.b64 | xz -d | tar -xf - -C vista
+          python3 harvester-browser/v2.0.0/integrate-vistacast.py
+          python3 harvester-browser/v2.1.0/upgrade-browser.py
+          python3 harvester-browser/v2.1.0/upgrade-player.py
+          python3 harvester-browser/v2.2.0/apply-page-lock.py
+          python3 harvester-browser/v2.3.0/safety-patch.py
+      - name: Merge browser into Vista official player app
+        run: |
+          set -euo pipefail
+          python3 scripts/integrate_harvester.py
+          grep -q 'com.harvester.browser.MainActivity' vendor/openstream/app/src/main/AndroidManifest.xml
+          grep -q 'Screen.Browser' vendor/openstream/app/src/main/java/com/ivor/openstream/presentation/navigation/AppNavigation.kt
+          test -s vendor/openstream/app/src/main/assets/autoplayer.js
+          test -s vendor/openstream/app/src/main/assets/pagelock.js
+          test ! -f vendor/openstream/app/src/main/java/com/harvester/browser/PlaybackService.java
+      - name: Java-only core regression tests
+        run: |
+          mkdir -p /tmp/hb-tests
+          javac -d /tmp/hb-tests hb-v18/app/src/main/java/com/harvester/browser/core/*.java hb-v18/core-tests/CoreTests.java
+          java -cp /tmp/hb-tests CoreTests
+          javac -d /tmp/hb-tests hb-v18/app/src/main/java/com/harvester/browser/core/PageNavigationLock.java hb-v18/core-tests/PageNavigationLockTests.java
+          java -cp /tmp/hb-tests PageNavigationLockTests
+      - name: Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" "build-tools;36.0.0" || "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Restore previous debug signing if configured
+        env:
+          VISTA_SIGNING_KEYSTORE_BASE64: ${{ secrets.VISTA_SIGNING_KEYSTORE_BASE64 }}
+          VISTA_KEYSTORE_PASSWORD: ${{ secrets.VISTA_KEYSTORE_PASSWORD }}
+          VISTA_KEY_ALIAS: ${{ secrets.VISTA_KEY_ALIAS }}
+          VISTA_KEY_PASSWORD: ${{ secrets.VISTA_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          if [ -n "${VISTA_SIGNING_KEYSTORE_BASE64:-}" ]; then
+            printf '%s' "$VISTA_SIGNING_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/vista-signing.jks"
+            chmod 600 "$RUNNER_TEMP/vista-signing.jks"
+            {
+              echo "OPENSTREAM_KEYSTORE_PATH=$RUNNER_TEMP/vista-signing.jks"
+              echo "OPENSTREAM_KEYSTORE_PASSWORD=$VISTA_KEYSTORE_PASSWORD"
+              echo "OPENSTREAM_KEY_ALIAS=$VISTA_KEY_ALIAS"
+              echo "OPENSTREAM_KEY_PASSWORD=$VISTA_KEY_PASSWORD"
+            } >> "$GITHUB_ENV"
+          fi
+      - name: Compile Vista Stream + Harvester unified APK
+        working-directory: vendor/openstream
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx5g"
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug --stacktrace --no-daemon
+      - name: Verify and stage unified APK
+        run: |
+          set -euo pipefail
+          APK="$(find vendor/openstream/app/build/outputs/apk/debug -type f -name '*universal*.apk' -print -quit)"
+          test -n "$APK" && test -s "$APK"
+          cp "$APK" VistaStream-Harvester-Unified.apk
+          sha256sum VistaStream-Harvester-Unified.apk
+          unzip -l VistaStream-Harvester-Unified.apk | grep -E 'assets/autoplayer.js|assets/pagelock.js' 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VistaStream-Harvester-Unified
+          path: VistaStream-Harvester-Unified.apk
+          if-no-files-found: error
+      - name: Publish verified single APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "vista-harvester-unified-${GITHUB_RUN_NUMBER}" VistaStream-Harvester-Unified.apk \
+            --target "${GITHUB_SHA}" \
+            --title "Vista Stream + Harvester — APK unificado ${GITHUB_RUN_NUMBER}" \
+            --notes "Vista Stream mantém o catálogo e o player/Chromecast oficial. Harvester Browser v2.3 integrado como navegador interno completo, com scanner, inspetor, crawler limitado, biblioteca e bloqueios. O player antigo VistaCast não é incluído. Build de testes; ligação à TV e migração de dados de APKs separados ainda não validadas." \
+            --prerelease
