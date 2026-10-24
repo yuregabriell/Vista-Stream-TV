@@ -8,6 +8,10 @@ import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -73,7 +77,14 @@ fun KeylessCatalogScreen(
                 decorFitsSystemWindows = false
             )
         ) {
-            KeylessOnlinePlayer(player, onClose = viewModel::closePlayer)
+            KeylessOnlinePlayer(
+                server = player,
+                resumePositionMs = state.resumePositionMs,
+                onProgress = viewModel::savePlayback,
+                onTryAlternative = { viewModel.nextSource(player) },
+                hasAlternative = state.servers.any { it.id != player.id && it.url != player.url },
+                onClose = viewModel::closePlayer
+            )
         }
         return
     }
@@ -91,7 +102,8 @@ fun KeylessCatalogScreen(
             failedProviders = state.failedProviders,
             onBack = viewModel::closeDetails,
             onEpisode = viewModel::chooseEpisode,
-            onResolve = viewModel::findStreams,
+            resumePositionMs = state.savedProgressMs,
+            onWatch = viewModel::playFirst,
             onPlay = viewModel::play
         )
         return
@@ -198,75 +210,175 @@ private fun KeylessTitleDetails(
     providersChecked: Int,
     providersTotal: Int,
     failedProviders: List<String>,
+    resumePositionMs: Long,
     onBack: () -> Unit,
     onEpisode: (Int, Int) -> Unit,
-    onResolve: () -> Unit,
+    onWatch: () -> Unit,
     onPlay: (VideoServer) -> Unit
 ) {
     BackHandler(onBack = onBack)
+    var sourcesExpanded by remember(title.sourceId) { mutableStateOf(false) }
+    val seasons = remember(episodes) { episodes.map { it.season }.distinct().sorted() }
+    val currentSeasonEpisodes = remember(episodes, season) { episodes.filter { it.season == season } }
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        Modifier.fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        TextButton(onClick = onBack) {
-            Icon(Icons.Default.ArrowBack, contentDescription = null)
-            Text(" Voltar à biblioteca")
-        }
-        Text(title.title, style = MaterialTheme.typography.headlineMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Box(Modifier.fillMaxWidth().height(208.dp)) {
             AsyncImage(
-                model = title.poster,
+                model = title.background ?: title.poster,
                 contentDescription = null,
-                modifier = Modifier.width(120.dp).height(180.dp),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
             )
-            Column {
-                Text(listOfNotNull(title.year?.toString(), if (title.type == "anime") "Anime" else title.type).joinToString(" · "))
-                Spacer(Modifier.height(8.dp))
-                Text(title.description.ifBlank { "Sem sinopse disponível." }, maxLines = 8, overflow = TextOverflow.Ellipsis)
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.2f), Color.Black.copy(alpha = 0.96f)))
+                )
+            )
+            TextButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(12.dp)) {
+                Icon(Icons.Default.ArrowBack, contentDescription = null, tint = Color.White)
+                Text(" Biblioteca", color = Color.White)
             }
-        }
-        if (title.type != "movie") {
-            Text("Episódios", style = MaterialTheme.typography.titleMedium)
-            if (episodes.isNotEmpty()) {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(episodes.take(250)) { ep ->
-                        FilterChip(
-                            selected = season == ep.season && episode == ep.number,
-                            onClick = { onEpisode(ep.season, ep.number) },
-                            label = { Text("T${ep.season} E${ep.number}") }
-                        )
-                    }
-                }
-            } else {
-                Text("Temporada $season · Episódio $episode — seleção inicial; catálogo sem lista detalhada.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        Button(onClick = onResolve, enabled = !resolving) {
-            Icon(Icons.Default.PlayArrow, contentDescription = null)
-            Text(if (resolving) " A procurar streams online..." else " Encontrar fontes online")
-        }
-        if (resolving) LinearProgressIndicator(Modifier.fillMaxWidth())
-        if (resolving || resolved) {
             Text(
-                "Fontes consultadas: $providersChecked / $providersTotal • Streams encontrados: ${servers.size}",
+                title.title,
+                modifier = Modifier.align(Alignment.BottomStart).padding(18.dp),
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+        }
+        Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(
+                listOfNotNull(
+                    title.year?.toString(),
+                    when (title.type) { "movie" -> "Filme"; "anime" -> "Anime"; else -> "Série" },
+                    if (title.type != "movie") "Temporada $season · Episódio $episode" else null
+                ).joinToString("  •  "),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Text(
+                title.description.ifBlank { "Sinopse não disponível." },
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 7,
+                overflow = TextOverflow.Ellipsis
+            )
+            Button(
+                onClick = onWatch,
+                enabled = servers.isNotEmpty() && !resolving,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(9.dp)
+            ) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(when {
+                    resolving -> "A procurar reprodução..."
+                    servers.isEmpty() -> "Sem fonte disponível"
+                    resumePositionMs > 15_000L -> "Continuar"
+                    else -> "Assistir"
+                }, fontWeight = FontWeight.Bold)
+            }
+            if (resolving) {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
+            Text(
+                if (resolving || resolved)
+                    "Fontes verificadas: $providersChecked/$providersTotal · Streams: ${servers.size}"
+                else "A preparar fontes online...",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-        if (resolved && servers.isEmpty()) {
-            Text(
-                "Nenhuma extensão instalada ofereceu um vídeo HTTP compatível para este título. " +
-                "Algumas fontes exigem um ID TMDB/IMDb válido; sem ele não apresentamos links fictícios. " +
-                "Adiciona uma fonte Stremio com streams diretos, ou escolhe outro título.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        servers.forEach { server ->
-            OutlinedButton(onClick = { onPlay(server) }, modifier = Modifier.fillMaxWidth()) {
-                Text("${server.providerName} · ${server.name} · ${server.streamType}", maxLines = 2)
+            if (resolved && servers.isEmpty()) {
+                Text(
+                    "Nenhum vídeo compatível encontrado. O catálogo informa quais títulos existem, " +
+                        "mas não garante disponibilidade em cada extensão.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            if (servers.isNotEmpty()) {
+                OutlinedButton(
+                    onClick = { sourcesExpanded = !sourcesExpanded },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Fontes disponíveis (${servers.size})  " + if (sourcesExpanded) "⌃" else "⌄")
+                }
+                if (sourcesExpanded) {
+                    servers.forEach { server ->
+                        OutlinedButton(onClick = { onPlay(server) }, modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                "${server.providerName} · ${server.name} · ${server.streamType}",
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+            if (title.type != "movie") {
+                HorizontalDivider()
+                Text("Episódios", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                if (seasons.size > 1) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(seasons) { n ->
+                            FilterChip(
+                                selected = season == n,
+                                onClick = {
+                                    episodes.firstOrNull { it.season == n }?.let { onEpisode(n, it.number) }
+                                },
+                                label = { Text("Temporada $n") }
+                            )
+                        }
+                    }
+                }
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp)
+                ) {
+                    items(currentSeasonEpisodes.ifEmpty {
+                        listOf(com.ivor.openstream.data.catalog.KeylessEpisode(season, episode, "Episódio $episode"))
+                    }, key = { "${it.season}:${it.number}" }) { ep ->
+                        val selected = ep.season == season && ep.number == episode
+                        Column(
+                            modifier = Modifier.width(190.dp)
+                                .clickable { onEpisode(ep.season, ep.number) }
+                                .background(
+                                    if (selected) MaterialTheme.colorScheme.surfaceContainerHigh
+                                    else MaterialTheme.colorScheme.surfaceContainerLow,
+                                    RoundedCornerShape(12.dp)
+                                ).padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(Modifier.fillMaxWidth().height(106.dp)) {
+                                AsyncImage(
+                                    model = title.background ?: title.poster,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                                if (selected) {
+                                    Icon(
+                                        Icons.Default.PlayArrow,
+                                        contentDescription = "Episódio selecionado",
+                                        tint = Color.White,
+                                        modifier = Modifier.align(Alignment.Center)
+                                            .background(Color.Black.copy(alpha = 0.56f), RoundedCornerShape(50))
+                                            .padding(6.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                "${ep.number}. ${ep.title}",
+                                maxLines = 2,
+                                style = MaterialTheme.typography.labelMedium,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
             }
         }
     }
