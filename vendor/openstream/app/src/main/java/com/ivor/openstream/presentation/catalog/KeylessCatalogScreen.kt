@@ -414,6 +414,7 @@ private fun KeylessTitleDetails(
                     }
                 }
             }
+            Spacer(Modifier.height(110.dp))
         }
     }
 }
