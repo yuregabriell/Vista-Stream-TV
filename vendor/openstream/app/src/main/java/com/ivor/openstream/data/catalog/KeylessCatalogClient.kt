@@ -118,8 +118,8 @@ class KeylessCatalogClient @Inject constructor(
         }.distinctBy { it.season to it.number }.sortedWith(compareBy({ it.season }, { it.number }))
     }
 
-    suspend fun findAnimeImdb(item: KeylessTitle): String? {
-        if (item.imdbId != null) return item.imdbId
+    suspend fun findAnimeImdb(item: KeylessTitle): String? = withContext(Dispatchers.IO) {
+        if (item.imdbId != null) return@withContext item.imdbId
         val candidates = listOfNotNull(item.alternateTitle, item.title).distinct()
         for (name in candidates) {
             val matches = runCatching { cinemeta("series", name, 1) }.getOrDefault(emptyList())
@@ -128,9 +128,9 @@ class KeylessCatalogClient @Inject constructor(
                 it.title.filter(Char::isLetterOrDigit).lowercase() == normalized ||
                     it.alternateTitle?.filter(Char::isLetterOrDigit)?.lowercase() == normalized
             }?.imdbId
-            if (found != null) return found
+            if (found != null) return@withContext found
         }
-        return null
+        null
     }
 
     private fun cinemeta(type: String, query: String, page: Int): List<KeylessTitle> {
