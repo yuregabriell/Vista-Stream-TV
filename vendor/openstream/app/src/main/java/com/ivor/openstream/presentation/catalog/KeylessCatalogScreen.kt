@@ -221,7 +221,6 @@ private fun KeylessTitleDetails(
     onPlay: (VideoServer) -> Unit
 ) {
     BackHandler(onBack = onBack)
-    var sourcesExpanded by remember(title.sourceId) { mutableStateOf(false) }
     val seasons = remember(episodes) { episodes.map { it.season }.distinct().sorted() }
     val currentSeasonEpisodes = remember(episodes, season) { episodes.filter { it.season == season } }
     Column(
@@ -304,19 +303,50 @@ private fun KeylessTitleDetails(
                 )
             }
             if (servers.isNotEmpty()) {
-                OutlinedButton(
-                    onClick = { sourcesExpanded = !sourcesExpanded },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Fontes disponíveis (${servers.size})  " + if (sourcesExpanded) "⌃" else "⌄")
-                }
-                if (sourcesExpanded) {
-                    servers.forEach { server ->
-                        OutlinedButton(onClick = { onPlay(server) }, modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                "${server.providerName} · ${server.name} · ${server.streamType}",
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
+                var menuOpen by remember(title.sourceId, season, episode) { mutableStateOf(false) }
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { menuOpen = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Fontes disponíveis (${servers.size})")
+                        Spacer(Modifier.weight(1f))
+                        Text("▾")
+                    }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onDismissRequest = { menuOpen = false },
+                        modifier = Modifier
+                            .widthIn(min = 270.dp, max = 560.dp)
+                            .heightIn(max = 340.dp)
+                    ) {
+                        servers.forEach { server ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(
+                                            server.providerName,
+                                            maxLines = 1,
+                                            style = MaterialTheme.typography.titleSmall
+                                        )
+                                        Text(
+                                            "${server.name} · ${server.streamType}" +
+                                                (server.audioLanguage?.let { " · $it" } ?: ""),
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    menuOpen = false
+                                    onPlay(server)
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                }
                             )
                         }
                     }
