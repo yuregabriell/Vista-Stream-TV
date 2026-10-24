@@ -2,7 +2,6 @@ package com.ivor.openstream.harvester
 
 import android.content.Intent
 import android.net.Uri
-import android.webkit.URLUtil
 import kotlinx.serialization.Serializable
 
 /**
@@ -21,6 +20,7 @@ object HarvesterContract {
     const val EXTRA_PAGE_URL = "com.vistastream.tv.extra.PAGE_URL"
     private val videoExtensions = Regex("""(?i)\.(mp4|m4v|mkv|webm|m3u8|mpd|mov|ts|m2ts|flv|avi|3gp)(?:[?#].*)?$""")
 
+    @Suppress("DEPRECATION")
     fun parse(intent: Intent?): HarvesterMedia? {
         intent ?: return null
         val action = intent.action ?: return null
@@ -29,7 +29,7 @@ object HarvesterContract {
             ACTION_PLAY -> intent.getStringExtra(EXTRA_URL) ?: intent.dataString
             Intent.ACTION_VIEW -> intent.dataString
             else -> intent.getStringExtra(Intent.EXTRA_TEXT)
-                ?: intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)?.toString()
+                ?: intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)?.toString()
         }?.trim()?.takeIf { it.length in 7..8192 } ?: return null
         // A text share containing an arbitrary web page must not be sent straight
         // to the decoder: browser detection must first extract a real stream.
