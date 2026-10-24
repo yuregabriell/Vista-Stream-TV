@@ -32,7 +32,8 @@ data class KeylessTitle(
     val tmdbId: Int? = null,
     val anilistId: Int? = null,
     val episodes: Int? = null,
-    val alternateTitle: String? = null
+    val alternateTitle: String? = null,
+    val genres: List<String> = emptyList()
 )
 
 data class KeylessEpisode(val season: Int, val number: Int, val title: String)
@@ -48,9 +49,9 @@ class KeylessCatalogClient @Inject constructor(
     val tmdbConfigured: Boolean get() = keyStore.current().isNotBlank()
 
     /** Cinemeta is a Stremio metadata/catalog service; it does NOT host the movies. */
-    suspend fun titles(type: String, query: String = "", page: Int = 1, force: Boolean = false): List<KeylessTitle> = withContext(Dispatchers.IO) {
-        val cacheKey = "${type}_${query.trim().lowercase()}_$page"
-        if (!force && query.isBlank() && page == 1 &&
+    suspend fun titles(type: String, query: String = "", page: Int = 1, force: Boolean = false, genre: String = "", year: Int? = null): List<KeylessTitle> = withContext(Dispatchers.IO) {
+        val cacheKey = "${type}_${query.trim().lowercase()}_${genre}_${year ?: 0}_$page"
+        if (!force && query.isBlank() && genre.isBlank() && year == null && page == 1 &&
             System.currentTimeMillis() - prefs.getLong("${cacheKey}_ts", 0L) < 6 * 60 * 60 * 1000L) {
             prefs.getString(cacheKey, null)?.let { raw ->
                 runCatching { json.decodeFromString<List<KeylessTitle>>(raw) }.getOrNull()
@@ -59,19 +60,19 @@ class KeylessCatalogClient @Inject constructor(
         }
         val results = runCatching {
             when (type) {
-                "anime" -> anime(query, page)
-                "movie", "series" -> cinemeta(type, query, page)
+                "anime" -> anime(query, page, genre, year)
+                "movie", "series" -> cinemeta(type, query, page, genre, year)
                 else -> emptyList()
             }
         }.getOrElse { problem ->
             // Keep the last-known-good catalog even if it is older than the refresh TTL.
-            if (query.isBlank() && page == 1) {
+            if (query.isBlank() && genre.isBlank() && year == null && page == 1) {
                 prefs.getString(cacheKey, null)?.let { raw ->
                     runCatching { json.decodeFromString<List<KeylessTitle>>(raw) }.getOrNull()
                 } ?: throw problem
             } else throw problem
         }
-        if (query.isBlank() && results.isNotEmpty() && page == 1) {
+        if (query.isBlank() && genre.isBlank() && year == null && results.isNotEmpty() && page == 1) {
             prefs.edit().putString(cacheKey, json.encodeToString(results))
                 .putLong("${cacheKey}_ts", System.currentTimeMillis()).apply()
         }
@@ -133,37 +134,57 @@ class KeylessCatalogClient @Inject constructor(
         null
     }
 
-    private fun cinemeta(type: String, query: String, page: Int): List<KeylessTitle> {
-        val extra = if (query.isNotBlank()) "search=${Uri.encode(query)}" else if (page > 1) "skip=${(page - 1) * 100}" else ""
-        val path = "https://v3-cinemeta.strem.io/catalog/$type/top" + if (extra.isNotEmpty()) "/$extra.json" else ".json"
-        val result = json.parseToJsonElement(request(path)) as? JsonObject ?: return emptyList()
-        val metas = result["metas"] as? JsonArray ?: return emptyList()
+
+    private fun cinemeta(type: String, query: String, page: Int, genre: String = "", year: Int? = null): List<KeylessTitle> {
+        // Cinemeta year catalog and standard genre/search/skip extras.
+        val catalog = if (year != null && query.isBlank()) "year" else "top"
+        val extras = buildList {
+            if (catalog == "year") add("genre=${year}")
+            else if (genre.isNotBlank()) add("genre=${Uri.encode(genre)}")
+            if (query.isNotBlank()) add("search=${Uri.encode(query)}")
+            if (page > 1) add("skip=${(page - 1) * 100}")
+        }
+        val path = "https://v3-cinemeta.strem.io/catalog/$type/$catalog" +
+            if (extras.isNotEmpty()) "/${extras.joinToString("&")}.json" else ".json"
+        val response = json.parseToJsonElement(request(path)) as? JsonObject ?: return emptyList()
+        val metas = response["metas"] as? JsonArray ?: return emptyList()
         return metas.mapNotNull { it as? JsonObject }.mapNotNull { meta ->
             val id = meta.str("id") ?: return@mapNotNull null
             if (!id.startsWith("tt")) return@mapNotNull null
             val title = meta.str("name") ?: return@mapNotNull null
             if (meta.str("adult") == "true") return@mapNotNull null
+            val genres = (meta["genres"] as? JsonArray)?.mapNotNull {
+                (it as? JsonPrimitive)?.contentOrNull
+            }.orEmpty()
             KeylessTitle(
-                sourceId = "cinemeta:$id",
-                title = title,
-                type = type,
-                year = meta.str("releaseInfo")?.take(4)?.toIntOrNull() ?: meta.str("year")?.take(4)?.toIntOrNull(),
+                sourceId = "cinemeta:$id", title = title, type = type,
+                year = meta.str("releaseInfo")?.take(4)?.toIntOrNull()
+                    ?: meta.str("year")?.take(4)?.toIntOrNull(),
                 poster = meta.str("poster"),
                 background = meta.str("background") ?: meta.str("banner"),
                 description = meta.str("description").orEmpty(),
                 imdbId = id,
-                tmdbId = meta.str("moviedb_id")?.toIntOrNull()
+                tmdbId = meta.str("moviedb_id")?.toIntOrNull(),
+                genres = genres
             )
         }.distinctBy(KeylessTitle::sourceId)
+            .filter { item ->
+                (year == null || item.year == null || item.year == year) &&
+                    (genre.isBlank() || catalog != "year" ||
+                        item.genres.any { it.equals(genre, ignoreCase = true) })
+            }
     }
 
-    private fun anime(query: String, page: Int): List<KeylessTitle> {
+    private fun anime(query: String, page: Int, genre: String = "", year: Int? = null): List<KeylessTitle> {
         val graphql = """
-          query(${'$'}page: Int, ${'$'}search: String) {
+          query(${'$'}page: Int, ${'$'}search: String, ${'$'}genre: String,
+                ${'$'}yearStart: FuzzyDateInt, ${'$'}yearEnd: FuzzyDateInt) {
             Page(page: ${'$'}page, perPage: 24) {
-              media(type: ANIME, isAdult: false, sort: [TRENDING_DESC], search: ${'$'}search) {
+              media(type: ANIME, isAdult: false, sort: [TRENDING_DESC],
+                    search: ${'$'}search, genre: ${'$'}genre,
+                    startDate_greater: ${'$'}yearStart, startDate_lesser: ${'$'}yearEnd) {
                 id title { english romaji native } coverImage { large } bannerImage
-                description(asHtml: false) startDate { year } episodes format
+                description(asHtml: false) startDate { year } episodes format genres
               }
             }
           }
@@ -171,10 +192,12 @@ class KeylessCatalogClient @Inject constructor(
         val variables = buildJsonObject {
             put("page", page)
             put("search", if (query.isBlank()) JsonNull else JsonPrimitive(query.trim()))
+            put("genre", if (genre.isBlank()) JsonNull else JsonPrimitive(genre))
+            put("yearStart", if (year == null) JsonNull else JsonPrimitive(year * 10_000 + 101))
+            put("yearEnd", if (year == null) JsonNull else JsonPrimitive(year * 10_000 + 1231))
         }
         val body = buildJsonObject { put("query", graphql); put("variables", variables) }.toString()
-        val request = Request.Builder()
-            .url("https://graphql.anilist.co")
+        val request = Request.Builder().url("https://graphql.anilist.co")
             .header("Accept", "application/json")
             .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
             .build()
@@ -182,24 +205,28 @@ class KeylessCatalogClient @Inject constructor(
             if (!r.isSuccessful) throw IllegalStateException("AniList HTTP ${r.code}")
             r.body?.string().orEmpty()
         }
-        val list = (json.parseToJsonElement(raw) as? JsonObject)?.get("data")
-            ?.jsonObject?.get("Page")?.jsonObject?.get("media") as? JsonArray ?: return emptyList()
+        val response = json.parseToJsonElement(raw) as? JsonObject ?: return emptyList()
+        if (!(response["errors"] as? JsonArray).isNullOrEmpty()) {
+            throw IllegalStateException("AniList não conseguiu aplicar os filtros")
+        }
+        val list = response["data"]?.jsonObject?.get("Page")?.jsonObject
+            ?.get("media") as? JsonArray ?: return emptyList()
         return list.mapNotNull { item ->
             val obj = item as? JsonObject ?: return@mapNotNull null
             val id = obj.int("id") ?: return@mapNotNull null
             val title = obj["title"] as? JsonObject ?: return@mapNotNull null
             val name = title.str("english") ?: title.str("romaji") ?: return@mapNotNull null
             KeylessTitle(
-                sourceId = "anilist:$id",
-                title = name,
-                alternateTitle = title.str("romaji"),
+                sourceId = "anilist:$id", title = name, alternateTitle = title.str("romaji"),
                 type = "anime",
                 year = (obj["startDate"] as? JsonObject)?.int("year"),
                 poster = (obj["coverImage"] as? JsonObject)?.str("large"),
                 background = obj.str("bannerImage"),
                 description = obj.str("description").orEmpty().replace(Regex("<[^>]+>"), ""),
-                anilistId = id,
-                episodes = obj.int("episodes")
+                anilistId = id, episodes = obj.int("episodes"),
+                genres = (obj["genres"] as? JsonArray)?.mapNotNull {
+                    (it as? JsonPrimitive)?.contentOrNull
+                }.orEmpty()
             )
         }.distinctBy(KeylessTitle::sourceId)
     }
