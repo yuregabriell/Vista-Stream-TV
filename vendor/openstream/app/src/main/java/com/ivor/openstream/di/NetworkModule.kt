@@ -10,6 +10,7 @@ import com.ivor.openstream.data.remote.TmdbApi
 import com.ivor.openstream.data.remote.GithubApi
 import com.ivor.openstream.data.settings.AppDns
 import com.ivor.openstream.data.settings.AppSettingsStore
+import com.ivor.openstream.data.settings.TmdbKeyStore
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -41,11 +42,19 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideAuthInterceptor(): Interceptor = Interceptor { chain ->
+    fun provideAuthInterceptor(keyStore: TmdbKeyStore): Interceptor = Interceptor { chain ->
         val original = chain.request()
         val originalHttpUrl = original.url
         val url = originalHttpUrl.newBuilder()
-            .addQueryParameter("api_key", BuildConfig.TMDB_API_KEY)
+            .apply {
+                if (originalHttpUrl.host == "api.themoviedb.org") {
+                    val key = keyStore.current()
+                    if (key.isNotBlank()) addQueryParameter("api_key", key)
+                    if (originalHttpUrl.queryParameter("language") == null) {
+                        addQueryParameter("language", "pt-BR")
+                    }
+                }
+            }
             .apply {
                 // No adult titles anywhere in the app, for every profile.
                 if (originalHttpUrl.host == "api.themoviedb.org" && originalHttpUrl.queryParameter("include_adult") == null) addQueryParameter("include_adult", "false")

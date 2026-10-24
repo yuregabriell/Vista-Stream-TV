@@ -59,6 +59,7 @@ import com.ivor.openstream.domain.model.WatchProgress
 import com.ivor.openstream.presentation.home.HomeRail
 import com.ivor.openstream.presentation.home.HomeUiState
 import com.ivor.openstream.presentation.home.HomeViewModel
+import com.ivor.openstream.presentation.components.CatalogSetupError
 import kotlinx.coroutines.flow.debounce
 
 /** What the info panel above the rows describes: the featured title, or the card in focus. */
@@ -87,7 +88,7 @@ fun TvHomeScreen(
 
     when (val state = uiState) {
         HomeUiState.Loading -> TvLoading()
-        is HomeUiState.Error -> TvErrorState(onRetry = viewModel::refresh)
+        is HomeUiState.Error -> CatalogSetupError(onRetry = viewModel::refresh, onSaveKey = viewModel::configureCatalogKey)
         is HomeUiState.Success -> {
             val featured = remember(state.hero) { state.hero.firstOrNull { it.backdropPath != null } }
             var focus by remember { mutableStateOf<HomeFocus?>(null) }

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ivor.openstream.R
+import com.ivor.openstream.data.settings.TmdbKeyStore
 import com.ivor.openstream.data.images.ArtworkPrefetcher
 import com.ivor.openstream.data.images.TmdbImages
 import com.ivor.openstream.data.local.entity.TitleRatingEntity
@@ -85,6 +86,7 @@ class HomeViewModel @Inject constructor(
     private val listRepository: CustomListRepository,
     private val watchLaterRepository: WatchLaterRepository,
     private val artworkPrefetcher: ArtworkPrefetcher,
+    private val tmdbKeyStore: TmdbKeyStore,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -223,6 +225,12 @@ class HomeViewModel @Inject constructor(
 
     fun removeFromContinueWatching(item: WatchProgress) {
         viewModelScope.launch { watchProgressRepository.dismiss(item.mediaType, item.tmdbId) }
+    }
+
+    fun configureCatalogKey(value: String): Boolean {
+        if (!tmdbKeyStore.save(value)) return false
+        loadData(forceRefresh = true)
+        return true
     }
 
     /** Pull-to-refresh keeps the current feed on screen while the new one loads. */

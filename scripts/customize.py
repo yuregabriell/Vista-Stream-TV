@@ -8,8 +8,10 @@ root = Path(sys.argv[1]).resolve()
 build = root / "app/build.gradle.kts"
 text = build.read_text(encoding="utf-8")
 old = 'applicationId = "com.ivor.openstream"'
-assert old in text, "Application ID changed upstream; manual review needed"
-text = text.replace(old, 'applicationId = "com.vistastream.tv"')
+if old in text:
+    text = text.replace(old, 'applicationId = "com.vistastream.tv"')
+else:
+    assert 'applicationId = "com.vistastream.tv"' in text
 text = text.replace('versionName = "2.2"', 'versionName = "0.2.0-vista"')
 build.write_text(text, encoding="utf-8")
 
@@ -31,7 +33,7 @@ assert "android.intent.category.LEANBACK_LAUNCHER" in xml
 github_api = root / "app/src/main/java/com/ivor/openstream/data/remote/GithubApi.kt"
 api = github_api.read_text(encoding="utf-8")
 original_route = 'repos/ivorisnoob/openstream/releases/latest'
-assert original_route in api, "Upstream update path changed; audit before patching"
+assert original_route in api or 'repos/yuregabriell/Vista-Stream-TV/releases/latest' in api
 github_api.write_text(api.replace(
     original_route, 'repos/yuregabriell/Vista-Stream-TV/releases/latest'
 ), encoding="utf-8")

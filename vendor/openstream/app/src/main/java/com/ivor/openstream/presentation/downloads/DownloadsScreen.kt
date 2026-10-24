@@ -515,9 +515,8 @@ private fun LocalFilesView(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.fillMaxWidth().height(60.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         OutlinedTextField(
                             value = state.searchQuery,
@@ -533,9 +532,14 @@ private fun LocalFilesView(
                             },
                             singleLine = true,
                             shape = ExpressiveShapes.large,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth().height(56.dp)
                         )
-
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Box {
                             FilledTonalIconButton(onClick = { sortMenuExpanded = true }) {
                                 Icon(Icons.Default.Sort, contentDescription = stringResource(R.string.cd_sort_by, stringResource(state.sortOrder.labelRes)))
@@ -558,11 +562,7 @@ private fun LocalFilesView(
                                 }
                             }
                         }
-
-                        Button(
-                            onClick = onImportClick,
-                            shape = ExpressiveShapes.large
-                        ) {
+                        Button(onClick = onImportClick, shape = ExpressiveShapes.large) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
                             Text(stringResource(R.string.local_import_files))

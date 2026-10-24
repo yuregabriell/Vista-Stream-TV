@@ -56,9 +56,11 @@ class AnimeRepositoryImpl @Inject constructor(
         if (!forceRefresh && age != null && age in 0L until CATALOG_TTL_MS) return Result.success(cached.items)
         return fetchCatalog(catalog, if (forceRefresh) freshApi else api)
             .onSuccess { items ->
-                catalogCache[key] = CachedCatalog(System.currentTimeMillis(), items)
-                // Lists used to be kept here; the HTTP cache holds them now.
-                if (sharedPreferences.contains(key)) sharedPreferences.edit().remove(key).apply()
+                val snapshot = CachedCatalog(System.currentTimeMillis(), items)
+                catalogCache[key] = snapshot
+                if (items.isNotEmpty()) {
+                    sharedPreferences.edit().putString(key, json.encodeToString(snapshot)).apply()
+                }
             }
             // Offline with nothing in the HTTP cache either: an older list beats an empty Home.
             .recoverCatching { error -> (cached ?: readLegacyCatalog(key))?.items ?: throw error }

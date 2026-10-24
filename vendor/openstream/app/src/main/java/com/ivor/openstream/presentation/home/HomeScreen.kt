@@ -4,6 +4,7 @@ import com.ivor.openstream.ui.theme.onScrim
 import com.ivor.openstream.presentation.components.SkeletonBox
 import com.ivor.openstream.presentation.components.AnimeCard
 import com.ivor.openstream.presentation.components.bottomContentPadding
+import com.ivor.openstream.presentation.components.CatalogSetupError
 import com.ivor.openstream.presentation.components.byWidth
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -131,7 +132,7 @@ fun HomeScreen(
         when (val state = uiState) {
             HomeUiState.Loading -> HomeSkeleton()
 
-            is HomeUiState.Error -> HomeError(onRetry = { viewModel.loadData() })
+            is HomeUiState.Error -> CatalogSetupError(onRetry = viewModel::refresh, onSaveKey = viewModel::configureCatalogKey)
 
             is HomeUiState.Success -> PullToRefreshBox(
                 isRefreshing = state.isRefreshing,

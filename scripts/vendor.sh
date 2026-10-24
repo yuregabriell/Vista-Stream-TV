@@ -7,6 +7,10 @@ trap 'rm -rf "$WORK"' EXIT
 fetch_repo() {
   local src="$1" ref="$2" sha="$3" dest="$4"
   local directory="$WORK/$(basename "$dest")"
+  if [[ -f "$dest/LICENSE" ]]; then
+    echo "Preserving customized source $dest"
+    return
+  fi
   git clone --quiet --depth 1 --branch "$ref" "https://github.com/$src.git" "$directory"
   git -C "$directory" fetch --quiet --depth 1 origin "$sha"
   git -C "$directory" checkout --quiet --detach "$sha"
