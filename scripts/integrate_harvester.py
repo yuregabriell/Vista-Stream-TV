@@ -12,7 +12,7 @@ ROOT = Path("vendor/openstream")
 ANDROID = ROOT / "app"
 SRC = ANDROID / "src/main"
 JAVA = SRC / "java"
-HB = Path("/tmp/harvester-app")
+HB = Path("hb-v18")
 HB_SRC = HB / "app/src/main"
 
 main = HB_SRC / "java/com/harvester/browser/MainActivity.java"
