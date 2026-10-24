@@ -47,6 +47,7 @@ class UpdateViewModel @Inject constructor(
     val uiState: StateFlow<UpdateUiState> = _uiState.asStateFlow()
 
     val currentVersion: String = BuildConfig.VERSION_NAME
+    private val currentBuild: Int = BuildConfig.VISTA_BUILD_NUMBER
 
     private val downloads = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
     private var downloadId = -1L
@@ -59,18 +60,32 @@ class UpdateViewModel @Inject constructor(
     fun checkForUpdate() {
         viewModelScope.launch {
             _uiState.value = UpdateUiState.Checking
-            _uiState.value = runCatching { githubApi.getLatestRelease() }.fold(
-                onSuccess = { release ->
-                    if (isNewerVersion(release.tagName, currentVersion)) {
-                        UpdateUiState.Available(release, pickAsset(release))
-                    } else {
-                        UpdateUiState.UpToDate(release)
+            _uiState.value = runCatching { githubApi.getReleases() }.fold(
+                onSuccess = { releases ->
+                    // All Vista developer APKs are GitHub prereleases, so /releases/latest
+                    // cannot find them. Choose the newest numeric build with an APK asset.
+                    val newest = releases.asSequence()
+                        .filter { it.assets.any { asset -> asset.name.endsWith(".apk", true) } }
+                        .mapNotNull { release ->
+                            releaseBuild(release.tagName)?.let { number -> number to release }
+                        }
+                        .maxByOrNull { it.first }
+                    when {
+                        newest == null -> UpdateUiState.UpToDate(null)
+                        newest.first > currentBuild -> UpdateUiState.Available(
+                            newest.second, pickAsset(newest.second)
+                        )
+                        else -> UpdateUiState.UpToDate(newest.second)
                     }
                 },
                 onFailure = { UpdateUiState.Failed(context.getString(R.string.st_could_not_github)) }
             )
         }
     }
+
+    private fun releaseBuild(tag: String): Int? =
+        Regex("""build[.\\-_](\\d+)""", RegexOption.IGNORE_CASE)
+            .find(tag)?.groupValues?.getOrNull(1)?.toIntOrNull()
 
     fun download(release: GithubReleaseDto, asset: GithubAssetDto) {
         val target = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), asset.name)
@@ -148,20 +163,6 @@ class UpdateViewModel @Inject constructor(
             ?: apks.firstOrNull { it.name.contains("universal", ignoreCase = true) }
             ?: apks.firstOrNull { SPLIT_ABIS.none { split -> it.name.contains(split, ignoreCase = true) } }
             ?: apks.firstOrNull()
-    }
-
-    /** Compares the numbers in tags like `v2.0`, `2.0.1` or `ALPHA_0.4`; suffixes such as `-debug` are ignored. */
-    private fun isNewerVersion(latest: String, current: String): Boolean {
-        fun numbers(version: String): List<Int>? =
-            Regex("""\d+(\.\d+)*""").find(version)?.value?.split(".")?.map { it.toInt() }
-        val l = numbers(latest) ?: return false
-        val c = numbers(current) ?: return false
-        for (i in 0 until maxOf(l.size, c.size)) {
-            val lv = l.getOrElse(i) { 0 }
-            val cv = c.getOrElse(i) { 0 }
-            if (lv != cv) return lv > cv
-        }
-        return false
     }
 
     override fun onCleared() {
