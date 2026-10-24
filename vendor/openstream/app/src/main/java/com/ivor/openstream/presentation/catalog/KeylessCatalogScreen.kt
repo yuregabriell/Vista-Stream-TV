@@ -1,6 +1,7 @@
 package com.ivor.openstream.presentation.catalog
 
 import android.net.Uri
+import com.ivor.openstream.harvester.HarvesterShelf
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -470,6 +471,11 @@ fun KeylessCatalogScreen(
                         }
                     }
                 }
+            }
+        }
+        if (!browsing) {
+            item(key = "harvester-browser-library") {
+                HarvesterShelf()
             }
         }
         if (!browsing && continueWatching.isEmpty()) {
