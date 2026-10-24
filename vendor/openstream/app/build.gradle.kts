@@ -96,6 +96,11 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            // A private GitHub Actions signing key (when configured) makes
+            // consecutive APK updates installable over each other.
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
