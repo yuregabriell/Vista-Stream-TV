@@ -80,6 +80,37 @@
             </intent-filter>
         </activity>
 
+        <!-- Harvester Browser / Android share official Vista player.
+             Only recognized video links and explicit playback commands are accepted. -->
+        <activity
+            android:name=".harvester.HarvesterPlaybackActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
+            android:theme="@style/Theme.OpenStream">
+            <intent-filter>
+                <action android:name="com.vistastream.tv.action.PLAY" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="https" android:mimeType="video/*" />
+                <data android:scheme="http" android:mimeType="video/*" />
+                <data android:scheme="content" android:mimeType="video/*" />
+                <data android:scheme="https" android:mimeType="application/vnd.apple.mpegurl" />
+                <data android:scheme="http" android:mimeType="application/vnd.apple.mpegurl" />
+                <data android:scheme="https" android:mimeType="application/dash+xml" />
+                <data android:scheme="http" android:mimeType="application/dash+xml" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".data.service.HlsDownloadService"
             android:exported="false"
