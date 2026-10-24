@@ -68,6 +68,8 @@ fun VistaFullscreenPlayer(
     episodeLabel: String,
     resumePositionMs: Long,
     onProgress: (Long, Long) -> Unit,
+    availableServers: List<VideoServer>,
+    onSelectSource: (VideoServer) -> Unit,
     hasAlternative: Boolean,
     onTryAlternative: () -> Unit,
     onClose: () -> Unit
@@ -105,6 +107,7 @@ fun VistaFullscreenPlayer(
     var err by remember(server.url) { mutableStateOf<String?>(null) }
     var tracks by remember(server.url) { mutableStateOf(Tracks.EMPTY) }
     var trackSheet by remember(server.url) { mutableStateOf(false) }
+    var sourceSheet by remember(server.url) { mutableStateOf(false) }
     var retry by remember(server.url) { mutableIntStateOf(0) }
 
     val player = remember(server.id, server.url) {
@@ -312,6 +315,11 @@ fun VistaFullscreenPlayer(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("${clock(position)} / ${clock(duration)}", color = Color.White, style = MaterialTheme.typography.labelMedium)
                     Spacer(Modifier.weight(1f))
+                    if (availableServers.size > 1) {
+                        TextButton(onClick = { sourceSheet = true }) {
+                            Text("Fontes", color = Color.White)
+                        }
+                    }
                     TextButton(onClick = { trackSheet = true }) {
                         Icon(Icons.Default.Subtitles, contentDescription = null, tint = Color.White)
                         Spacer(Modifier.width(6.dp))
@@ -346,6 +354,38 @@ fun VistaFullscreenPlayer(
                 }
             }
         }
+    }
+    if (sourceSheet) {
+        AlertDialog(
+            onDismissRequest = { sourceSheet = false },
+            title = { Text("Escolher fonte de reprodução") },
+            text = {
+                Column(
+                    Modifier.widthIn(max = 600.dp).heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    availableServers.forEach { option ->
+                        TextButton(
+                            onClick = {
+                                sourceSheet = false
+                                if (option.id != server.id) onSelectSource(option)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                "${if (option.id == server.id) "✓  " else ""}${option.providerName} · ${option.name}" +
+                                    (option.audioLanguage?.let { " · $it" } ?: ""),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { sourceSheet = false }) { Text("Fechar") } }
+        )
     }
     if (trackSheet) {
         VistaTrackPicker(
