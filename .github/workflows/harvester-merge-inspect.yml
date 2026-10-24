@@ -1,0 +1,33 @@
+name: Inspect Harvester for native Vista merge
+on:
+  push:
+    branches: [vista-harvester-unified]
+    paths: [.github/workflows/harvester-merge-inspect.yml]
+  workflow_dispatch:
+permissions: {contents: read}
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch Harvester browser sources
+        run: |
+          git clone --quiet --depth 1 --branch harvester-browser-v23-safe-traffic \
+            https://github.com/yuregabrieldev/tiktok-feedback-helpers.git /tmp/harvest-repo
+          mkdir -p /tmp/harvester
+          cat /tmp/harvest-repo/harvester-browser/v1.4.0/payload*.txt | base64 -d | tar -xJf - -C /tmp/harvester
+          ( cd /tmp/harvester &&
+            python3 /tmp/harvest-repo/harvester-browser/v1.5.0/cast-patch.xz.b64 || true )
+      - name: Review original project structure
+        run: |
+          echo '=== APP PROJECT ==='
+          cat /tmp/harvester/app/build.gradle
+          echo '=== SOURCES ==='
+          find /tmp/harvester/app/src/main -type f | sort
+          echo '=== IMPORTS, MANIFEST, RESOURCE IDS ==='
+          grep -h 'com.harvester.browser.R\| R\.\|BuildConfig\|getResources()' /tmp/harvester/app/src/main/java/com/harvester/browser/*.java | head -60 || true
+          cat /tmp/harvester/app/src/main/AndroidManifest.xml
+          echo '=== MAIN METHOD LANDMARKS ==='
+          grep -n 'openNativePlayer\|requestCastAt\|NativePlayerActivity\|CastContext\|MainActivity extends\|onCreate(\|private void' /tmp/harvester/app/src/main/java/com/harvester/browser/MainActivity.java | tail -75
+          echo '=== VISTA LABELS ==='
+          grep -R 'HarvesterShelf\|HarvesterPlaybackActivity' -n vendor/openstream/app/src/main/java/com/ivor/openstream | head -40
