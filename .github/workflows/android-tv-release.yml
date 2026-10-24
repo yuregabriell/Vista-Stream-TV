@@ -68,6 +68,6 @@ jobs:
         run: |
           TAG="v0.2.0-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-TV-${GITHUB_RUN_NUMBER}.apk" \
-            --target "${GITHUB_SHA}" --title "Vista Stream TV — $TAG" \
+            --target "$(git rev-parse HEAD)" --title "Vista Stream TV — $TAG" \
             --notes "Versão inicial baseada no OpenStream MIT com fonte GoAnime MIT vendorizada (ainda sem runtime Go). Repositórios OpenStream e Stremio configuráveis na app. APK de desenvolvimento assinado temporariamente; para atualizar poderá ser necessário desinstalar a build anterior." \
             --prerelease
