@@ -162,6 +162,17 @@ text=text.replace(old,'''                composable(Screen.Browser.route) {
 '''+old,1)
 navigation.write_text(text)
 
+# Unified builds must have a higher versionCode than the latest Vista Stream
+# build 69, otherwise Android treats an in-place update as a downgrade.
+gradle=ANDROID / "build.gradle.kts"
+g=gradle.read_text()
+assert 'versionCode = vistaBuild' in g
+assert 'versionName = "0.2.0-build.$vistaBuild"' in g
+g=g.replace('versionCode = vistaBuild','versionCode = 1000 + vistaBuild',1)
+g=g.replace('versionName = "0.2.0-build.$vistaBuild"',
+            'versionName = "0.3.0-unified.$vistaBuild"',1)
+gradle.write_text(g)
+
 # Keep existing official Harvester player & saved shelf unchanged: all links
 # selected in the internal browser enter that same player, same Vista library.
 assert 'HarvesterPlaybackActivity' in xml
