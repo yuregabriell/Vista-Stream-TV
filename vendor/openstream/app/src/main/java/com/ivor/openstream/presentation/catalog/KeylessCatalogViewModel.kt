@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.ivor.openstream.data.catalog.KeylessCatalogClient
 import com.ivor.openstream.data.catalog.KeylessTitle
 import com.ivor.openstream.data.catalog.KeylessEpisode
+import com.ivor.openstream.data.catalog.VistaWatchHistory
 import com.ivor.openstream.domain.model.MediaIdentity
 import com.ivor.openstream.domain.model.VideoServer
 import com.ivor.openstream.domain.repository.StreamingRepository
@@ -17,7 +18,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 
 data class KeylessCatalogState(
@@ -34,6 +34,8 @@ data class KeylessCatalogState(
     val resolving: Boolean = false,
     val servers: List<VideoServer> = emptyList(),
     val playing: VideoServer? = null,
+    val resumePositionMs: Long = 0L,
+    val savedProgressMs: Long = 0L,
     val resolveFinished: Boolean = false,
     val resolvedProviders: Int = 0,
     val totalProviders: Int = 0,
@@ -43,7 +45,8 @@ data class KeylessCatalogState(
 @HiltViewModel
 class KeylessCatalogViewModel @Inject constructor(
     private val client: KeylessCatalogClient,
-    private val streams: StreamingRepository
+    private val streams: StreamingRepository,
+    private val history: VistaWatchHistory
 ) : ViewModel() {
     val hasTmdbKey: Boolean get() = client.tmdbConfigured
     private val _state = MutableStateFlow(KeylessCatalogState())
@@ -88,21 +91,37 @@ class KeylessCatalogViewModel @Inject constructor(
         episodeJob?.cancel()
         _state.value = _state.value.copy(
             selected = item, episodes = emptyList(), season = 1, episode = 1,
-            resolving = false, servers = emptyList(), playing = null, resolveFinished = false,
+            resolving = true, servers = emptyList(), playing = null, resolveFinished = false,
+            savedProgressMs = history.read(item.sourceId, 1, 1).takeIf { it.canResume }?.positionMs ?: 0L,
+            resumePositionMs = 0L,
             resolvedProviders = 0, totalProviders = 0, failedProviders = emptyList()
         )
         episodeJob = viewModelScope.launch {
             val enriched = runCatching { client.enrich(item) }.getOrDefault(item)
-            val list = runCatching { client.episodes(enriched) }.getOrDefault(emptyList())
+            val remoteEpisodes = runCatching { client.episodes(enriched) }.getOrDefault(emptyList())
+            // AniList exposes episode counts but often has no per-episode metadata.
+            val list = if (remoteEpisodes.isNotEmpty()) remoteEpisodes else {
+                (1..(enriched.episodes ?: 1).coerceIn(1, 250)).map {
+                    KeylessEpisode(1, it, "Episódio $it")
+                }
+            }
             if (_state.value.selected?.sourceId == item.sourceId) {
                 _state.value = _state.value.copy(selected = enriched, episodes = list)
+                // The user should not have to press a second button to search.
+                findStreams()
             }
         }
     }
 
     fun chooseEpisode(season: Int, episode: Int) {
         resolutionJob?.cancel()
-        _state.value = _state.value.copy(season = season, episode = episode, servers = emptyList(), resolveFinished = false, resolvedProviders = 0, totalProviders = 0, failedProviders = emptyList())
+        val title = _state.value.selected ?: return
+        _state.value = _state.value.copy(
+            season = season, episode = episode, servers = emptyList(), resolving = true,
+            savedProgressMs = history.read(title.sourceId, season, episode).takeIf { it.canResume }?.positionMs ?: 0L,
+            resolveFinished = false, resolvedProviders = 0, totalProviders = 0, failedProviders = emptyList()
+        )
+        findStreams()
     }
 
     fun closeDetails() {
@@ -156,11 +175,37 @@ class KeylessCatalogViewModel @Inject constructor(
     }
 
     fun play(server: VideoServer) {
-        resolutionJob?.cancel()
-        _state.value = _state.value.copy(playing = server, resolving = false)
+        val title = _state.value.selected ?: return
+        val saved = history.read(title.sourceId, _state.value.season, _state.value.episode)
+        _state.value = _state.value.copy(
+            playing = server, resolving = false,
+            resumePositionMs = saved.takeIf { it.canResume }?.positionMs ?: 0L
+        )
+    }
+
+    fun playFirst() {
+        _state.value.servers.firstOrNull()?.let(::play)
+    }
+
+    fun nextSource(current: VideoServer) {
+        val candidates = _state.value.servers
+        val next = candidates.firstOrNull { it.id != current.id && it.url != current.url }
+        if (next == null) closePlayer() else play(next)
+    }
+
+    fun savePlayback(positionMs: Long, durationMs: Long) {
+        val title = _state.value.selected ?: return
+        history.write(title.sourceId, _state.value.season, _state.value.episode, positionMs, durationMs)
     }
 
     fun closePlayer() {
-        _state.value = _state.value.copy(playing = null)
+        val title = _state.value.selected
+        _state.value = _state.value.copy(
+            playing = null,
+            savedProgressMs = if (title != null) {
+                history.read(title.sourceId, _state.value.season, _state.value.episode)
+                    .takeIf { it.canResume }?.positionMs ?: 0L
+            } else 0L
+        )
     }
 }
