@@ -23,6 +23,13 @@ class VistaWatchHistory @Inject constructor(@ApplicationContext context: Context
         )
     }
 
+    fun lastPlayedAt(id: String): Long = prefs.getLong("$id:lastPlayedAt", 0L)
+
+    fun isInProgress(id: String): Boolean {
+        val (season, episode) = lastEpisode(id) ?: return false
+        return read(id, season, episode).canResume
+    }
+
     fun lastEpisode(id: String): Pair<Int, Int>? {
         val season = prefs.getInt("$id:lastSeason", 0)
         val episode = prefs.getInt("$id:lastEpisode", 0)
@@ -38,6 +45,7 @@ class VistaWatchHistory @Inject constructor(@ApplicationContext context: Context
             .putLong("$key:duration", durationMs)
             .putInt("$id:lastSeason", season)
             .putInt("$id:lastEpisode", episode)
+            .putLong("$id:lastPlayedAt", System.currentTimeMillis())
             .apply()
     }
 }

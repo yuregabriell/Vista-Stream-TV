@@ -49,6 +49,11 @@ class KeylessCatalogViewModel @Inject constructor(
     private val history: VistaWatchHistory
 ) : ViewModel() {
     val hasTmdbKey: Boolean get() = client.tmdbConfigured
+
+    fun continueWatching(titles: List<KeylessTitle>): List<KeylessTitle> =
+        titles.filter { history.isInProgress(it.sourceId) }
+            .sortedByDescending { history.lastPlayedAt(it.sourceId) }
+            .take(20)
     private val _state = MutableStateFlow(KeylessCatalogState())
     val state: StateFlow<KeylessCatalogState> = _state.asStateFlow()
     private var job: Job? = null

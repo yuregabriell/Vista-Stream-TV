@@ -164,6 +164,9 @@ fun KeylessCatalogScreen(
             "Adicionados recentemente ao catálogo" to recentFirst.take(24)
         )
     }
+    val continueWatching = if (!searching && category == "all") {
+        viewModel.continueWatching(categoryItems)
+    } else emptyList()
     val wideLayout = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
     val posterWidth = if (wideLayout) 178.dp else 138.dp
     LazyColumn(
@@ -324,6 +327,46 @@ fun KeylessCatalogScreen(
                                     listOfNotNull(featured.year?.toString(), "Filme · Ver detalhes").joinToString("  •  "),
                                     color = Color.White.copy(alpha = 0.85f),
                                     style = MaterialTheme.typography.labelMedium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (continueWatching.isNotEmpty()) {
+            item(key = "continue-watching") {
+                Column(
+                    Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "Continuar a assistir",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(start = 22.dp)
+                    )
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(continueWatching, key = { it.sourceId }) { title ->
+                            Column(
+                                Modifier.width(posterWidth).clickable { viewModel.select(title) },
+                                verticalArrangement = Arrangement.spacedBy(7.dp)
+                            ) {
+                                AsyncImage(
+                                    model = title.poster ?: title.background,
+                                    contentDescription = title.title,
+                                    modifier = Modifier.fillMaxWidth().aspectRatio(0.69f),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Text(title.title, style = MaterialTheme.typography.labelLarge,
+                                    maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    "Retomar episódio ou filme",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
