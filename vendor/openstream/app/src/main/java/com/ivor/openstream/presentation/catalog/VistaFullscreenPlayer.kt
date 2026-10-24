@@ -28,6 +28,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -77,22 +79,30 @@ fun VistaFullscreenPlayer(
     BackHandler(onBack = onClose)
     val context = LocalContext.current
     val activity = remember(context) { context.findPlayerActivity() }
+    val composeView = LocalView.current
+    // A Compose Dialog has its own Android Window. Hide system bars there as
+    // well as on the host Activity, otherwise status/navigation bars remain visible.
+    val dialogWindow = remember(composeView) {
+        (composeView.parent as? DialogWindowProvider)?.window
+    }
 
     // SENSOR_LANDSCAPE permits either landscape rotation without prompting the user.
     // The activity manifest already handles orientation/screenSize config changes.
-    DisposableEffect(activity) {
+    DisposableEffect(activity, dialogWindow) {
         val original = activity?.requestedOrientation
-        val window = activity?.window
-        if (activity != null && window != null) {
+        val windows = listOfNotNull(activity?.window, dialogWindow).distinct()
+        if (activity != null) {
             activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+        windows.forEach { window ->
             WindowCompat.getInsetsController(window, window.decorView).apply {
                 systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                 hide(WindowInsetsCompat.Type.systemBars())
             }
         }
         onDispose {
-            if (activity != null && window != null) {
-                activity.requestedOrientation = original ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            activity?.requestedOrientation = original ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            windows.forEach { window ->
                 WindowCompat.getInsetsController(window, window.decorView)
                     .show(WindowInsetsCompat.Type.systemBars())
             }
