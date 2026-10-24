@@ -144,11 +144,14 @@ internal object HarvesterTitleMatching {
         val full=clean(value)
         val base=full.substringBefore(':').trim()
         val punct=full.replace(Regex("[^\\p{L}\\p{N}]+")," ").trim()
-        val guesses=mutableListOf(full,base,punct)
-        if("spider man" in compact(full))guesses.add("Spider Man")
+        val guesses=mutableListOf(full,base)
         val tokens=punct.split(" ").filter{it.isNotBlank()}
-        if(tokens.size>=4)guesses.add(tokens.take(2).joinToString(" "))
-        return guesses.filter{it.length>=2}.distinctBy(::compact).take(4)
+        if(tokens.size>=2)guesses.add(tokens.take(2).joinToString(" "))
+        if("spider man" in compact(full))guesses.add("Spider Man")
+        guesses.add(punct)
+        // Preserve URL search punctuation differences: the catalog indexes
+        // "homem aranha" more reliably than "homem-aranha".
+        return guesses.filter{it.length>=2}.distinctBy{it.lowercase(Locale.ROOT)}.take(4)
     }
     fun score(raw:String, candidate:String, year:Int?, expectedYear:Int?,
               type:String, preferredType:String):Int {
