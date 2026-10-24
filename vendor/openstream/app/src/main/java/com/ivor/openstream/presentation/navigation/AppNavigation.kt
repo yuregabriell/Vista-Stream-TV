@@ -536,7 +536,7 @@ fun AppNavigation(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .then(
-                        if (showToolbar) Modifier.padding(bottom = toolbarTop + 12.dp)
+                        if (showToolbar) Modifier.navigationBarsPadding().padding(bottom = toolbarTop + 12.dp)
                         else Modifier.navigationBarsPadding().padding(bottom = 16.dp)
                     )
                     .padding(horizontal = 16.dp)
@@ -581,6 +581,7 @@ fun AppNavigation(
                 HorizontalFloatingToolbar(
                     expanded = true,
                     modifier = Modifier
+                        .navigationBarsPadding()
                         .padding(bottom = ToolbarBottomOffset)
                         .onSizeChanged { toolbarHeightPx = it.height }
                         .pointerInput(Unit) {
@@ -666,7 +667,7 @@ fun AppNavigation(
 }
 
 /** Gap between the floating toolbar and the bottom edge of the window. */
-private val ToolbarBottomOffset = 50.dp
+private val ToolbarBottomOffset = 18.dp
 
 @Composable
 private fun OfflineBanner(showDownloadsAction: Boolean, onOpenDownloads: () -> Unit) {

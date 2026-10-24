@@ -239,7 +239,7 @@ private fun BrowseTab(
     CenteredListBox(Modifier.fillMaxSize(), minGutter = 16.dp) { gutter ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = gutter, end = gutter, top = 16.dp, bottom = 48.dp),
+            contentPadding = PaddingValues(start = gutter, end = gutter, top = 22.dp, bottom = 192.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
@@ -378,7 +378,7 @@ private fun InstalledTab(
     CenteredListBox(Modifier.fillMaxSize(), minGutter = 16.dp) { gutter ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = gutter, end = gutter, top = 16.dp, bottom = 48.dp),
+            contentPadding = PaddingValues(start = gutter, end = gutter, top = 22.dp, bottom = 192.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item {
@@ -518,7 +518,7 @@ private fun RepositoriesTab(
     CenteredListBox(Modifier.fillMaxSize(), minGutter = 16.dp) { gutter ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = gutter, end = gutter, top = 16.dp, bottom = 48.dp),
+            contentPadding = PaddingValues(start = gutter, end = gutter, top = 22.dp, bottom = 192.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             item(key = "ptbr-addon-configurator") {
