@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Storefront
@@ -98,6 +99,7 @@ private enum class MarketplaceTab(@StringRes val labelRes: Int) {
 @Composable
 fun MarketplaceScreen(
     onBackClick: () -> Unit,
+    onSettingsClick: () -> Unit = {},
     viewModel: MarketplaceViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -131,6 +133,9 @@ fun MarketplaceScreen(
                     )
                 },
                 actions = {
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(Icons.Default.Settings, contentDescription = "Abrir definições")
+                    }
                     RefreshAction(isSyncing = state.catalog.isSyncing, onClick = viewModel::refresh)
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -228,6 +233,8 @@ private fun BrowseTab(
     viewModel: MarketplaceViewModel,
     onOpenDetails: (MarketplaceExtension) -> Unit
 ) {
+    var compatibleOnly by rememberSaveable { mutableStateOf(false) }
+    val visibleResults = if (compatibleOnly) state.results.filter { it.manifest.isSupported } else state.results
     CenteredListBox(Modifier.fillMaxSize(), minGutter = 16.dp) { gutter ->
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -252,6 +259,21 @@ private fun BrowseTab(
                     shape = ExpressiveShapes.medium,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search)
                 )
+            }
+
+            item(key = "compatibility") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = !compatibleOnly,
+                        onClick = { compatibleOnly = false },
+                        label = { Text("Todas (${state.results.size})") }
+                    )
+                    FilterChip(
+                        selected = compatibleOnly,
+                        onClick = { compatibleOnly = true },
+                        label = { Text("Compatíveis (${state.results.count { it.manifest.isSupported }})") }
+                    )
+                }
             }
 
             if (!state.isFiltered && state.charts.isNotEmpty()) {
@@ -312,7 +334,7 @@ private fun BrowseTab(
                 }
             }
 
-            if (state.results.isEmpty()) {
+            if (visibleResults.isEmpty()) {
                 item {
                     EmptyState(
                         icon = Icons.Default.Storefront,
@@ -329,7 +351,7 @@ private fun BrowseTab(
                     )
                 }
             } else {
-                items(state.results, key = { it.key }) { extension ->
+                items(visibleResults, key = { it.key }) { extension ->
                     ExtensionRow(
                         extension = extension,
                         onClick = { onOpenDetails(extension) },

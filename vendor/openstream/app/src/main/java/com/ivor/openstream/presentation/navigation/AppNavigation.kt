@@ -405,7 +405,8 @@ fun AppNavigation(
 
                 composable(Screen.Marketplace.route) {
                     MarketplaceScreen(
-                        onBackClick = { navController.popBackStack() }
+                        onBackClick = { navController.popBackStack() },
+                        onSettingsClick = { navController.navigate(Screen.Settings.route) }
                     )
                 }
 

@@ -78,13 +78,14 @@ fun TvExtensionsScreen(
     val state by viewModel.state.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
     var showInstalled by remember { mutableStateOf(false) }
+    var compatibleOnly by remember { mutableStateOf(false) }
     var showAddRepo by remember { mutableStateOf(false) }
     var repoInput by remember { mutableStateOf("") }
     var selectedKey by remember { mutableStateOf<String?>(null) }
     var pendingRemove by remember { mutableStateOf<MarketplaceExtension?>(null) }
     var detailHasFocus by remember { mutableStateOf(false) }
 
-    val visible = if (showInstalled) state.installed else state.results
+    val visible = if (showInstalled) state.installed else if (compatibleOnly) state.results.filter { it.manifest.isSupported } else state.results
     val selected = visible.firstOrNull { it.key == selectedKey } ?: visible.firstOrNull()
     val rowRequesters = remember { mutableMapOf<String, FocusRequester>() }
     fun rowRequester(key: String) = rowRequesters.getOrPut(key) { FocusRequester() }
@@ -169,6 +170,11 @@ fun TvExtensionsScreen(
                         }
                     }
                     if (!showInstalled) {
+                        TvPill(
+                            label = if (compatibleOnly) "Compatíveis" else "Todas as fontes",
+                            selected = compatibleOnly,
+                            onClick = { compatibleOnly = !compatibleOnly }
+                        )
                         androidx.compose.material3.OutlinedTextField(
                             value = state.query,
                             onValueChange = viewModel::setQuery,

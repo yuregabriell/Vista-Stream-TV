@@ -21,6 +21,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -32,6 +33,7 @@ fun CatalogSetupError(
     onOpenSources: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val uriHandler = LocalUriHandler.current
     var key by rememberSaveable { mutableStateOf("") }
     var invalid by rememberSaveable { mutableStateOf(false) }
     Column(
@@ -49,7 +51,11 @@ fun CatalogSetupError(
                     "Uma chave TMDB API v3 pode ser necessária nesta instalação. Verifica também a Internet.",
                 style = MaterialTheme.typography.bodyMedium
             )
-            Text("Obtém a tua chave em themoviedb.org/settings/api:", style = MaterialTheme.typography.bodySmall)
+            Text("A chave gratuita é criada na tua própria conta do TMDB:", style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(
+                onClick = { uriHandler.openUri("https://www.themoviedb.org/settings/api") },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Abrir TMDB para obter chave API v3") }
             OutlinedTextField(
                 value = key,
                 onValueChange = { key = it; invalid = false },
