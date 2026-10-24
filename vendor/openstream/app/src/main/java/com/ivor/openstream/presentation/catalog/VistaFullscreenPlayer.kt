@@ -180,8 +180,6 @@ fun VistaFullscreenPlayer(
             }
         }
         player.addListener(listener)
-        player.prepare()
-        player.playWhenReady = true
         onDispose {
             val length = player.duration
             if (length > 0) onProgress(player.currentPosition, length)
@@ -190,11 +188,29 @@ fun VistaFullscreenPlayer(
         }
     }
     LaunchedEffect(player) {
+        // Some sources return an HLS manifest behind a misleading .mp4 path.
+        // Correct media-source selection from HTTP Content-Type when available.
+        val hint = VistaStreamMime.fromHeaders(server)
+        val original = player.currentMediaItem
+        if (hint != null && original != null && original.localConfiguration?.mimeType != hint) {
+            val at = player.currentPosition
+            player.setMediaItem(original.buildUpon().setMimeType(hint).build())
+            if (at > 0) player.seekTo(at)
+        }
+        player.prepare()
+        player.playWhenReady = true
+    }
+
+    LaunchedEffect(player) {
+        var lastSavedBucket = -1L
         while (true) {
             delay(1200)
             position = player.currentPosition.coerceAtLeast(0)
             duration = player.duration.takeIf { it > 0 } ?: 0L
-            if (player.isPlaying && duration > 0) onProgress(position, duration)
+            if (player.isPlaying && duration > 0 && position / 5_000L != lastSavedBucket) {
+                onProgress(position, duration)
+                lastSavedBucket = position / 5_000L
+            }
         }
     }
     LaunchedEffect(visible, playing, trackSheet, err) {
