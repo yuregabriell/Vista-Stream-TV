@@ -242,7 +242,8 @@ class KeylessCatalogViewModel @Inject constructor(
                     if (_state.value.selected?.sourceId == item.sourceId) {
                         _state.value = _state.value.copy(
                             servers = resolution.servers.filter {
-                                it.url.startsWith("https://") || it.url.startsWith("http://")
+                                it.url.startsWith("https://") || it.url.startsWith("http://") ||
+                                    it.url.startsWith("rtsp://")
                             },
                             resolving = !resolution.isComplete, resolveFinished = resolution.isComplete,
                             resolvedProviders = resolution.completedProviders,

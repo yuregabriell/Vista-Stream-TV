@@ -133,6 +133,9 @@ fun VistaFullscreenPlayer(
                 val inferred = server.mimeType ?: when {
                     server.isHls -> MimeTypes.APPLICATION_M3U8
                     server.url.substringBefore('?').endsWith(".mpd", ignoreCase = true) -> MimeTypes.APPLICATION_MPD
+                    server.url.contains(".ism/Manifest", ignoreCase = true) -> MimeTypes.APPLICATION_SS
+                    server.url.substringBefore('?').endsWith(".mkv", ignoreCase = true) -> MimeTypes.VIDEO_MATROSKA
+                    server.url.substringBefore('?').endsWith(".webm", ignoreCase = true) -> MimeTypes.VIDEO_WEBM
                     else -> null
                 }
                 val subtitles = server.subtitles.mapNotNull { entry ->
@@ -201,14 +204,19 @@ fun VistaFullscreenPlayer(
         }
     }
     LaunchedEffect(player) {
-        // Some sources return an HLS manifest behind a misleading .mp4 path.
-        // Correct media-source selection from HTTP Content-Type when available.
-        val hint = VistaStreamMime.fromHeaders(server)
-        val original = player.currentMediaItem
-        if (hint != null && original != null && original.localConfiguration?.mimeType != hint) {
-            val at = player.currentPosition
-            player.setMediaItem(original.buildUpon().setMimeType(hint).build())
-            if (at > 0) player.seekTo(at)
+        // Probe direct HTTP sources once before playback. The actual content
+        // can be HLS, DASH, SmoothStreaming or a progressive container.
+        val detected = VistaStreamMime.inspect(server)
+        if (detected.unsupportedReason != null) {
+            err = detected.unsupportedReason
+            return@LaunchedEffect
+        }
+        val media = player.currentMediaItem
+        val hint = detected.mime
+        if (hint != null && media != null &&
+            media.localConfiguration?.mimeType != hint
+        ) {
+            player.setMediaItem(media.buildUpon().setMimeType(hint).build())
         }
         player.prepare()
         player.playWhenReady = true
