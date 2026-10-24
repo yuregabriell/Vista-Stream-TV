@@ -75,6 +75,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -512,6 +513,7 @@ private fun RepositoriesTab(
     viewModel: MarketplaceViewModel
 ) {
     var repoUrl by rememberSaveable { mutableStateOf("") }
+    val links = LocalUriHandler.current
 
     CenteredListBox(Modifier.fillMaxSize(), minGutter = 16.dp) { gutter ->
         LazyColumn(
@@ -519,6 +521,44 @@ private fun RepositoriesTab(
             contentPadding = PaddingValues(start = gutter, end = gutter, top = 16.dp, bottom = 48.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            item(key = "ptbr-addon-configurator") {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = ExpressiveShapes.large,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    Column(
+                        Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text("Fontes em português do Brasil",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold)
+                        Text(
+                            "AIOStreams PT-BR é uma configuração partilhada no Reddit que agrega " +
+                                "fontes dubladas. Não é um addon pronto: podes precisar de uma conta " +
+                                "Debrid, configurar o serviço e gerar o teu próprio manifest.json.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Button(onClick = {
+                            links.openUri("https://aiostreams.fortheweak.cloud/stremio/configure")
+                        }) { Text("Configurar AIOStreams PT-BR") }
+                        Text(
+                            "Depois de configurar, cola abaixo o URL manifest.json gerado. " +
+                                "O Vista importa o manifesto compatível, não as tuas credenciais.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        androidx.compose.material3.TextButton(onClick = {
+                            links.openUri("https://www.reddit.com/r/StremioAddons/comments/1u9mp5t/")
+                        }) { Text("Ver publicação e configuração original") }
+                        androidx.compose.material3.TextButton(onClick = {
+                            links.openUri("https://www.reddit.com/r/StremioAddons/comments/1sgp8q8/")
+                        }) { Text("Recomendações de legendas PT-BR") }
+                    }
+                }
+            }
+
             item(key = "popular-repositories") {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
