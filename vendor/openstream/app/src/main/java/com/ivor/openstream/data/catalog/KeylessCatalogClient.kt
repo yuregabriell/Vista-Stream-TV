@@ -176,39 +176,54 @@ class KeylessCatalogClient @Inject constructor(
     }
 
     private fun anime(query: String, page: Int, genre: String = "", year: Int? = null): List<KeylessTitle> {
+        // Build only the requested GraphQL arguments. The no-filter request
+        // deliberately matches the previously working AniList request.
+        // JsonPrimitive serialises search/genre strings with proper GraphQL quotes.
+        val arguments = buildList {
+            add("type: ANIME")
+            add("isAdult: false")
+            add("sort: [TRENDING_DESC]")
+            if (query.isNotBlank()) add("search: ${JsonPrimitive(query.trim())}")
+            if (genre.isNotBlank()) add("genre: ${JsonPrimitive(genre)}")
+            if (year != null) {
+                add("startDate_greater: ${year * 10_000}")
+                add("startDate_lesser: ${(year + 1) * 10_000}")
+            }
+        }.joinToString(", ")
         val graphql = """
-          query(${'$'}page: Int, ${'$'}search: String, ${'$'}genre: String,
-                ${'$'}yearStart: FuzzyDateInt, ${'$'}yearEnd: FuzzyDateInt) {
-            Page(page: ${'$'}page, perPage: 24) {
-              media(type: ANIME, isAdult: false, sort: [TRENDING_DESC],
-                    search: ${'$'}search, genre: ${'$'}genre,
-                    startDate_greater: ${'$'}yearStart, startDate_lesser: ${'$'}yearEnd) {
+          query {
+            Page(page: $page, perPage: 24) {
+              media($arguments) {
                 id title { english romaji native } coverImage { large } bannerImage
                 description(asHtml: false) startDate { year } episodes format genres
               }
             }
           }
         """.trimIndent()
-        val variables = buildJsonObject {
-            put("page", page)
-            put("search", if (query.isBlank()) JsonNull else JsonPrimitive(query.trim()))
-            put("genre", if (genre.isBlank()) JsonNull else JsonPrimitive(genre))
-            put("yearStart", if (year == null) JsonNull else JsonPrimitive(year * 10_000 + 101))
-            put("yearEnd", if (year == null) JsonNull else JsonPrimitive(year * 10_000 + 1231))
-        }
-        val body = buildJsonObject { put("query", graphql); put("variables", variables) }.toString()
+        val body = buildJsonObject { put("query", graphql) }.toString()
         val request = Request.Builder().url("https://graphql.anilist.co")
             .header("Accept", "application/json")
+            .header("User-Agent", "VistaStream/1.0 (Android; public anime catalog)")
             .post(body.toRequestBody("application/json; charset=utf-8".toMediaType()))
             .build()
-        val raw = http.newCall(request).execute().use { r ->
-            if (!r.isSuccessful) throw IllegalStateException("AniList HTTP ${r.code}")
-            r.body?.string().orEmpty()
+        val raw = http.newCall(request).execute().use { response ->
+            val content = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val explanation = runCatching {
+                    ((json.parseToJsonElement(content) as JsonObject)["errors"] as? JsonArray)
+                        ?.firstOrNull()?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull
+                }.getOrNull()
+                throw IllegalStateException(
+                    "AniList HTTP ${response.code}" +
+                        (explanation?.take(180)?.let { ": $it" } ?: "")
+                )
+            }
+            content
         }
         val response = json.parseToJsonElement(raw) as? JsonObject ?: return emptyList()
-        if (!(response["errors"] as? JsonArray).isNullOrEmpty()) {
-            throw IllegalStateException("AniList não conseguiu aplicar os filtros")
-        }
+        val error = (response["errors"] as? JsonArray)?.firstOrNull()
+            ?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull
+        if (error != null) throw IllegalStateException("AniList: ${error.take(180)}")
         val list = response["data"]?.jsonObject?.get("Page")?.jsonObject
             ?.get("media") as? JsonArray ?: return emptyList()
         return list.mapNotNull { item ->
