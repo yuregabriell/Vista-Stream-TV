@@ -291,6 +291,7 @@ fun AppNavigation(
                             navController.navigate(Screen.Details.createRoute(mediaType, id))
                         },
                         onSettingsClick = { navController.navigate(Screen.Settings.route) },
+                        onOpenSources = { navController.navigate(Screen.Marketplace.route) },
                         onUpdateClick = { navController.navigate(Screen.Update.route) },
                         profile = activeProfile,
                         onSwitchProfile = { showProfilePicker = true }
@@ -305,7 +306,8 @@ fun AppNavigation(
                         onAnimeClick = { animeId, mediaType ->
                             navController.navigate(Screen.Details.createRoute(mediaType, animeId))
                         },
-                        focusTrigger = focusTrigger
+                        focusTrigger = focusTrigger,
+                        onOpenSources = { navController.navigate(Screen.Marketplace.route) }
                     )
                 }
 

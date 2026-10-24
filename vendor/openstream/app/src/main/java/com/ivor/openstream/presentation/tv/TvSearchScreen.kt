@@ -58,6 +58,8 @@ import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Surface
 import com.ivor.openstream.R
+import com.ivor.openstream.presentation.catalog.KeylessCatalogScreen
+import com.ivor.openstream.presentation.catalog.KeylessCatalogViewModel
 import com.ivor.openstream.data.remote.model.AnimeDto
 import com.ivor.openstream.domain.model.BrowseGenre
 import com.ivor.openstream.presentation.search.SearchViewModel
@@ -78,8 +80,14 @@ private val KEY_GAP: Dp = 6.dp
 fun TvSearchScreen(
     onTitleClick: (animeId: Int, mediaType: String) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenSources: () -> Unit = {},
+    keylessViewModel: KeylessCatalogViewModel = hiltViewModel(),
     viewModel: SearchViewModel = hiltViewModel()
 ) {
+    if (!keylessViewModel.hasTmdbKey) {
+        KeylessCatalogScreen(modifier = modifier, onOpenSources = onOpenSources, searchFirst = true, viewModel = keylessViewModel)
+        return
+    }
     val state by viewModel.uiState.collectAsState()
     val query = state.query
     val firstKey = remember { FocusRequester() }

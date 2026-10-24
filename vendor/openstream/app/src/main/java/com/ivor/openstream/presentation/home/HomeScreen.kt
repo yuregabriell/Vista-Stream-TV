@@ -1,6 +1,8 @@
 package com.ivor.openstream.presentation.home
 
 import com.ivor.openstream.ui.theme.onScrim
+import com.ivor.openstream.presentation.catalog.KeylessCatalogScreen
+import com.ivor.openstream.presentation.catalog.KeylessCatalogViewModel
 import com.ivor.openstream.presentation.components.SkeletonBox
 import com.ivor.openstream.presentation.components.AnimeCard
 import com.ivor.openstream.presentation.components.bottomContentPadding
@@ -99,11 +101,17 @@ fun HomeScreen(
     onResume: (WatchProgress) -> Unit,
     onOpenDetails: (mediaType: String, id: Int) -> Unit,
     onSettingsClick: () -> Unit,
+    onOpenSources: () -> Unit = {},
     onUpdateClick: () -> Unit = {},
     profile: Profile? = null,
     onSwitchProfile: () -> Unit = {},
-    viewModel: HomeViewModel = hiltViewModel()
+    viewModel: HomeViewModel = hiltViewModel(),
+    keylessViewModel: KeylessCatalogViewModel = hiltViewModel()
 ) {
+    if (!keylessViewModel.hasTmdbKey) {
+        KeylessCatalogScreen(onOpenSources = onOpenSources, viewModel = keylessViewModel)
+        return
+    }
     val uiState by viewModel.uiState.collectAsState()
     val continueWatching by viewModel.continueWatching.collectAsState()
     val matches by viewModel.matches.collectAsState()

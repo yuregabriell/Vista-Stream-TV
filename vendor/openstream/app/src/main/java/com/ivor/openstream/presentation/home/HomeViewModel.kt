@@ -211,7 +211,7 @@ class HomeViewModel @Inject constructor(
             profileRepository.activeProfile
                 .map { it?.isKids }
                 .distinctUntilChanged()
-                .collect { kids -> if (kids != null) loadData() }
+                .collect { kids -> if (kids != null && tmdbKeyStore.current().isNotBlank()) loadData() }
         }
     }
 

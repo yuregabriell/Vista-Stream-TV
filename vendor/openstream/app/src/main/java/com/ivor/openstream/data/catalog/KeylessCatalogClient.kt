@@ -47,9 +47,10 @@ class KeylessCatalogClient @Inject constructor(
     val tmdbConfigured: Boolean get() = keyStore.current().isNotBlank()
 
     /** Cinemeta is a Stremio metadata/catalog service; it does NOT host the movies. */
-    suspend fun titles(type: String, query: String = "", page: Int = 1): List<KeylessTitle> = withContext(Dispatchers.IO) {
+    suspend fun titles(type: String, query: String = "", page: Int = 1, force: Boolean = false): List<KeylessTitle> = withContext(Dispatchers.IO) {
         val cacheKey = "${type}_${query.trim().lowercase()}_$page"
-        if (query.isBlank() && page == 1) {
+        if (!force && query.isBlank() && page == 1 &&
+            System.currentTimeMillis() - prefs.getLong("${cacheKey}_ts", 0L) < 6 * 60 * 60 * 1000L) {
             prefs.getString(cacheKey, null)?.let { raw ->
                 runCatching { json.decodeFromString<List<KeylessTitle>>(raw) }.getOrNull()
                     ?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
@@ -61,14 +62,15 @@ class KeylessCatalogClient @Inject constructor(
             else -> emptyList()
         }
         if (query.isBlank() && results.isNotEmpty() && page == 1) {
-            prefs.edit().putString(cacheKey, json.encodeToString(results)).apply()
+            prefs.edit().putString(cacheKey, json.encodeToString(results))
+                .putLong("${cacheKey}_ts", System.currentTimeMillis()).apply()
         }
         results
     }
 
-    suspend fun refresh(): Map<String, List<KeylessTitle>> = supervisorScope {
+    suspend fun refresh(force: Boolean = false): Map<String, List<KeylessTitle>> = supervisorScope {
         listOf("movie", "series", "anime").map { type ->
-            async { type to runCatching { titles(type) }.getOrDefault(emptyList()) }
+            async { type to runCatching { titles(type, force = force) }.getOrDefault(emptyList()) }
         }.map { it.await() }.toMap()
     }
 
@@ -126,9 +128,9 @@ class KeylessCatalogClient @Inject constructor(
 
     private fun anime(query: String, page: Int): List<KeylessTitle> {
         val graphql = """
-          query(\$page: Int, \$search: String) {
-            Page(page: \$page, perPage: 24) {
-              media(type: ANIME, isAdult: false, sort: [TRENDING_DESC], search: \$search) {
+          query($page: Int, $search: String) {
+            Page(page: $page, perPage: 24) {
+              media(type: ANIME, isAdult: false, sort: [TRENDING_DESC], search: $search) {
                 id title { english romaji native } coverImage { large } bannerImage
                 description(asHtml: false) startDate { year } episodes format
               }

@@ -58,6 +58,8 @@ import com.ivor.openstream.data.remote.model.AnimeDto
 import com.ivor.openstream.domain.model.WatchProgress
 import com.ivor.openstream.presentation.home.HomeRail
 import com.ivor.openstream.presentation.home.HomeUiState
+import com.ivor.openstream.presentation.catalog.KeylessCatalogScreen
+import com.ivor.openstream.presentation.catalog.KeylessCatalogViewModel
 import com.ivor.openstream.presentation.home.HomeViewModel
 import com.ivor.openstream.presentation.components.CatalogSetupError
 import kotlinx.coroutines.flow.debounce
@@ -82,8 +84,13 @@ fun TvHomeScreen(
     onPlay: (mediaType: String, id: Int, season: Int, episode: Int) -> Unit,
     onOpenExtensions: () -> Unit = {},
     modifier: Modifier = Modifier,
-    viewModel: HomeViewModel = hiltViewModel()
+    viewModel: HomeViewModel = hiltViewModel(),
+    keylessViewModel: KeylessCatalogViewModel = hiltViewModel()
 ) {
+    if (!keylessViewModel.hasTmdbKey) {
+        KeylessCatalogScreen(modifier = modifier, onOpenSources = onOpenExtensions, viewModel = keylessViewModel)
+        return
+    }
     val uiState by viewModel.uiState.collectAsState()
     val continueWatching by viewModel.continueWatching.collectAsState()
 

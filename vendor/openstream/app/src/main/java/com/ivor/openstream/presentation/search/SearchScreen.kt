@@ -2,6 +2,8 @@ package com.ivor.openstream.presentation.search
 
 import com.ivor.openstream.ui.theme.onScrim
 import com.ivor.openstream.R
+import com.ivor.openstream.presentation.catalog.KeylessCatalogScreen
+import com.ivor.openstream.presentation.catalog.KeylessCatalogViewModel
 import com.ivor.openstream.presentation.components.bottomContentPadding
 import com.ivor.openstream.presentation.components.isCompactWidth
 import androidx.compose.foundation.layout.height
@@ -126,8 +128,14 @@ fun SearchScreen(
     onBackClick: () -> Unit,
     onAnimeClick: (Int, String) -> Unit,
     focusTrigger: Long = 0L,
+    onOpenSources: () -> Unit = {},
+    keylessViewModel: KeylessCatalogViewModel = hiltViewModel(),
     viewModel: SearchViewModel = hiltViewModel()
 ) {
+    if (!keylessViewModel.hasTmdbKey) {
+        KeylessCatalogScreen(onOpenSources = onOpenSources, searchFirst = true, viewModel = keylessViewModel)
+        return
+    }
     val state by viewModel.uiState.collectAsState()
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
