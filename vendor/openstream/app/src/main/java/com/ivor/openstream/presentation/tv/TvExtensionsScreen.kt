@@ -43,6 +43,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -75,6 +76,7 @@ fun TvExtensionsScreen(
     modifier: Modifier = Modifier,
     viewModel: MarketplaceViewModel = hiltViewModel()
 ) {
+    val uriHandler = LocalUriHandler.current
     val state by viewModel.state.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
     var showInstalled by remember { mutableStateOf(false) }
@@ -284,6 +286,14 @@ fun TvExtensionsScreen(
                             "Fontes OpenStream e add-ons Stremio compatíveis podem funcionar no nosso player.",
                             style = MaterialTheme.typography.bodySmall
                         )
+                        androidx.compose.material3.Text(
+                            "AIOStreams PT-BR: a configuração do Reddit exige gerar " +
+                                "um URL próprio; não é uma extensão pronta para importar.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        androidx.compose.material3.TextButton(onClick = {
+                            uriHandler.openUri("https://aiostreams.fortheweak.cloud/stremio/configure")
+                        }) { androidx.compose.material3.Text("Configurar AIOStreams PT-BR") }
                         androidx.compose.material3.TextButton(onClick = {
                             viewModel.addRepo("https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json")
                             showInstalled = false
