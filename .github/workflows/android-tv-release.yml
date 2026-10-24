@@ -92,8 +92,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.2.0-build.${GITHUB_RUN_NUMBER}"
+          TAG="v0.3.0-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-TV-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "Vista Stream TV — $TAG" \
-            --notes "Versão inicial baseada no OpenStream MIT com fonte GoAnime MIT vendorizada (ainda sem runtime Go). Repositórios OpenStream e Stremio configuráveis na app. APK de desenvolvimento assinado temporariamente; para atualizar poderá ser necessário desinstalar a build anterior." \
+            --notes "Versão com Catálogo BR opt-in: fontes experimentais, catálogo aberto Creative Commons, pesquisa, episódios e player Media3. Extensões CloudStream .cs3 não são executadas no VS. APK de desenvolvimento assinado temporariamente; para atualizar poderá ser necessário desinstalar a build anterior." \
             --prerelease
