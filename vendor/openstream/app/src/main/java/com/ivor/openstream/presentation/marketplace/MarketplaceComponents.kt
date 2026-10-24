@@ -1,0 +1,722 @@
+package com.ivor.openstream.presentation.marketplace
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.scale
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+
+import androidx.compose.animation.AnimatedVisibility
+import com.ivor.openstream.R
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Update
+import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.ui.res.stringResource
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import com.ivor.openstream.domain.model.ExtensionRepo
+import com.ivor.openstream.domain.model.ExtensionStatus
+import com.ivor.openstream.domain.model.MarketplaceExtension
+import com.ivor.openstream.ui.theme.ExpressiveShapes
+import java.util.concurrent.TimeUnit
+import kotlin.math.roundToInt
+
+@Composable
+fun ExtensionAvatar(
+    extension: MarketplaceExtension,
+    size: Int = 48
+) {
+    val manifest = extension.manifest
+    Surface(
+        modifier = Modifier.size(size.dp),
+        shape = ExpressiveShapes.medium,
+        color = if (extension.isActive) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        },
+        contentColor = if (extension.isActive) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
+    ) {
+        if (manifest.iconUrl != null) {
+            AsyncImage(
+                model = manifest.iconUrl,
+                contentDescription = null,
+                modifier = Modifier.size(size.dp).clip(ExpressiveShapes.medium)
+            )
+        } else {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = manifest.name.take(1).uppercase(),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun StatusDot(status: ExtensionStatus) {
+    Surface(
+        modifier = Modifier.size(8.dp),
+        shape = CircleShape,
+        color = statusColor(status)
+    ) {}
+}
+
+@Composable
+fun statusColor(status: ExtensionStatus): Color = when (status) {
+    ExtensionStatus.OK -> MaterialTheme.colorScheme.primary
+    ExtensionStatus.SLOW -> MaterialTheme.colorScheme.tertiary
+    ExtensionStatus.BETA -> MaterialTheme.colorScheme.secondary
+    ExtensionStatus.DOWN -> MaterialTheme.colorScheme.error
+}
+
+/** A row in the browse and installed lists. */
+@Composable
+fun ExtensionRow(
+    extension: MarketplaceExtension,
+    onClick: () -> Unit,
+    onInstall: () -> Unit,
+    onUninstall: () -> Unit,
+    onUpdate: () -> Unit,
+    onEnabledChange: (Boolean) -> Unit,
+    rank: Int? = null,
+    /** Installed tab only: move this source up or down the search order (null at either end). */
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null,
+    showReorder: Boolean = false
+) {
+    val manifest = extension.manifest
+    val rowInteractionSource = remember { MutableInteractionSource() }
+    val isRowFocused by rowInteractionSource.collectIsFocusedAsState()
+    Surface(
+        onClick = onClick,
+        interactionSource = rowInteractionSource,
+        shape = ExpressiveShapes.large,
+        color = if (isRowFocused) {
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        } else if (extension.isInstalled) {
+            MaterialTheme.colorScheme.surfaceContainerHigh
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        },
+        border = if (isRowFocused) {
+            BorderStroke(2.5.dp, MaterialTheme.colorScheme.primary)
+        } else if (extension.hasUpdate) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.7f))
+        } else {
+            null
+        },
+        shadowElevation = if (isRowFocused) 8.dp else 0.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (isRowFocused) Modifier.scale(1.02f) else Modifier)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (rank != null) {
+                    Text(
+                        text = rank.toString(),
+                        modifier = Modifier.width(24.dp),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                ExtensionAvatar(extension)
+                Spacer(Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = manifest.name,
+                            modifier = Modifier.weight(1f, fill = false),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (manifest.tags.contains("official")) {
+                            Spacer(Modifier.width(6.dp))
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = stringResource(R.string.st_official_repo),
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = extensionSubtitle(extension),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                ExtensionAction(
+                    extension = extension,
+                    onInstall = onInstall,
+                    onUpdate = onUpdate
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = manifest.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            AnimatedVisibility(
+                visible = extension.isInstalled,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                Column {
+                    Spacer(Modifier.height(12.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = when {
+                                !manifest.isSupported -> stringResource(R.string.st_needs_newer_app)
+                                extension.isEnabled -> stringResource(R.string.er_active_player)
+                                else -> stringResource(R.string.mk_paused)
+                            },
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (extension.isEnabled) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                        if (showReorder) {
+                            IconButton(onClick = { onMoveUp?.invoke() }, enabled = onMoveUp != null) {
+                                Icon(Icons.Default.KeyboardArrowUp, contentDescription = stringResource(R.string.cd_move_up, manifest.name))
+                            }
+                            IconButton(onClick = { onMoveDown?.invoke() }, enabled = onMoveDown != null) {
+                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = stringResource(R.string.cd_move_down, manifest.name))
+                            }
+                        }
+                        Switch(
+                            checked = extension.isEnabled,
+                            onCheckedChange = onEnabledChange,
+                            enabled = manifest.isSupported
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        TextButton(onClick = onUninstall) {
+                            Icon(
+                                Icons.Outlined.DeleteOutline,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(stringResource(R.string.action_remove))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExtensionAction(
+    extension: MarketplaceExtension,
+    onInstall: () -> Unit,
+    onUpdate: () -> Unit
+) {
+    when {
+        extension.hasUpdate -> {
+            val updateInteractionSource = remember { MutableInteractionSource() }
+            val isUpdateFocused by updateInteractionSource.collectIsFocusedAsState()
+            FilledTonalButton(
+                onClick = onUpdate,
+                interactionSource = updateInteractionSource,
+                shape = ExpressiveShapes.small,
+                border = if (isUpdateFocused) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                modifier = if (isUpdateFocused) Modifier.scale(1.08f) else Modifier
+            ) {
+                Icon(Icons.Default.Update, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.action_update))
+            }
+        }
+
+        extension.isInstalled -> Icon(
+            imageVector = Icons.Default.CheckCircle,
+            contentDescription = stringResource(R.string.st_installed),
+            tint = MaterialTheme.colorScheme.primary
+        )
+
+        !extension.manifest.isSupported -> Text(
+            text = stringResource(R.string.mk_unsupported),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.error
+        )
+
+        else -> {
+            val installInteractionSource = remember { MutableInteractionSource() }
+            val isInstallFocused by installInteractionSource.collectIsFocusedAsState()
+            Button(
+                onClick = onInstall,
+                interactionSource = installInteractionSource,
+                shape = ExpressiveShapes.small,
+                border = if (isInstallFocused) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                modifier = if (isInstallFocused) Modifier.scale(1.08f) else Modifier
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.action_install))
+            }
+        }
+    }
+}
+
+/** Compact "top charts" tile used in the browse rail. */
+@Composable
+fun ChartTile(
+    rank: Int,
+    extension: MarketplaceExtension,
+    onClick: () -> Unit,
+    onInstall: () -> Unit
+) {
+    val manifest = extension.manifest
+    val tileInteractionSource = remember { MutableInteractionSource() }
+    val isTileFocused by tileInteractionSource.collectIsFocusedAsState()
+    Surface(
+        onClick = onClick,
+        interactionSource = tileInteractionSource,
+        shape = ExpressiveShapes.large,
+        color = if (isTileFocused) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = if (isTileFocused) BorderStroke(2.5.dp, MaterialTheme.colorScheme.primary) else null,
+        shadowElevation = if (isTileFocused) 8.dp else 0.dp,
+        modifier = Modifier
+            .width(212.dp)
+            .then(if (isTileFocused) Modifier.scale(1.04f) else Modifier)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "#$rank",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.weight(1f))
+                StatusDot(manifest.status)
+            }
+            Spacer(Modifier.height(10.dp))
+            ExtensionAvatar(extension, size = 40)
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = manifest.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = manifest.language,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(12.dp))
+            if (extension.isInstalled) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.st_installed),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            } else {
+                Button(
+                    onClick = onInstall,
+                    shape = ExpressiveShapes.small,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.action_install))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun RepoCard(
+    repo: ExtensionRepo,
+    extensionCount: Int,
+    onRemove: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = ExpressiveShapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (repo.isBuiltIn) Icons.Default.Verified else Icons.Default.Public,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = repo.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = repo.url.substringAfter("://"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (!repo.isBuiltIn) {
+                    TextButton(onClick = onRemove) { Text(stringResource(R.string.action_remove)) }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Static facts, not actions: plain pills instead of disabled chips, so
+                // screen readers hear text rather than a disabled button.
+                StaticMetaChip(stringResource(R.string.st_extensions_count, extensionCount))
+                StaticMetaChip(lastSyncLabel(repo.lastSyncedAt))
+            }
+            if (repo.error != null) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = repo.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StaticMetaChip(text: String) {
+    Surface(
+        shape = ExpressiveShapes.small,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ExtensionDetailsSheet(
+    extension: MarketplaceExtension,
+    repoName: String,
+    onDismiss: () -> Unit,
+    onInstall: () -> Unit,
+    onUninstall: () -> Unit,
+    onUpdate: () -> Unit,
+    onEnabledChange: (Boolean) -> Unit
+) {
+    val manifest = extension.manifest
+    val uriHandler = LocalUriHandler.current
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 32.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ExtensionAvatar(extension, size = 64)
+                Spacer(Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = manifest.name,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        text = stringResource(R.string.misc_author_version, manifest.author, manifest.versionName),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(18.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatBlock(label = stringResource(R.string.st_status), value = stringResource(manifest.status.labelRes))
+                StatBlock(label = stringResource(R.string.details_language), value = manifest.language)
+                StatBlock(
+                    label = if (manifest.installs > 0) stringResource(R.string.mk_stat_installs) else stringResource(R.string.mk_stat_reliability),
+                    value = if (manifest.installs > 0) {
+                        formatCount(manifest.installs)
+                    } else {
+                        reliabilityLabel(extension)
+                    }
+                )
+            }
+
+            Spacer(Modifier.height(18.dp))
+            Text(
+                text = manifest.description,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(Modifier.height(18.dp))
+            DetailLine(label = stringResource(R.string.st_repository), value = repoName)
+            DetailLine(label = stringResource(R.string.sheet_engine), value = manifest.engine.type.key)
+            if (manifest.tags.isNotEmpty()) {
+                DetailLine(label = stringResource(R.string.st_tags), value = manifest.tags.joinToString(", "))
+            }
+            if (manifest.updatedAt > 0L) {
+                DetailLine(label = stringResource(R.string.st_updated), value = lastSyncLabel(manifest.updatedAt))
+            }
+            if (manifest.rating > 0f && manifest.ratingCount > 0) {
+                DetailLine(
+                    label = stringResource(R.string.li_sort_rating),
+                    value = stringResource(R.string.misc_rating_count, manifest.rating.toString(), formatCount(manifest.ratingCount.toLong()))
+                )
+            }
+
+            if (extension.isInstalled) {
+                Spacer(Modifier.height(14.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = stringResource(R.string.sheet_use_resolving),
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Switch(
+                        checked = extension.isEnabled,
+                        onCheckedChange = onEnabledChange,
+                        enabled = manifest.isSupported
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                when {
+                    extension.hasUpdate -> Button(
+                        onClick = onUpdate,
+                        modifier = Modifier.weight(1f),
+                        shape = ExpressiveShapes.small
+                    ) {
+                        Icon(Icons.Default.Update, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.st_updated_to, manifest.versionName))
+                    }
+
+                    !extension.isInstalled -> Button(
+                        onClick = onInstall,
+                        modifier = Modifier.weight(1f),
+                        shape = ExpressiveShapes.small,
+                        enabled = manifest.isSupported
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.action_install))
+                    }
+
+                    else -> OutlinedButton(
+                        onClick = onUninstall,
+                        modifier = Modifier.weight(1f),
+                        shape = ExpressiveShapes.small
+                    ) {
+                        Icon(Icons.Outlined.DeleteOutline, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.action_remove))
+                    }
+                }
+                if (manifest.homepage != null) {
+                    OutlinedButton(
+                        onClick = { uriHandler.openUri(manifest.homepage) },
+                        shape = ExpressiveShapes.small
+                    ) {
+                        Text(stringResource(R.string.up_website))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatBlock(label: String, value: String) {
+    Surface(
+        shape = ExpressiveShapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHighest
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailLine(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+        Text(
+            text = label,
+            modifier = Modifier.width(110.dp),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
+@Composable
+fun EmptyState(icon: ImageVector, title: String, body: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = ExpressiveShapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            modifier = Modifier.padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(36.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(
+                text = body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun extensionSubtitle(extension: MarketplaceExtension): String {
+    val manifest = extension.manifest
+    val parts = mutableListOf(manifest.language, "v${manifest.versionName}")
+    if (manifest.installs > 0) parts += stringResource(R.string.misc_installs, formatCount(manifest.installs))
+    extension.usage.successRate?.let { parts += stringResource(R.string.misc_success_rate, (it * 100).roundToInt()) }
+    if (manifest.isFallback) parts += stringResource(R.string.mk_fallback_tag)
+    return parts.joinToString(" · ")
+}
+
+@Composable
+fun reliabilityLabel(extension: MarketplaceExtension): String {
+    val rate = extension.usage.successRate ?: return stringResource(R.string.er_no_data)
+    return "${(rate * 100).roundToInt()}%"
+}
+
+fun formatCount(value: Long): String = when {
+    value >= 1_000_000 -> "${value / 100_000 / 10.0}M"
+    value >= 1_000 -> "${value / 100 / 10.0}k"
+    else -> value.toString()
+}
+
+@Composable
+fun lastSyncLabel(timestamp: Long): String {
+    if (timestamp <= 0L) return stringResource(R.string.up_never_synced)
+    val elapsed = System.currentTimeMillis() - timestamp
+    val minutes = TimeUnit.MILLISECONDS.toMinutes(elapsed)
+    val hours = TimeUnit.MILLISECONDS.toHours(elapsed)
+    val days = TimeUnit.MILLISECONDS.toDays(elapsed)
+    return when {
+        minutes < 1 -> stringResource(R.string.hi_just_now)
+        minutes < 60 -> stringResource(R.string.misc_mins_ago, minutes)
+        hours < 24 -> stringResource(R.string.misc_hours_ago, hours)
+        days < 30 -> stringResource(R.string.misc_days_ago, days)
+        else -> stringResource(R.string.misc_months_ago, days / 30)
+    }
+}

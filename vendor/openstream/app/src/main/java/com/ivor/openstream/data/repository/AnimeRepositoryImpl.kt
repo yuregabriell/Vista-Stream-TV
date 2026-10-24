@@ -1,0 +1,222 @@
+package com.ivor.openstream.data.repository
+
+import android.content.SharedPreferences
+import com.ivor.openstream.data.remote.TmdbApi
+import com.ivor.openstream.data.remote.model.AnimeDetailsDto
+import com.ivor.openstream.data.remote.model.AnimeDto
+import com.ivor.openstream.data.remote.model.SeasonDetailsDto
+import com.ivor.openstream.domain.repository.AnimeRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import com.ivor.openstream.domain.model.AnimeCatalog
+import com.ivor.openstream.domain.model.BrowseGenre
+import com.ivor.openstream.di.NetworkModule
+import kotlinx.coroutines.awaitAll
+import java.util.concurrent.ConcurrentHashMap
+import javax.inject.Inject
+import javax.inject.Named
+
+class AnimeRepositoryImpl @Inject constructor(
+    private val api: TmdbApi,
+    /** Checks with TMDB before answering; for pull to refresh. */
+    @Named(NetworkModule.FRESH_TMDB) private val freshApi: TmdbApi,
+    private val sharedPreferences: SharedPreferences,
+    private val json: Json,
+    private val kids: KidsContentFilter
+) : AnimeRepository {
+
+    private val HISTORY_KEY = "watch_history_list"
+
+    /** Home's lists as last built, filtered for the profile; the HTTP cache keeps the raw answers on disk. */
+    private val catalogCache = ConcurrentHashMap<String, CachedCatalog>()
+
+    override suspend fun getPopularAnime(page: Int): Result<List<AnimeDto>> = runCatching {
+        api.getPopularAnime(page = page).results
+    }
+
+    override suspend fun getTrendingAnime(timeWindow: String, page: Int): Result<List<AnimeDto>> = runCatching {
+        api.getTrendingAnime(timeWindow, page).results
+    }
+
+    override suspend fun getTopRatedAnime(page: Int): Result<List<AnimeDto>> = runCatching {
+        api.getTopRatedAnime(page).results
+    }
+
+    override suspend fun getAiringTodayAnime(page: Int): Result<List<AnimeDto>> = runCatching {
+        api.getAiringTodayAnime(page).results
+    }
+
+    override suspend fun getCatalog(catalog: AnimeCatalog, forceRefresh: Boolean): Result<List<AnimeDto>> {
+        // Kids profiles get their own filtered copy of each list.
+        val key = catalogKey(catalog)
+        val cached = catalogCache[key]
+        val age = cached?.let { System.currentTimeMillis() - it.savedAt }
+        if (!forceRefresh && age != null && age in 0L until CATALOG_TTL_MS) return Result.success(cached.items)
+        return fetchCatalog(catalog, if (forceRefresh) freshApi else api)
+            .onSuccess { items ->
+                catalogCache[key] = CachedCatalog(System.currentTimeMillis(), items)
+                // Lists used to be kept here; the HTTP cache holds them now.
+                if (sharedPreferences.contains(key)) sharedPreferences.edit().remove(key).apply()
+            }
+            // Offline with nothing in the HTTP cache either: an older list beats an empty Home.
+            .recoverCatching { error -> (cached ?: readLegacyCatalog(key))?.items ?: throw error }
+    }
+
+    /** A list saved by an older version, until the first successful load replaces it. */
+    private fun readLegacyCatalog(key: String): CachedCatalog? = runCatching {
+        sharedPreferences.getString(key, null)?.let { json.decodeFromString<CachedCatalog>(it) }
+    }.getOrNull()
+
+    override fun clearCachedCatalogs() = catalogCache.clear()
+
+    private fun catalogKey(catalog: AnimeCatalog) =
+        if (kids.isActive) "catalog_cache_kids_${catalog.name}" else "catalog_cache_${catalog.name}"
+
+    private suspend fun fetchCatalog(catalog: AnimeCatalog, api: TmdbApi): Result<List<AnimeDto>> = runCatching {
+        val anime = mapOf(
+            "with_genres" to "$ANIMATION_GENRE",
+            "with_original_language" to "ja",
+            "include_adult" to "false"
+        )
+        val movieKids = kids.movieDiscoverParams()
+        val tvKids = kids.tvDiscoverParams()
+        val results = when (catalog) {
+            AnimeCatalog.TRENDING -> api.getTrendingAll("week").results
+                // The mixed feed also lists people.
+                .filter { it.mediaType == "movie" || it.mediaType == "tv" }
+            AnimeCatalog.NEW_EPISODES -> api.getOnTheAir().results
+            AnimeCatalog.POPULAR_MOVIES -> api.discoverMovieWith(
+                mapOf("sort_by" to "popularity.desc", "vote_count.gte" to "300", "include_adult" to "false") + movieKids
+            ).results.map { it.copy(mediaType = "movie") }
+            AnimeCatalog.POPULAR_SERIES -> api.discoverTvWith(
+                mapOf("sort_by" to "popularity.desc", "vote_count.gte" to "200", "include_adult" to "false") + tvKids
+            ).results.map { it.copy(mediaType = "tv") }
+            AnimeCatalog.TOP_RATED_MOVIES -> api.discoverMovieWith(
+                mapOf("sort_by" to "vote_average.desc", "vote_count.gte" to "3000", "include_adult" to "false") + movieKids
+            ).results.map { it.copy(mediaType = "movie") }
+            AnimeCatalog.TRENDING_ANIME -> coroutineScope {
+                // TMDB's trending feed cannot be filtered server-side, so read a few pages and keep anime.
+                (1..3).map { page -> async { api.getTrendingAnime("week", page).results } }
+                    .awaitAll()
+                    .flatten()
+                    .filter { it.originalLanguage == "ja" && it.genreIds.orEmpty().contains(ANIMATION_GENRE) }
+            }.ifEmpty { api.discoverTvWith(anime + ("sort_by" to "popularity.desc") + tvKids).results }
+            AnimeCatalog.ANIME_MOVIES -> api.discoverMovieWith(
+                anime + mapOf("sort_by" to "popularity.desc", "vote_count.gte" to "100") + movieKids
+            ).results.map { it.copy(mediaType = "movie") }
+        }
+        val moviesPreFiltered = catalog == AnimeCatalog.POPULAR_MOVIES || catalog == AnimeCatalog.TOP_RATED_MOVIES ||
+            catalog == AnimeCatalog.ANIME_MOVIES
+        kids.filter(
+            results.filter { it.posterPath != null }.distinctBy { "${it.mediaType}:${it.id}" },
+            moviesPreFiltered = moviesPreFiltered
+        )
+    }
+
+    override suspend fun discoverByGenre(genre: BrowseGenre, page: Int): Result<List<AnimeDto>> = runCatching {
+        coroutineScope {
+            val common = mapOf("sort_by" to "popularity.desc", "include_adult" to "false", "page" to "$page") +
+                if (genre.isAnime) mapOf("with_original_language" to "ja") else emptyMap()
+            val movies = genre.movieGenreId?.let { id ->
+                async {
+                    api.discoverMovieWith(common + mapOf("with_genres" to "$id", "vote_count.gte" to "50") + kids.movieDiscoverParams())
+                        .results.map { it.copy(mediaType = "movie") }
+                }
+            }
+            val series = genre.tvGenreId?.let { id ->
+                async {
+                    api.discoverTvWith(common + mapOf("with_genres" to "$id", "vote_count.gte" to "30") + kids.tvDiscoverParams())
+                        .results.map { it.copy(mediaType = "tv") }
+                }
+            }
+            val combined = (movies?.await().orEmpty() + series?.await().orEmpty())
+                .filter { it.posterPath != null }
+                .sortedByDescending { it.popularity ?: 0.0 }
+            kids.filter(combined, moviesPreFiltered = true)
+        }
+    }
+
+    override suspend fun searchAnime(
+        query: String,
+        page: Int,
+        mediaType: String,
+        sortBy: String
+    ): Result<List<AnimeDto>> = runCatching {
+        require(query.isNotBlank()) { "Search query cannot be blank" }
+
+        val (tvShows, movies) = coroutineScope {
+            when (mediaType) {
+                "tv" -> api.searchTv(query.trim(), page).results to emptyList()
+                "movie" -> emptyList<AnimeDto>() to api.searchMovie(query.trim(), page).results
+                else -> {
+                    val tvRequest = async { api.searchTv(query.trim(), page).results }
+                    val movieRequest = async { api.searchMovie(query.trim(), page).results }
+                    tvRequest.await() to movieRequest.await()
+                }
+            }
+        }
+
+        kids.filter(
+            AnimeSearchResults.prepare(
+                tvShows = tvShows,
+                movies = movies,
+                sortBy = sortBy,
+                query = query
+            )
+        )
+    }
+
+    override suspend fun getAnimeDetails(id: Int): Result<AnimeDetailsDto> = runCatching {
+        api.getAnimeDetails(id = id)
+    }
+
+    override suspend fun getMovieDetails(id: Int): Result<AnimeDetailsDto> = runCatching {
+        api.getMovieDetails(id = id)
+    }
+
+    override suspend fun getMediaDetails(id: Int, mediaType: String, fresh: Boolean): Result<AnimeDetailsDto> = runCatching {
+        val api = if (fresh) freshApi else api
+        // Everything the title page shows, in one request (and one cache entry the screens share).
+        if (mediaType == "movie") {
+            api.getMovieDetails(id = id, appendToResponse = "videos,credits,recommendations")
+        } else {
+            api.getAnimeDetails(id = id, appendToResponse = "videos,aggregate_credits,recommendations")
+        }
+    }
+
+    override suspend fun getSeasonDetails(animeId: Int, seasonNumber: Int, fresh: Boolean): Result<SeasonDetailsDto> = runCatching {
+        (if (fresh) freshApi else api).getSeasonDetails(id = animeId, seasonNumber = seasonNumber)
+    }
+
+    override suspend fun addToWatchHistory(anime: AnimeDto) {
+        val history = getWatchHistory().toMutableList()
+        history.removeIf { it.id == anime.id }
+        history.add(0, anime)
+        if (history.size > 50) history.removeAt(history.lastIndex)
+        
+        sharedPreferences.edit().putString(HISTORY_KEY, json.encodeToString(history)).apply()
+    }
+
+    override suspend fun getWatchHistory(): List<AnimeDto> {
+        val jsonString = sharedPreferences.getString(HISTORY_KEY, null) ?: return emptyList()
+        return try {
+            json.decodeFromString(jsonString)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    override suspend fun clearWatchHistory() {
+        sharedPreferences.edit().remove(HISTORY_KEY).apply()
+    }
+
+    @kotlinx.serialization.Serializable
+    private data class CachedCatalog(val savedAt: Long, val items: List<AnimeDto>)
+
+    private companion object {
+        const val ANIMATION_GENRE = 16
+        const val CATALOG_TTL_MS = 3 * 60 * 60 * 1000L
+    }
+}

@@ -1,0 +1,551 @@
+name: Build APKs
+
+on:
+  # beta is the branch testers follow: work lands there first and a push to it
+  # is the only thing that posts an APK. main moves through the beta -> main
+  # pull request and is what releases are cut from.
+  push:
+    branches: [ main, beta ]
+  pull_request:
+    branches: [ main, beta ]
+  workflow_dispatch:
+
+# Least privilege by default: no job gets a token unless it asks for one below.
+permissions: {}
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  TELEGRAM_APK_CHAT_ID: "@ivorisnoob_chat"
+
+jobs:
+  # Nothing builds until this job says the run was started by someone with write
+  # access to this repository. Every other job hangs off it via `needs`, so an
+  # untrusted PR costs a few seconds of a runner and stops.
+  authorize:
+    name: Authorize run
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      allowed: ${{ steps.gate.outputs.allowed }}
+      is-fork-pr: ${{ steps.gate.outputs.is-fork-pr }}
+    steps:
+      - name: Check the actor is the owner or a trusted collaborator
+        id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          ACTOR: ${{ github.actor }}
+          REPO: ${{ github.repository }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          # Computed by GitHub from repo membership; a PR author cannot set it.
+          PR_ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          # Optional repo variable, a space separated list of logins the owner
+          # wants treated as trusted (Settings > Secrets and variables > Actions).
+          # Commas are tolerated here; the release gate in telegram-notify.yml
+          # matches on spaces, so prefer spaces.
+          EXTRA_TRUSTED: ${{ vars.TRUSTED_ACTORS }}
+        run: |
+          set -euo pipefail
+
+          # Bots that push on the owner's behalf. Everything else has to earn it
+          # through repository membership.
+          # read -a splits on whitespace without pathname expansion, which the
+          # bracketed bot logins need: unquoted `claude[bot]` is a glob pattern.
+          read -r -a TRUSTED <<< "${REPO_OWNER} claude claude[bot] claude-bot claude-code[bot] ${EXTRA_TRUSTED//,/ }"
+
+          actor_is_trusted() {
+            local candidate
+            for candidate in "${TRUSTED[@]}"; do
+              if [ "${candidate,,}" = "${ACTOR,,}" ]; then
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          allowed=false
+          is_fork_pr=false
+          reason=""
+
+          case "${EVENT_NAME}" in
+            pull_request)
+              if [ "${PR_HEAD_REPO}" = "${REPO}" ]; then
+                # A branch can only exist in this repo if someone with write
+                # access pushed it, so a same-repo PR is authorized by construction.
+                allowed=true
+                reason="same-repo pull request"
+              else
+                is_fork_pr=true
+                case "${PR_ASSOCIATION}" in
+                  # To also let previously merged contributors build fork PRs,
+                  # add CONTRIBUTOR to this list. Left out on purpose: it is not
+                  # a permission the owner granted.
+                  OWNER|MEMBER|COLLABORATOR)
+                    allowed=true
+                    reason="fork pull request from ${PR_ASSOCIATION}"
+                    ;;
+                  *)
+                    reason="fork pull request from ${PR_ASSOCIATION:-NONE}"
+                    ;;
+                esac
+              fi
+              ;;
+            push|workflow_dispatch)
+              if actor_is_trusted; then
+                allowed=true
+                reason="${EVENT_NAME} by trusted actor"
+              else
+                reason="${EVENT_NAME} by untrusted actor"
+              fi
+              ;;
+            *)
+              reason="unhandled event ${EVENT_NAME}"
+              ;;
+          esac
+
+          echo "allowed=${allowed}" >> "$GITHUB_OUTPUT"
+          echo "is-fork-pr=${is_fork_pr}" >> "$GITHUB_OUTPUT"
+
+          if [ "${allowed}" = "true" ]; then
+            echo "Authorized: ${ACTOR} (${reason})." >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### Build skipped"
+              echo ""
+              echo "\`${ACTOR}\` is not the repository owner or a collaborator (${reason})."
+              echo "A maintainer can run this build by pushing the change to a branch in this repository."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  build-debug:
+    name: Build Debug APK
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v6
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build Debug APK
+      env:
+        # Optional: without it the build falls back to TMDB's DEMO_KEY,
+        # which is heavily rate-limited.
+        TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+      run: ./gradlew assembleDebug
+
+    - name: Upload Debug APK (Universal)
+      uses: actions/upload-artifact@v7
+      with:
+        name: app-debug-universal
+        path: app/build/outputs/apk/debug/*universal*.apk
+        if-no-files-found: error
+        retention-days: 14
+
+    - name: Upload Debug APK (arm64-v8a)
+      uses: actions/upload-artifact@v7
+      with:
+        name: app-debug-arm64-v8a
+        path: app/build/outputs/apk/debug/*arm64-v8a*.apk
+        if-no-files-found: error
+        retention-days: 14
+
+    - name: Upload Debug APK (armeabi-v7a)
+      uses: actions/upload-artifact@v7
+      with:
+        name: app-debug-armeabi-v7a
+        path: app/build/outputs/apk/debug/*armeabi-v7a*.apk
+        if-no-files-found: error
+        retention-days: 14
+
+  build-release:
+    name: Build Release APK
+    needs: authorize
+    # Fork PRs never receive the signing secrets, so a release build there would
+    # fail on the keystore decode. Debug still runs for them.
+    if: needs.authorize.outputs.allowed == 'true' && needs.authorize.outputs.is-fork-pr != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v7
+      with:
+        # Telegram changelogs are computed from the last successfully delivered
+        # beta head, which can be older than checkout's default shallow history.
+        # Full depth also brings origin/main, the fallback starting point.
+        fetch-depth: 0
+        persist-credentials: false
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v6
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Restore release keystore
+      shell: bash
+      env:
+        OPENSTREAM_KEYSTORE_BASE64: ${{ secrets.OPENSTREAM_KEYSTORE_BASE64 }}
+      run: |
+        if [[ -z "$OPENSTREAM_KEYSTORE_BASE64" ]]; then
+          echo "Missing required GitHub Actions secret: OPENSTREAM_KEYSTORE_BASE64" >&2
+          exit 1
+        fi
+
+        keystore_path="$RUNNER_TEMP/openstream-release.jks"
+        printf '%s' "$OPENSTREAM_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+
+    - name: Build signed universal release APK
+      shell: bash
+      env:
+        OPENSTREAM_KEYSTORE_PATH: ${{ runner.temp }}/openstream-release.jks
+        OPENSTREAM_KEYSTORE_PASSWORD: ${{ secrets.OPENSTREAM_KEYSTORE_PASSWORD }}
+        OPENSTREAM_KEY_ALIAS: ${{ secrets.OPENSTREAM_KEY_ALIAS }}
+        OPENSTREAM_KEY_PASSWORD: ${{ secrets.OPENSTREAM_KEY_PASSWORD }}
+        TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+      run: |
+        for variable in \
+          OPENSTREAM_KEYSTORE_PASSWORD \
+          OPENSTREAM_KEY_ALIAS \
+          OPENSTREAM_KEY_PASSWORD
+        do
+          if [[ -z "${!variable}" ]]; then
+            echo "Missing required GitHub Actions secret: $variable" >&2
+            exit 1
+          fi
+        done
+
+        ./gradlew assembleRelease --no-daemon --stacktrace
+
+    - name: Upload Release APK (Universal)
+      uses: actions/upload-artifact@v7
+      with:
+        name: app-release-universal
+        path: app/build/outputs/apk/release/*universal*.apk
+        if-no-files-found: error
+        retention-days: 14
+
+    - name: Upload Release APK (arm64-v8a)
+      uses: actions/upload-artifact@v7
+      with:
+        name: app-release-arm64-v8a
+        path: app/build/outputs/apk/release/*arm64-v8a*.apk
+        if-no-files-found: error
+        retention-days: 14
+
+    - name: Upload Release APK (armeabi-v7a)
+      uses: actions/upload-artifact@v7
+      with:
+        name: app-release-armeabi-v7a
+        path: app/build/outputs/apk/release/*armeabi-v7a*.apk
+        if-no-files-found: error
+        retention-days: 14
+
+    # R8 deobfuscation map for this exact build. Release stack traces arriving
+    # through the in-app diagnostics export are only readable against the mapping
+    # of the versionCode that produced them, so keep it as a retained workflow
+    # artifact for maintainers rather than a public release asset.
+    - name: Upload Release mapping.txt
+      uses: actions/upload-artifact@v7
+      with:
+        name: app-release-mapping
+        path: app/build/outputs/mapping/release/mapping.txt
+        if-no-files-found: error
+        retention-days: 90
+
+    # Testers follow one branch. A pull request builds its APKs as artifacts and
+    # posts nothing; the post happens when the work lands on beta. Posting per
+    # pull request meant two open ones took turns being "Latest beta", each
+    # without the other's changes and each with a changelog measured from its
+    # own last build rather than from the APK the tester had installed.
+    - name: Send Release APKs to Telegram
+      if: github.event_name == 'push' && github.ref == 'refs/heads/beta'
+      env:
+        BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        CHAT_ID: ${{ env.TELEGRAM_APK_CHAT_ID }}
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+        RUN_ID: ${{ github.run_id }}
+        BETA_BRANCH: ${{ github.ref_name }}
+        HEAD_SHA: ${{ github.sha }}
+        # Where a beta's changelog starts when there is no earlier delivery to
+        # measure from: everything beta has that this branch does not.
+        RELEASE_BRANCH: main
+      run: |
+        set -euo pipefail
+
+        esc() { sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g' <<< "$1"; }
+
+        telegram_ok() {
+          jq -e '.ok == true' >/dev/null 2>&1 <<< "$1"
+        }
+
+        send_plain_message() {
+          local message="$1" response
+          response=$(curl -sS -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${CHAT_ID}" \
+            --data-urlencode "disable_web_page_preview=true" \
+            --data-urlencode "text=${message}")
+          if ! telegram_ok "$response"; then
+            echo "Telegram changelog send failed: ${response}"
+            exit 1
+          fi
+        }
+
+        VERSION=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts || echo "unknown")
+        RUN_URL="https://github.com/${REPO}/actions/runs/${RUN_ID}"
+
+        CAPTION="<b>Latest beta</b> · OpenStream v${VERSION}
+
+        SHA: <code>${HEAD_SHA::7}</code>
+        <a href=\"${RUN_URL}\">Workflow Run</a>"
+
+        # Find the head SHA from the last successful push run on the beta
+        # branch. Canceled and failed runs are deliberately absent, so their
+        # commit changelogs roll forward into the next APK that is delivered.
+        ENCODED_BRANCH=$(jq -rn --arg value "$BETA_BRANCH" '$value | @uri')
+        RUNS_URL="${GITHUB_API_URL}/repos/${REPO}/actions/workflows/build.yml/runs?event=push&status=success&branch=${ENCODED_BRANCH}&per_page=100"
+        if ! RUNS_JSON=$(curl -fsSL \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer ${GH_TOKEN}" \
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+          "$RUNS_URL"); then
+          echo "Could not read workflow history; falling back to everything ${BETA_BRANCH} has over ${RELEASE_BRANCH}."
+          RUNS_JSON='{"workflow_runs":[]}'
+        fi
+
+        LAST_SENT_SHA=$(jq -r --arg repo "$REPO" --arg run_id "$RUN_ID" '
+          [
+            .workflow_runs[]?
+            | select((.id | tostring) != $run_id)
+            | select(.head_repository.full_name == $repo)
+          ]
+          | sort_by(.created_at)
+          | reverse
+          | .[0].head_sha // empty
+        ' <<< "$RUNS_JSON" 2>/dev/null || true)
+
+        if [ -n "$LAST_SENT_SHA" ] \
+          && git cat-file -e "${LAST_SENT_SHA}^{commit}" 2>/dev/null \
+          && git merge-base --is-ancestor "$LAST_SENT_SHA" "$HEAD_SHA"; then
+          CHANGELOG_START_SHA="$LAST_SENT_SHA"
+          echo "Collecting Telegram changelogs after successful run head ${LAST_SENT_SHA:0:7}."
+        else
+          # First delivery, unavailable history, or a rewritten beta: include
+          # everything beta has that the release branch does not. Repeating an
+          # entry is safer than losing it.
+          CHANGELOG_START_SHA=$(git merge-base "origin/${RELEASE_BRANCH}" "$HEAD_SHA" 2>/dev/null || true)
+          echo "Collecting Telegram changelogs from the ${RELEASE_BRANCH} merge base ${CHANGELOG_START_SHA:0:7}."
+        fi
+
+        if [ -n "$CHANGELOG_START_SHA" ]; then
+          mapfile -t NEW_COMMITS < <(git rev-list --reverse "${CHANGELOG_START_SHA}..${HEAD_SHA}")
+        else
+          # No shared history with the release branch to measure from. Deliver
+          # the APK with the head commit's entry rather than nothing.
+          NEW_COMMITS=("$HEAD_SHA")
+        fi
+
+        # Nothing has landed since the last delivery: beta was created or
+        # fast-forwarded onto a commit testers already have. Posting it again
+        # would only move the pin onto an identical APK.
+        if [ "${#NEW_COMMITS[@]}" -eq 0 ]; then
+          echo "No commits since ${CHANGELOG_START_SHA:0:7}; testers already have this build. Nothing posted."
+          echo "Beta post skipped: no commits since the last delivered APK." >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        fi
+
+        extract_changelog() {
+          git show -s --format=%B "$1" | awk '
+            /^Changelog:[[:space:]]*$/ { found = 1; next }
+            # Git trailers sit after the changelog; they are not changelog.
+            # Matched by shape ("Token: value", a hyphenated word then a
+            # colon) rather than by a list of names, so a trailer nobody
+            # listed cannot leak into the post. Changelog lines are "- "
+            # bullets and never match.
+            found && $0 ~ /^[A-Za-z][A-Za-z0-9]*(-[A-Za-z0-9]+)*:[[:space:]]/ { next }
+            found { lines[++count] = $0 }
+            END {
+              first = 1
+              while (first <= count && lines[first] ~ /^[[:space:]]*$/) first++
+              last = count
+              while (last >= first && lines[last] ~ /^[[:space:]]*$/) last--
+              for (i = first; i <= last; i++) print lines[i]
+            }
+          '
+        }
+
+        CHANGELOG_FILE=$(mktemp)
+        trap 'rm -f "$CHANGELOG_FILE"' EXIT
+        ENTRY_COUNT=0
+        printf 'Changes since the last APK\n' > "$CHANGELOG_FILE"
+
+        for commit in "${NEW_COMMITS[@]}"; do
+          CHANGELOG=$(extract_changelog "$commit")
+          if [ -z "${CHANGELOG//[[:space:]]/}" ]; then
+            continue
+          fi
+          SUBJECT=$(git show -s --format=%s "$commit")
+          printf '\n%s (%s)\n%s\n' "$SUBJECT" "${commit:0:7}" "$CHANGELOG" >> "$CHANGELOG_FILE"
+          ENTRY_COUNT=$((ENTRY_COUNT + 1))
+        done
+
+        # Commits that say nothing to testers and touch nothing an APK is built
+        # from (docs, workflows, README art) would only move the pin onto a
+        # build identical to the one already there. Any path not listed counts
+        # as an app change, so a gap in this list posts rather than skips, and
+        # a range with a changelog entry is always delivered.
+        if [ "$ENTRY_COUNT" -eq 0 ] && [ -n "$CHANGELOG_START_SHA" ]; then
+          CHANGED_PATHS=$(git diff --name-only "$CHANGELOG_START_SHA" "$HEAD_SHA")
+          APP_PATHS=$(grep -Ev '^(docs/|\.github/|screenshots/|[^/]+\.md$|LICENSE$|\.gitignore$)' \
+            <<< "$CHANGED_PATHS" || true)
+          if [ -z "${APP_PATHS//[[:space:]]/}" ]; then
+            echo "Only docs and workflow files changed since ${CHANGELOG_START_SHA:0:7}. Nothing posted."
+            echo "Beta post skipped: nothing in the APK changed since the last delivered one." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+        fi
+
+        if [ "$ENTRY_COUNT" -eq 0 ]; then
+          printf '\nNo public changelog entries were included in the new commits.\n' >> "$CHANGELOG_FILE"
+        fi
+
+        # Keep only the newest beta pinned. Reading the old id before sending
+        # lets us pin the replacement first, so a permissions/API failure never
+        # leaves the channel without its previous useful pin.
+        PINNED_MESSAGE_ID=""
+        CHAT_RESPONSE=$(curl -sS -X POST "https://api.telegram.org/bot${BOT_TOKEN}/getChat" \
+          --data-urlencode "chat_id=${CHAT_ID}" || true)
+        if telegram_ok "$CHAT_RESPONSE"; then
+          PINNED_MESSAGE_ID=$(jq -r '.result.pinned_message.message_id // empty' \
+            <<< "$CHAT_RESPONSE")
+        else
+          echo "Could not read the previous Telegram pin; continuing without removing it."
+        fi
+
+        APK_MESSAGE_ID=""
+        for apk in app/build/outputs/apk/release/*universal*.apk; do
+          SIZE=$(stat -c%s "$apk")
+          if [ "$SIZE" -gt 50000000 ]; then
+            RESPONSE=$(curl -sS -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+              --data-urlencode "chat_id=${CHAT_ID}" \
+              --data-urlencode "parse_mode=HTML" \
+              --data-urlencode "text=<b>Latest beta</b> · OpenStream v${VERSION}
+
+        $(esc "$(basename "$apk")") is over Telegram's 50 MB bot limit — grab it from the <a href=\"${RUN_URL}\">workflow artifacts</a>.")
+            if ! telegram_ok "$RESPONSE"; then
+              echo "Telegram artifact-link send failed: ${RESPONSE}"
+              exit 1
+            fi
+            APK_MESSAGE_ID=$(jq -r '.result.message_id // empty' <<< "$RESPONSE")
+            continue
+          fi
+          RESPONSE=$(curl -sS -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendDocument" \
+            --form-string "chat_id=${CHAT_ID}" \
+            --form-string "parse_mode=HTML" \
+            --form-string "caption=${CAPTION}" \
+            -F "document=@${apk}")
+          if ! telegram_ok "$RESPONSE"; then
+            echo "Telegram APK send failed: ${RESPONSE}"
+            exit 1
+          fi
+          APK_MESSAGE_ID=$(jq -r '.result.message_id // empty' <<< "$RESPONSE")
+        done
+
+        if [ -n "$APK_MESSAGE_ID" ]; then
+          PIN_RESPONSE=$(curl -sS -X POST \
+            "https://api.telegram.org/bot${BOT_TOKEN}/pinChatMessage" \
+            --data-urlencode "chat_id=${CHAT_ID}" \
+            --data-urlencode "message_id=${APK_MESSAGE_ID}" \
+            --data-urlencode "disable_notification=true" || true)
+          if telegram_ok "$PIN_RESPONSE"; then
+            echo "Pinned latest beta message ${APK_MESSAGE_ID} without notification."
+            if [ -n "$PINNED_MESSAGE_ID" ] &&
+              [ "$PINNED_MESSAGE_ID" != "$APK_MESSAGE_ID" ]; then
+              UNPIN_RESPONSE=$(curl -sS -X POST \
+                "https://api.telegram.org/bot${BOT_TOKEN}/unpinChatMessage" \
+                --data-urlencode "chat_id=${CHAT_ID}" \
+                --data-urlencode "message_id=${PINNED_MESSAGE_ID}" || true)
+              if ! telegram_ok "$UNPIN_RESPONSE"; then
+                echo "Could not remove previous Telegram pin ${PINNED_MESSAGE_ID}; new beta remains pinned."
+              fi
+            fi
+          else
+            echo "Could not pin latest beta message; APK delivery succeeded and the previous pin was kept."
+          fi
+        else
+          echo "Telegram did not return an APK message id; skipping pin update."
+        fi
+
+        # Telegram counts message length in UTF-16 units. Split on complete
+        # Unicode characters, preferring line boundaries, with room below 4096.
+        mapfile -d '' -t CHANGELOG_CHUNKS < <(
+          python3 - "$CHANGELOG_FILE" <<'PY'
+        import sys
+
+        limit = 3800
+        text = open(sys.argv[1], encoding="utf-8").read()
+
+        def units(value):
+            return len(value.encode("utf-16-le")) // 2
+
+        chunks = []
+        current = ""
+        for line in text.splitlines(keepends=True):
+            while units(line) > limit:
+                if current:
+                    chunks.append(current.rstrip())
+                    current = ""
+                used = 0
+                cut = 0
+                for cut, char in enumerate(line, start=1):
+                    char_units = units(char)
+                    if used + char_units > limit:
+                        cut -= 1
+                        break
+                    used += char_units
+                chunks.append(line[:cut].rstrip())
+                line = line[cut:]
+
+            candidate = current + line
+            if current and units(candidate) > limit:
+                chunks.append(current.rstrip())
+                current = line
+            else:
+                current = candidate
+
+        if current.strip():
+            chunks.append(current.rstrip())
+
+        for chunk in chunks:
+            sys.stdout.buffer.write(chunk.encode("utf-8") + b"\0")
+        PY
+        )
+
+        for chunk in "${CHANGELOG_CHUNKS[@]}"; do
+          send_plain_message "$chunk"
+        done
