@@ -128,9 +128,102 @@ class KeylessCatalogClient @Inject constructor(
 
     private fun anime(query: String, page: Int): List<KeylessTitle> {
         val graphql = """
-          query($page: Int, $search: String) {
+          query(${': Int, ${': String) {
             Page(page: $page, perPage: 24) {
               media(type: ANIME, isAdult: false, sort: [TRENDING_DESC], search: $search) {
+                id title { english romaji native } coverImage { large } bannerImage
+                description(asHtml: false) startDate { year } episodes format
+              }
+            }
+          }
+        }page: Int, $search: String) {
+            Page(page: ${', perPage: 24) {
+              media(type: ANIME, isAdult: false, sort: [TRENDING_DESC], search: $search) {
+                id title { english romaji native } coverImage { large } bannerImage
+                description(asHtml: false) startDate { year } episodes format
+              }
+            }
+          }
+        }page, perPage: 24) {
+              media(type: ANIME, isAdult: false, sort: [TRENDING_DESC], search: $search) {
+                id title { english romaji native } coverImage { large } bannerImage
+                description(asHtml: false) startDate { year } episodes format
+              }
+            }
+          }
+        }search: String) {
+            Page(page: $page, perPage: 24) {
+              media(type: ANIME, isAdult: false, sort: [TRENDING_DESC], search: ${') {
+                id title { english romaji native } coverImage { large } bannerImage
+                description(asHtml: false) startDate { year } episodes format
+              }
+            }
+          }
+        }page: Int, $search: String) {
+            Page(page: ${', perPage: 24) {
+              media(type: ANIME, isAdult: false, sort: [TRENDING_DESC], search: $search) {
+                id title { english romaji native } coverImage { large } bannerImage
+                description(asHtml: false) startDate { year } episodes format
+              }
+            }
+          }
+        }page, perPage: 24) {
+              media(type: ANIME, isAdult: false, sort: [TRENDING_DESC], search: $search) {
+                id title { english romaji native } coverImage { large } bannerImage
+                description(asHtml: false) startDate { year } episodes format
+              }
+            }
+          }
+        }search) {
+                id title { english romaji native } coverImage { large } bannerImage
+                description(asHtml: false) startDate { year } episodes format
+              }
+            }
+          }
+        }page: Int, ${': String) {
+            Page(page: ${', perPage: 24) {
+              media(type: ANIME, isAdult: false, sort: [TRENDING_DESC], search: $search) {
+                id title { english romaji native } coverImage { large } bannerImage
+                description(asHtml: false) startDate { year } episodes format
+              }
+            }
+          }
+        }page, perPage: 24) {
+              media(type: ANIME, isAdult: false, sort: [TRENDING_DESC], search: $search) {
+                id title { english romaji native } coverImage { large } bannerImage
+                description(asHtml: false) startDate { year } episodes format
+              }
+            }
+          }
+        }search: String) {
+            Page(page: ${', perPage: 24) {
+              media(type: ANIME, isAdult: false, sort: [TRENDING_DESC], search: ${') {
+                id title { english romaji native } coverImage { large } bannerImage
+                description(asHtml: false) startDate { year } episodes format
+              }
+            }
+          }
+        }page, perPage: 24) {
+              media(type: ANIME, isAdult: false, sort: [TRENDING_DESC], search: $search) {
+                id title { english romaji native } coverImage { large } bannerImage
+                description(asHtml: false) startDate { year } episodes format
+              }
+            }
+          }
+        }search) {
+                id title { english romaji native } coverImage { large } bannerImage
+                description(asHtml: false) startDate { year } episodes format
+              }
+            }
+          }
+        }page, perPage: 24) {
+              media(type: ANIME, isAdult: false, sort: [TRENDING_DESC], search: ${') {
+                id title { english romaji native } coverImage { large } bannerImage
+                description(asHtml: false) startDate { year } episodes format
+              }
+            }
+          }
+        }search) {
                 id title { english romaji native } coverImage { large } bannerImage
                 description(asHtml: false) startDate { year } episodes format
               }
