@@ -98,13 +98,18 @@ class KeylessCatalogViewModel @Inject constructor(
         browseJob = viewModelScope.launch {
             try {
                 val types = if (type == "all") listOf("movie", "series", "anime") else listOf(type)
-                val returned = types.map { kind ->
+                val fetched = types.map { kind ->
                     async {
                         runCatching {
                             client.titles(kind, query = query, page = page, genre = genre, year = year)
-                        }.getOrDefault(emptyList())
+                        }
                     }
                 }.map { it.await() }
+                if (fetched.all { it.isFailure }) {
+                    throw fetched.first().exceptionOrNull()
+                        ?: IllegalStateException("Falha ao carregar o catálogo")
+                }
+                val returned = fetched.map { it.getOrDefault(emptyList()) }
                 val results = returned.flatten().distinctBy { it.sourceId }
                 val sameQuery = _state.value.browseType == type &&
                     _state.value.browseQuery == query &&
