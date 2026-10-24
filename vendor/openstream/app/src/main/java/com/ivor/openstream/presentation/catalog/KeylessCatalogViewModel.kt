@@ -86,9 +86,10 @@ class KeylessCatalogViewModel @Inject constructor(
             resolving = false, servers = emptyList(), playing = null, resolveFinished = false
         )
         episodeJob = viewModelScope.launch {
-            val list = runCatching { client.episodes(item) }.getOrDefault(emptyList())
+            val enriched = runCatching { client.enrich(item) }.getOrDefault(item)
+            val list = runCatching { client.episodes(enriched) }.getOrDefault(emptyList())
             if (_state.value.selected?.sourceId == item.sourceId) {
-                _state.value = _state.value.copy(episodes = list)
+                _state.value = _state.value.copy(selected = enriched, episodes = list)
             }
         }
     }
@@ -110,9 +111,10 @@ class KeylessCatalogViewModel @Inject constructor(
         _state.value = _state.value.copy(resolving = true, resolveFinished = false, servers = emptyList())
         resolutionJob = viewModelScope.launch {
             try {
-                val imdb = item.imdbId ?: runCatching { client.findAnimeImdb(item) }.getOrNull()
+                val enriched = runCatching { client.enrich(item) }.getOrDefault(item)
+                val imdb = enriched.imdbId ?: runCatching { client.findAnimeImdb(enriched) }.getOrNull()
                 val identity = MediaIdentity(
-                    tmdbId = 0,
+                    tmdbId = enriched.tmdbId ?: 0,
                     tmdbType = if (item.type == "movie") "movie" else "tv",
                     imdbId = imdb,
                     anilistId = item.anilistId,

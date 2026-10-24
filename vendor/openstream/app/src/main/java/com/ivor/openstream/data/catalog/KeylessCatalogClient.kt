@@ -29,6 +29,7 @@ data class KeylessTitle(
     val background: String? = null,
     val description: String = "",
     val imdbId: String? = null,
+    val tmdbId: Int? = null,
     val anilistId: Int? = null,
     val episodes: Int? = null,
     val alternateTitle: String? = null
@@ -72,6 +73,26 @@ class KeylessCatalogClient @Inject constructor(
         listOf("movie", "series", "anime").map { type ->
             async { type to runCatching { titles(type, force = force) }.getOrDefault(emptyList()) }
         }.map { it.await() }.toMap()
+    }
+
+    /**
+     * Cinemeta may provide moviedb_id directly in its metadata. This lets the
+     * existing TMDB-id-based resolvers run WITHOUT an API key or a TMDB request.
+     */
+    suspend fun enrich(item: KeylessTitle): KeylessTitle = withContext(Dispatchers.IO) {
+        if (item.imdbId == null) return@withContext item
+        val type = if (item.type == "movie") "movie" else "series"
+        val raw = request("https://v3-cinemeta.strem.io/meta/$type/${item.imdbId}.json")
+        val meta = (json.parseToJsonElement(raw) as? JsonObject)?.get("meta") as? JsonObject
+            ?: return@withContext item
+        item.copy(
+            tmdbId = meta.str("moviedb_id")?.toIntOrNull()
+                ?: meta.str("tmdb_id")?.toIntOrNull()
+                ?: item.tmdbId,
+            description = item.description.ifBlank { meta.str("description").orEmpty() },
+            background = item.background ?: meta.str("background"),
+            poster = item.poster ?: meta.str("poster")
+        )
     }
 
     suspend fun episodes(item: KeylessTitle): List<KeylessEpisode> = withContext(Dispatchers.IO) {
@@ -121,7 +142,8 @@ class KeylessCatalogClient @Inject constructor(
                 poster = meta.str("poster"),
                 background = meta.str("background") ?: meta.str("banner"),
                 description = meta.str("description").orEmpty(),
-                imdbId = id
+                imdbId = id,
+                tmdbId = meta.str("moviedb_id")?.toIntOrNull()
             )
         }.distinctBy(KeylessTitle::sourceId)
     }
