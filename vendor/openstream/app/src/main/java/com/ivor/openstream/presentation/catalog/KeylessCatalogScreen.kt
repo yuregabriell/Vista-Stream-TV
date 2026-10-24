@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -34,6 +35,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.awaitEachGesture
+import androidx.compose.ui.input.pointer.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,8 +76,23 @@ fun KeylessCatalogScreen(
     viewModel: KeylessCatalogViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
-    var category by remember { mutableStateOf(if (searchFirst) "all" else "all") }
-    var query by remember { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf("all") }
+    var query by rememberSaveable { mutableStateOf("") }
+    var discover by rememberSaveable { mutableStateOf(false) }
+    var genre by rememberSaveable { mutableStateOf("") }
+    var year by rememberSaveable { mutableStateOf<Int?>(null) }
+    var genreMenu by remember { mutableStateOf(false) }
+    var yearMenu by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    var listOrigin by remember { mutableStateOf(Offset.Zero) }
+    var searchBounds by remember { mutableStateOf(Rect.Zero) }
+    var currentUtcDay by remember { mutableLongStateOf(System.currentTimeMillis() / 86_400_000L) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60L * 60L * 1000L)
+            currentUtcDay = System.currentTimeMillis() / 86_400_000L
+        }
+    }
     val chosen = state.selected
     val player = state.playing
 
@@ -115,64 +142,71 @@ fun KeylessCatalogScreen(
         return
     }
 
-    // Home is vertically scrollable as a whole. Its bottom content inset reserves the
-    // space occupied by the floating navigation toolbar in AppNavigation.
-    // System status bar is accounted for before the first title or filter.
-    val recentFirst = remember(state.sections, category) {
+    // Main home is editorial rails; a selected category/search opens a full
+    // paginated catalogue with filters. An open title/player keeps its own state.
+    val recentFirst = remember(state.sections) {
         state.sections.values.flatten().distinctBy { it.sourceId }
             .filter { it.year != null }
-            .sortedWith(compareByDescending<KeylessTitle> { it.year ?: 0 }
-                .thenBy { it.title })
+            .sortedWith(compareByDescending<KeylessTitle> { it.year ?: 0 }.thenBy { it.title })
     }
     var sort by rememberSaveable { mutableStateOf("popular") }
     val searching = query.isNotBlank() && state.query.isNotBlank() && query == state.query
-    val categoryItems = when (category) {
-        "movie" -> state.sections["movie"].orEmpty()
-        "series" -> state.sections["series"].orEmpty()
-        "anime" -> state.sections["anime"].orEmpty()
-        else -> state.sections.values.flatten().distinctBy { it.sourceId }
-    }
-    fun sorted(items: List<KeylessTitle>): List<KeylessTitle> = when (sort) {
-        "recent" -> items.sortedWith(compareByDescending<KeylessTitle> { it.year ?: 0 }.thenBy { it.title })
-        "alphabetical" -> items.sortedBy { it.title.lowercase() }
-        else -> items
-    }
-    val sections = if (searching) {
-        listOf("Resultados da pesquisa" to sorted(state.searchResults.filter {
-            category == "all" || it.type == category
-        }))
-    } else when (category) {
-        "movie" -> listOf(
-            "Filmes populares" to sorted(state.sections["movie"].orEmpty()),
-            "Filmes recentes" to state.sections["movie"].orEmpty().filter { it.year != null }
-                .sortedByDescending { it.year }
-        )
-        "series" -> listOf(
-            "Séries populares" to sorted(state.sections["series"].orEmpty()),
-            "Séries recentes" to state.sections["series"].orEmpty().filter { it.year != null }
-                .sortedByDescending { it.year }
-        )
-        "anime" -> listOf(
-            "Animes em alta" to sorted(state.sections["anime"].orEmpty()),
-            "Animes recentes" to state.sections["anime"].orEmpty().filter { it.year != null }
-                .sortedByDescending { it.year }
-        )
-        else -> listOf(
-            "Filmes populares" to sorted(state.sections["movie"].orEmpty()),
-            "Séries para descobrir" to sorted(state.sections["series"].orEmpty()),
-            "Animes em alta" to sorted(state.sections["anime"].orEmpty()),
-            "Adicionados recentemente ao catálogo" to recentFirst.take(24)
+    val browsing = discover || category != "all" || searching || searchFirst
+    val browseType = if (category == "all") "all" else category
+    LaunchedEffect(browsing, browseType, genre, year, searching, state.query) {
+        if (browsing) viewModel.browse(
+            browseType, if (searching) state.query else "", genre, year
         )
     }
-    val continueWatching = if (!searching && category == "all") {
-        viewModel.continueWatching(categoryItems)
-    } else emptyList()
+    val categoryItems = state.sections.values.flatten().distinctBy { it.sourceId }
+    val sections = if (!browsing) listOf(
+        "Filmes populares" to state.sections["movie"].orEmpty(),
+        "Séries para descobrir" to state.sections["series"].orEmpty(),
+        "Animes em alta" to state.sections["anime"].orEmpty(),
+        "Adicionados recentemente" to recentFirst.take(24)
+    ) else emptyList()
+    val continueWatching = if (!browsing) viewModel.continueWatching(categoryItems) else emptyList()
     val wideLayout = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
     val posterWidth = if (wideLayout) 178.dp else 138.dp
+    val browseItems = remember(state.browseItems, sort) {
+        when (sort) {
+            "recent" -> state.browseItems.sortedWith(
+                compareByDescending<KeylessTitle> { it.year ?: 0 }.thenBy { it.title }
+            )
+            "alphabetical" -> state.browseItems.sortedBy { it.title.lowercase() }
+            else -> state.browseItems
+        }
+    }
+    val gridColumns = if (wideLayout) 4 else 2
+    val browseRows = remember(browseItems, gridColumns) { browseItems.chunked(gridColumns) }
+    val genreOptions = if (category == "anime") listOf(
+        "Action" to "Ação", "Adventure" to "Aventura", "Comedy" to "Comédia",
+        "Drama" to "Drama", "Fantasy" to "Fantasia", "Mystery" to "Mistério",
+        "Romance" to "Romance", "Sci-Fi" to "Ficção científica",
+        "Slice of Life" to "Vida quotidiana", "Sports" to "Desporto",
+        "Supernatural" to "Sobrenatural", "Horror" to "Terror"
+    ) else listOf(
+        "Action" to "Ação", "Adventure" to "Aventura", "Animation" to "Animação",
+        "Comedy" to "Comédia", "Crime" to "Crime", "Documentary" to "Documentário",
+        "Drama" to "Drama", "Family" to "Família", "Fantasy" to "Fantasia",
+        "Horror" to "Terror", "Mystery" to "Mistério", "Romance" to "Romance",
+        "Sci-Fi" to "Ficção científica", "Thriller" to "Suspense", "War" to "Guerra"
+    )
     LazyColumn(
         modifier = modifier.fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding(),
+            .statusBarsPadding()
+            .onGloballyPositioned { listOrigin = it.positionInWindow() }
+            .pointerInput(searchBounds, listOrigin) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(
+                        requireUnconsumed = false, pass = PointerEventPass.Initial
+                    )
+                    if (!searchBounds.contains(down.position + listOrigin)) {
+                        focusManager.clearFocus()
+                    }
+                }
+            },
         contentPadding = PaddingValues(top = 22.dp, bottom = 200.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -212,15 +246,16 @@ fun KeylessCatalogScreen(
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+                    .onGloballyPositioned { searchBounds = it.boundsInWindow() },
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
                     imeAction = androidx.compose.ui.text.input.ImeAction.Search
                 ),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                    onSearch = { viewModel.search(query) }
+                    onSearch = { viewModel.search(query); focusManager.clearFocus(); discover = false }
                 ),
                 trailingIcon = {
-                    TextButton(onClick = { viewModel.search(query) }, enabled = query.isNotBlank()) {
+                    TextButton(onClick = { viewModel.search(query); focusManager.clearFocus(); discover = false }, enabled = query.isNotBlank()) {
                         Text("Buscar")
                     }
                 }
@@ -239,30 +274,109 @@ fun KeylessCatalogScreen(
                 )) { (id, label) ->
                     FilterChip(
                         selected = category == id,
-                        onClick = { category = id },
+                        onClick = {
+                            category = id
+                            discover = false
+                            genre = ""
+                            year = null
+                            sort = "popular"
+                            focusManager.clearFocus()
+                        },
                         label = { Text(label) }
                     )
                 }
             }
         }
-        item(key = "home-sort") {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(start = 22.dp, end = 20.dp, bottom = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Ordenar",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.width(12.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(listOf("popular" to "Populares", "recent" to "Recentes", "alphabetical" to "A–Z")) { (id, label) ->
-                        FilterChip(
-                            selected = sort == id,
-                            onClick = { sort = id },
-                            label = { Text(label) }
+        if (browsing) {
+            item(key = "catalog-navigation") {
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = {
+                            category = "all"; discover = false
+                            query = ""; viewModel.search("")
+                            genre = ""; year = null; sort = "popular"
+                        }) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = null)
+                            Text("Início")
+                        }
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            "${state.browseItems.size} títulos carregados",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelSmall
                         )
+                    }
+                    Text(
+                        when {
+                            searching -> "Resultados para \"$query\""
+                            category == "movie" -> "Todos os filmes"
+                            category == "series" -> "Todas as séries"
+                            category == "anime" -> "Explorar animes"
+                            else -> "Descobrir títulos"
+                        },
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(Modifier.weight(1f)) {
+                            OutlinedButton(
+                                onClick = { genreMenu = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(genreOptions.firstOrNull { it.first == genre }?.second ?: "Género",
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(" ▾")
+                            }
+                            DropdownMenu(
+                                expanded = genreMenu,
+                                onDismissRequest = { genreMenu = false },
+                                modifier = Modifier.heightIn(max = 360.dp)
+                            ) {
+                                DropdownMenuItem(text = { Text("Todos os géneros") }, onClick = {
+                                    genre = ""; genreMenu = false
+                                })
+                                genreOptions.forEach { (value, label) ->
+                                    DropdownMenuItem(text = { Text(label) }, onClick = {
+                                        genre = value; genreMenu = false
+                                    })
+                                }
+                            }
+                        }
+                        Box(Modifier.weight(1f)) {
+                            OutlinedButton(
+                                onClick = { yearMenu = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(year?.toString() ?: "Ano")
+                                Text(" ▾")
+                            }
+                            DropdownMenu(
+                                expanded = yearMenu,
+                                onDismissRequest = { yearMenu = false },
+                                modifier = Modifier.heightIn(max = 360.dp)
+                            ) {
+                                DropdownMenuItem(text = { Text("Todos os anos") }, onClick = {
+                                    year = null; yearMenu = false
+                                })
+                                (2026 downTo 1980).forEach { value ->
+                                    DropdownMenuItem(text = { Text(value.toString()) }, onClick = {
+                                        year = value; yearMenu = false
+                                    })
+                                }
+                            }
+                        }
+                    }
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(listOf("popular" to "Populares", "recent" to "Recentes", "alphabetical" to "A–Z")) { (id, label) ->
+                            FilterChip(
+                                selected = sort == id,
+                                onClick = { sort = id },
+                                label = { Text(label) }
+                            )
+                        }
                     }
                 }
             }
@@ -278,10 +392,12 @@ fun KeylessCatalogScreen(
                 }
             }
         }
-        if (!searching && category == "all" && !state.loading) {
-            val featured = state.sections["movie"].orEmpty().firstOrNull {
-                !it.background.isNullOrBlank() || !it.poster.isNullOrBlank()
-            } ?: categoryItems.firstOrNull()
+        if (!browsing && !state.loading) {
+            val candidates = state.sections.values.flatten().distinctBy { it.sourceId }
+                .filter { !it.background.isNullOrBlank() || !it.poster.isNullOrBlank() }
+            val featured = candidates.takeIf { it.isNotEmpty() }?.let {
+                it[Math.floorMod(currentUtcDay.toInt(), it.size)]
+            }
             if (featured != null) {
                 item(key = "featured") {
                     Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
@@ -291,8 +407,15 @@ fun KeylessCatalogScreen(
                         ) {
                             Text("Em destaque", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                             Spacer(Modifier.weight(1f))
-                            Text("DESCUBRA", style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary)
+                            TextButton(onClick = {
+                                discover = true
+                                genre = ""
+                                year = null
+                                sort = "popular"
+                                focusManager.clearFocus()
+                            }) {
+                                Text("Descubra  ›")
+                            }
                         }
                         Box(
                             Modifier.fillMaxWidth().padding(horizontal = 20.dp)
@@ -390,9 +513,9 @@ fun KeylessCatalogScreen(
                                 fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f),
                                 maxLines = 1, overflow = TextOverflow.Ellipsis
                             )
-                            if (category == "all" && !searching && index < 3) {
+                            if (!browsing && index < 3) {
                                 val destination = listOf("movie", "series", "anime")[index]
-                                TextButton(onClick = { category = destination }) { Text("Ver mais") }
+                                TextButton(onClick = { category = destination; genre = ""; year = null; sort = "popular"; focusManager.clearFocus() }) { Text("Ver mais  ›") }
                             }
                         }
                         LazyRow(
@@ -433,13 +556,74 @@ fun KeylessCatalogScreen(
                 }
             }
         }
-        if (searching && state.searchResults.isEmpty() && !state.searching) {
-            item(key = "search-empty") {
-                Text(
-                    "Nenhum título encontrado. Experimenta outro nome.",
-                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 24.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        if (browsing) {
+            itemsIndexed(browseRows, key = { index, _ -> "grid-row-$index" }) { _, titles ->
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 7.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    titles.forEach { title ->
+                        Column(
+                            modifier = Modifier.weight(1f).clickable {
+                                focusManager.clearFocus()
+                                viewModel.select(title)
+                            },
+                            verticalArrangement = Arrangement.spacedBy(7.dp)
+                        ) {
+                            AsyncImage(
+                                model = title.poster ?: title.background,
+                                contentDescription = title.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxWidth().aspectRatio(0.69f)
+                                    .background(MaterialTheme.colorScheme.surfaceContainer,
+                                        RoundedCornerShape(12.dp))
+                            )
+                            Text(title.title, maxLines = 2, minLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.labelLarge)
+                            Text(
+                                listOfNotNull(title.year?.toString(), when (title.type) {
+                                    "movie" -> "Filme"
+                                    "anime" -> "Anime"
+                                    else -> "Série"
+                                }).joinToString(" · "),
+                                maxLines = 1,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                    repeat(gridColumns - titles.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            if (state.browseHasMore || state.browseLoading) {
+                item(key = "browse-more") {
+                    LaunchedEffect(state.browsePage, state.browseLoading, state.browseHasMore,
+                        state.browseType, state.browseGenre, state.browseYear, state.browseQuery) {
+                        if (!state.browseLoading && state.browseHasMore) viewModel.loadMore()
+                    }
+                    Column(
+                        Modifier.fillMaxWidth().padding(18.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        if (state.browseLoading) CircularProgressIndicator()
+                        else Text("Mais títulos", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            } else if (browseItems.isEmpty() && !state.loading) {
+                item(key = "browse-empty") {
+                    Text("Nenhum título encontrado para estes filtros.",
+                        modifier = Modifier.padding(24.dp))
+                }
+            }
+            if (state.browseError != null) {
+                item(key = "browse-error") {
+                    Column(Modifier.padding(20.dp)) {
+                        Text(state.browseError.orEmpty(),
+                            color = MaterialTheme.colorScheme.error)
+                        OutlinedButton(onClick = viewModel::loadMore) { Text("Tentar novamente") }
+                    }
+                }
             }
         }
         item(key = "end-spacer") {
