@@ -1,4 +1,7 @@
 package com.ivor.openstream.presentation.tv
+import android.content.Intent
+import com.ivor.openstream.brsources.BrCatalogActivity
+import androidx.compose.ui.platform.LocalContext
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -77,6 +80,7 @@ fun TvExtensionsScreen(
     viewModel: MarketplaceViewModel = hiltViewModel()
 ) {
     val uriHandler = LocalUriHandler.current
+    val brContext = LocalContext.current
     val state by viewModel.state.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
     var showInstalled by remember { mutableStateOf(false) }
@@ -114,6 +118,9 @@ fun TvExtensionsScreen(
                 supporting = state.message?.let { "$counts  ·  $it" } ?: counts,
                 actions = {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Button(onClick = { brContext.startActivity(Intent(brContext, BrCatalogActivity::class.java)) }) {
+                            Text("Catálogo BR")
+                        }
                         Button(onClick = { showAddRepo = true },
                             contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
