@@ -84,7 +84,7 @@ class StremioAddonProvider(
         val takesTmdb = prefixes != null && prefixes.any { it.startsWith("tmdb") }
         return buildList {
             if (imdb != null && takesImdb) add(imdb + suffix)
-            if (takesTmdb) add("tmdb:${identity.tmdbId}$suffix")
+            if (takesTmdb && identity.tmdbId > 0) add("tmdb:${identity.tmdbId}$suffix")
         }
     }
 

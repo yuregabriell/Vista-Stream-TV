@@ -34,7 +34,10 @@ data class KeylessCatalogState(
     val resolving: Boolean = false,
     val servers: List<VideoServer> = emptyList(),
     val playing: VideoServer? = null,
-    val resolveFinished: Boolean = false
+    val resolveFinished: Boolean = false,
+    val resolvedProviders: Int = 0,
+    val totalProviders: Int = 0,
+    val failedProviders: List<String> = emptyList()
 )
 
 @HiltViewModel
@@ -85,7 +88,8 @@ class KeylessCatalogViewModel @Inject constructor(
         episodeJob?.cancel()
         _state.value = _state.value.copy(
             selected = item, episodes = emptyList(), season = 1, episode = 1,
-            resolving = false, servers = emptyList(), playing = null, resolveFinished = false
+            resolving = false, servers = emptyList(), playing = null, resolveFinished = false,
+            resolvedProviders = 0, totalProviders = 0, failedProviders = emptyList()
         )
         episodeJob = viewModelScope.launch {
             val enriched = runCatching { client.enrich(item) }.getOrDefault(item)
@@ -98,7 +102,7 @@ class KeylessCatalogViewModel @Inject constructor(
 
     fun chooseEpisode(season: Int, episode: Int) {
         resolutionJob?.cancel()
-        _state.value = _state.value.copy(season = season, episode = episode, servers = emptyList(), resolveFinished = false)
+        _state.value = _state.value.copy(season = season, episode = episode, servers = emptyList(), resolveFinished = false, resolvedProviders = 0, totalProviders = 0, failedProviders = emptyList())
     }
 
     fun closeDetails() {
@@ -110,7 +114,8 @@ class KeylessCatalogViewModel @Inject constructor(
     fun findStreams() {
         val item = _state.value.selected ?: return
         resolutionJob?.cancel()
-        _state.value = _state.value.copy(resolving = true, resolveFinished = false, servers = emptyList())
+        _state.value = _state.value.copy(resolving = true, resolveFinished = false, servers = emptyList(),
+            resolvedProviders = 0, totalProviders = 0, failedProviders = emptyList())
         resolutionJob = viewModelScope.launch {
             try {
                 val enriched = runCatching { client.enrich(item) }.getOrDefault(item)
@@ -132,7 +137,10 @@ class KeylessCatalogViewModel @Inject constructor(
                             servers = resolution.servers.filter {
                                 it.url.startsWith("https://") || it.url.startsWith("http://")
                             },
-                            resolving = !resolution.isComplete, resolveFinished = resolution.isComplete
+                            resolving = !resolution.isComplete, resolveFinished = resolution.isComplete,
+                            resolvedProviders = resolution.completedProviders,
+                            totalProviders = resolution.totalProviders,
+                            failedProviders = resolution.failedProviders
                         )
                     }
                 }

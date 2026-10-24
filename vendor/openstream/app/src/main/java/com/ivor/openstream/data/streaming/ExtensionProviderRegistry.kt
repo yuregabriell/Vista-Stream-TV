@@ -43,8 +43,16 @@ class ExtensionStreamProvider(
     override val isEnabled: Boolean = delegate.isEnabled
     override val isFallback: Boolean = delegate.isFallback
 
-    override suspend fun resolve(identity: MediaIdentity): Result<List<VideoServer>> =
-        delegate.resolve(identity)
+    override suspend fun resolve(identity: MediaIdentity): Result<List<VideoServer>> {
+        // Embedded websites and Vidking routes require a real numeric TMDB ID.
+        // Passing 0 used to manufacture dead links such as .../tv/0/1/1.
+        if (identity.tmdbId <= 0 &&
+            (delegate is VidkingDirectProvider || delegate is WebEmbedProvider)
+        ) {
+            return Result.success(emptyList())
+        }
+        return delegate.resolve(identity)
+    }
 }
 
 /**

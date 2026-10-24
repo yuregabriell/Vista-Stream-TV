@@ -30,7 +30,7 @@ class IdMappingService @Inject constructor(
             // Only rows long past their lifetime: an expired one is still the offline fallback below.
             runCatching { mappingDao.deleteOlderThan(now() - SWEEP_AFTER_MS) }
         }
-        if (!identity.imdbId.isNullOrBlank()) return identity
+        if (!identity.imdbId.isNullOrBlank() || identity.tmdbId <= 0) return identity
 
         val cacheKey = "tmdb-external:${identity.tmdbType}:${identity.tmdbId}"
         val cached = mappingDao.get(cacheKey)

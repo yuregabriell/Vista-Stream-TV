@@ -13,5 +13,14 @@ data class MediaIdentity(
     val year: Int? = null
 ) {
     val cacheKey: String
-        get() = "$tmdbType:$tmdbId:$season:$episode"
+        get() = if (tmdbId > 0) {
+            "$tmdbType:$tmdbId:$season:$episode"
+        } else {
+            // Keyless catalog must never let two unrelated titles share tv:0:1:1.
+            val unique = imdbId?.takeIf { it.isNotBlank() }
+                ?: anilistId?.let { "anilist:$it" }
+                ?: malId?.let { "mal:$it" }
+                ?: "${title.lowercase().trim()}:${year ?: 0}"
+            "$tmdbType:$unique:$season:$episode"
+        }
 }
