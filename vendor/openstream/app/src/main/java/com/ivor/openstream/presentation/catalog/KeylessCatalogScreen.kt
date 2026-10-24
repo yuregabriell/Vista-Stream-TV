@@ -184,6 +184,9 @@ fun KeylessCatalogScreen(
     val gridColumns = if (wideLayout) 4 else 2
     val browseRows = remember(browseItems, gridColumns) { browseItems.chunked(gridColumns) }
     val catalogListState = rememberLazyListState()
+    LaunchedEffect(browsing, browseType, genre, year, searching) {
+        catalogListState.scrollToItem(0)
+    }
     if (browsing) {
         BackHandler(enabled = !searchFirst) {
             category = "all"
@@ -466,6 +469,23 @@ fun KeylessCatalogScreen(
                             }
                         }
                     }
+                }
+            }
+        }
+        if (!browsing && continueWatching.isEmpty()) {
+            item(key = "continue-watching-empty") {
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text("Continuar a assistir",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold)
+                    Text(
+                        "Os vídeos com progresso guardado nesta instalação aparecem aqui.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         }
