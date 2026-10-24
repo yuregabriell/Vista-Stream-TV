@@ -117,6 +117,15 @@ s=s.replace(needle,'''    // Cast is selected at Home or here; any subsequent pl
             val position=if(hadCast && castSession.nowPlaying.value?.title==title)
                 castSession.currentPositionMs()
                 else player.currentPosition.takeIf { it>0 }?:resumePositionMs
+            val candidateSubtitles=server.subtitles.mapIndexed { index,sub ->
+                com.ivor.openstream.data.remote.model.SubtitleDto(
+                    id="vista-cast-${index}",
+                    url=sub.url,
+                    display=sub.label,
+                    language=sub.language
+                )
+            }
+            castSession.setSubtitleCandidates(candidateSubtitles,"pt-BR")
             castSession.update(castNowPlaying(info,position))
             player.pause()
             hadCast=true
