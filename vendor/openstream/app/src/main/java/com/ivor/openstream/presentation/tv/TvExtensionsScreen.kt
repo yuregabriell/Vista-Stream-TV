@@ -292,7 +292,7 @@ fun TvExtensionsScreen(
                             style = MaterialTheme.typography.bodySmall
                         )
                         androidx.compose.material3.TextButton(onClick = {
-                            uriHandler.openUri("https://aiostreams.fortheweak.cloud/stremio/configure")
+                            runCatching { uriHandler.openUri("https://aiostreams.fortheweak.cloud/stremio/configure") }
                         }) { androidx.compose.material3.Text("Configurar AIOStreams PT-BR") }
                         androidx.compose.material3.TextButton(onClick = {
                             viewModel.addRepo("https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json")
