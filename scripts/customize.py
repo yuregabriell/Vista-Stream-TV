@@ -33,9 +33,9 @@ assert "android.intent.category.LEANBACK_LAUNCHER" in xml
 github_api = root / "app/src/main/java/com/ivor/openstream/data/remote/GithubApi.kt"
 api = github_api.read_text(encoding="utf-8")
 original_route = 'repos/ivorisnoob/openstream/releases/latest'
-assert original_route in api or 'repos/yuregabriell/Vista-Stream-TV/releases/latest' in api
+assert original_route in api or 'repos/yuregabriell/Vista-Stream-TV/releases?per_page=100' in api
 github_api.write_text(api.replace(
-    original_route, 'repos/yuregabriell/Vista-Stream-TV/releases/latest'
+    original_route, 'repos/yuregabriell/Vista-Stream-TV/releases?per_page=100'
 ), encoding="utf-8")
 
 print("App ID and branding changed. TV launcher intent present; D-pad still requires device testing.")
