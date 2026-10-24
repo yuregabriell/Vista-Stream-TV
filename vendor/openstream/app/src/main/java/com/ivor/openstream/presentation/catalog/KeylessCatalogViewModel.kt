@@ -49,12 +49,14 @@ class KeylessCatalogViewModel @Inject constructor(
     private var episodeJob: Job? = null
     private var resolutionJob: Job? = null
 
-    init { refresh() }
+    init { loadCatalog(force = false) }
 
-    fun refresh() {
+    fun refresh() = loadCatalog(force = true)
+
+    private fun loadCatalog(force: Boolean) {
         viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, error = null)
-            val sections = client.refresh()
+            val sections = client.refresh(force = force)
             _state.value = _state.value.copy(
                 sections = sections, loading = false,
                 error = if (sections.values.all { it.isEmpty() }) "Não foi possível consultar Cinemeta e AniList. Verifica a Internet." else null

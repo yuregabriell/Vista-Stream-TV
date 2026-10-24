@@ -57,10 +57,19 @@ class KeylessCatalogClient @Inject constructor(
                     ?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
             }
         }
-        val results = when (type) {
-            "anime" -> anime(query, page)
-            "movie", "series" -> cinemeta(type, query, page)
-            else -> emptyList()
+        val results = runCatching {
+            when (type) {
+                "anime" -> anime(query, page)
+                "movie", "series" -> cinemeta(type, query, page)
+                else -> emptyList()
+            }
+        }.getOrElse { problem ->
+            // Keep the last-known-good catalog even if it is older than the refresh TTL.
+            if (query.isBlank() && page == 1) {
+                prefs.getString(cacheKey, null)?.let { raw ->
+                    runCatching { json.decodeFromString<List<KeylessTitle>>(raw) }.getOrNull()
+                } ?: throw problem
+            } else throw problem
         }
         if (query.isBlank() && results.isNotEmpty() && page == 1) {
             prefs.edit().putString(cacheKey, json.encodeToString(results))
