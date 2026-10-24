@@ -35,8 +35,11 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Locate runner Android SDK
+        shell: bash
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          command -v sdkmanager || ls /usr/local/lib/android/sdk/cmdline-tools/*/bin/sdkmanager
       - name: Android platform
         shell: bash
         run: |
