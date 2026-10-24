@@ -272,17 +272,17 @@ private fun KeylessTitleDetails(
             )
             Button(
                 onClick = onWatch,
-                enabled = servers.isNotEmpty() && !resolving,
+                enabled = servers.isNotEmpty(),
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(9.dp)
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text(when {
+                    servers.isNotEmpty() && resumePositionMs > 15_000L -> "Continuar"
+                    servers.isNotEmpty() -> "Assistir"
                     resolving -> "A procurar reprodução..."
-                    servers.isEmpty() -> "Sem fonte disponível"
-                    resumePositionMs > 15_000L -> "Continuar"
-                    else -> "Assistir"
+                    else -> "Sem fonte disponível"
                 }, fontWeight = FontWeight.Bold)
             }
             if (resolving) {
