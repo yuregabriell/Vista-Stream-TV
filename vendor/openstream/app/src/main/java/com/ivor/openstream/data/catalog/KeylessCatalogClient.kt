@@ -35,7 +35,8 @@ data class KeylessTitle(
     val anilistId: Int? = null,
     val episodes: Int? = null,
     val alternateTitle: String? = null,
-    val genres: List<String> = emptyList()
+    val genres: List<String> = emptyList(),
+    val format: String? = null
 )
 
 data class KeylessEpisode(val season: Int, val number: Int, val title: String)
@@ -269,6 +270,7 @@ class KeylessCatalogClient @Inject constructor(
                 background = obj.str("bannerImage"),
                 description = obj.str("description").orEmpty().replace(Regex("<[^>]+>"), ""),
                 anilistId = id, episodes = obj.int("episodes"),
+                format = obj.str("format"),
                 genres = (obj["genres"] as? JsonArray)?.mapNotNull {
                     (it as? JsonPrimitive)?.contentOrNull
                 }.orEmpty()
