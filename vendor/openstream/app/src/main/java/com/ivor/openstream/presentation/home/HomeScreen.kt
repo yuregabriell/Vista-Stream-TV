@@ -1,6 +1,7 @@
 package com.ivor.openstream.presentation.home
 
 import com.ivor.openstream.ui.theme.onScrim
+import com.ivor.openstream.data.catalog.KeylessTitle
 import com.ivor.openstream.presentation.catalog.KeylessCatalogScreen
 import com.ivor.openstream.presentation.catalog.KeylessCatalogViewModel
 import com.ivor.openstream.presentation.components.SkeletonBox
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -71,6 +73,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -126,6 +129,18 @@ fun HomeScreen(
                 hasVerifiedTmdbKey = true
                 viewModel.refresh()
             }
+        )
+        return
+    }
+    val homeMode by viewModel.mode.collectAsState()
+    val keylessCatalogState by keylessViewModel.state.collectAsState()
+    var selectedAniList by remember { mutableStateOf<KeylessTitle?>(null) }
+    if (selectedAniList != null) {
+        KeylessCatalogScreen(
+            onOpenSources = onOpenSources,
+            viewModel = keylessViewModel,
+            initialTitle = selectedAniList,
+            onInitialDismiss = { selectedAniList = null }
         )
         return
     }
@@ -194,7 +209,10 @@ fun HomeScreen(
                 onRefresh = viewModel::refresh,
                 modifier = Modifier.fillMaxSize()
             ) {
+                val homeListState = androidx.compose.foundation.lazy.rememberLazyListState()
+                LaunchedEffect(homeMode) { homeListState.scrollToItem(0) }
                 LazyColumn(
+                    state = homeListState,
                     modifier = Modifier.fillMaxSize(),
                     // Clears the floating toolbar and the mini player.
                     contentPadding = PaddingValues(bottom = bottomContentPadding)
@@ -202,6 +220,8 @@ fun HomeScreen(
                     item(key = "hero") {
                         HeroSection(
                             items = state.hero,
+                            mode = homeMode,
+                            onModeChange = viewModel::setMode,
                             onOpen = open,
                             onSettingsClick = onSettingsClick,
                             onUpdateClick = onUpdateClick,
@@ -217,7 +237,7 @@ fun HomeScreen(
 
                     item(key = "explore-full-catalog") {
                         Surface(
-                            onClick = { explorerCategory = "all" },
+                            onClick = { explorerCategory = if (homeMode == HomeMode.ANIME) "anime" else "all" },
                             modifier = Modifier.fillMaxWidth()
                                 .padding(horizontal = 20.dp, vertical = 9.dp),
                             shape = ExpressiveShapes.large,
@@ -231,7 +251,9 @@ fun HomeScreen(
                                 Column(Modifier.weight(1f)) {
                                     Text("Explorar catálogo completo", fontWeight = FontWeight.Bold,
                                         style = MaterialTheme.typography.titleMedium)
-                                    Text("Milhares de filmes, séries e animes · Carregamento contínuo",
+                                    Text(if (homeMode == HomeMode.ANIME)
+                                        "AniList + TMDB · Animes, filmes e especiais"
+                                        else "Milhares de filmes e séries · Carregamento contínuo",
                                         style = MaterialTheme.typography.bodySmall)
                                 }
                                 Icon(Icons.Default.Star, contentDescription = null)
@@ -282,6 +304,28 @@ fun HomeScreen(
                         }
                     }
 
+                    if (homeMode == HomeMode.ANIME && profile?.isKids != true &&
+                        keylessCatalogState.sections["anime"].orEmpty().isNotEmpty()) {
+                        item(key = "anilist-premium") {
+                            Row(
+                                modifier = Modifier.fillMaxWidth()
+                                    .padding(start = 5.dp, end = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(Modifier.weight(1f)) {
+                                    SectionHeader(title = "Em alta no AniList")
+                                }
+                                TextButton(onClick = { explorerCategory = "anime" }) {
+                                    Text("Ver todos")
+                                }
+                            }
+                            AniListPosterRail(
+                                items = keylessCatalogState.sections["anime"].orEmpty().take(22),
+                                onOpen = { selectedAniList = it }
+                            )
+                        }
+                    }
+
                     state.rails.forEach { rail ->
                         item(key = rail.key) {
                             Row(
@@ -291,7 +335,8 @@ fun HomeScreen(
                                 Box(Modifier.weight(1f)) { SectionHeader(title = rail.title) }
                                 TextButton(onClick = {
                                     explorerCategory = when(rail.key) {
-                                        "anime", "anime-movies" -> "anime"
+                                        "anime", "anime-movies", "anime-trending", "anime-new",
+                                        "anime-popular", "anime-rated", "anime-action", "anime-fantasy" -> "anime"
                                         "popular-movies", "top-rated" -> "movie"
                                         "popular-series", "new-episodes" -> "tv"
                                         else -> "all"
@@ -319,12 +364,88 @@ fun HomeScreen(
     }
 }
 
+@Composable
+private fun PremiumModeSwitch(mode: HomeMode, onModeChange: (HomeMode) -> Unit) {
+    // Deliberately compact: this is navigation, not another full-height banner.
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .padding(start = 22.dp, end = 22.dp, bottom = 12.dp)
+            .height(42.dp)
+            .clip(ExpressiveShapes.medium)
+            .background(MaterialTheme.colorScheme.surfaceContainer),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        listOf(
+            HomeMode.FILMS_SERIES to "Filmes & Séries",
+            HomeMode.ANIME to "Animes"
+        ).forEach { (choice, label) ->
+            val selected = mode == choice
+            Surface(
+                onClick = { onModeChange(choice) },
+                modifier = Modifier.weight(1f).fillMaxSize().padding(3.dp),
+                shape = ExpressiveShapes.small,
+                color = if (selected) MaterialTheme.colorScheme.primaryContainer
+                    else Color.Transparent,
+                contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AniListPosterRail(items: List<KeylessTitle>, onOpen: (KeylessTitle) -> Unit) {
+    val width = byWidth(compact = 132.dp, medium = 152.dp, expanded = 164.dp)
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        items(items, key = { it.sourceId }) { anime ->
+            Column(
+                modifier = Modifier.width(width)
+                    .clip(ExpressiveShapes.medium)
+                    .clickable { onOpen(anime) }
+                    .padding(bottom = 10.dp)
+            ) {
+                AsyncImage(
+                    model = anime.poster,
+                    contentDescription = anime.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(0.68f)
+                        .clip(ExpressiveShapes.medium)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                )
+                Text(
+                    text = anime.title,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 8.dp, start = 6.dp, end = 6.dp)
+                )
+            }
+        }
+    }
+}
+
 // region Hero
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HeroSection(
     items: List<AnimeDto>,
+    mode: HomeMode,
+    onModeChange: (HomeMode) -> Unit,
     onOpen: (AnimeDto) -> Unit,
     onSettingsClick: () -> Unit,
     onUpdateClick: () -> Unit,
@@ -371,6 +492,8 @@ private fun HeroSection(
             }
             ProfileSwitchButton(profile = profile, onSwitch = onSwitchProfile, onKidsTap = onKidsTap)
         }
+
+        PremiumModeSwitch(mode = mode, onModeChange = onModeChange)
 
         if (items.isNotEmpty()) {
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
