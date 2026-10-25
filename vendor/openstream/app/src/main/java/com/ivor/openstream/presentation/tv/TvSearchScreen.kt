@@ -72,8 +72,8 @@ private val KEY_GAP: Dp = 6.dp
 /**
  * Search the way TV apps do it: a narrow keyboard column on the left and the results filling the
  * rest of the screen, updating as letters are added (Android TV has no keyboard for a text field to
- * open). Before anything is typed, the right side offers recent searches, genres and what is
- * trending. Opening a result remembers the query as a recent search.
+ * open). Before anything is typed, the right side offers recent searches and genres.
+ * Opening a result remembers the query as a recent search.
  */
 @OptIn(ExperimentalComposeUiApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -174,10 +174,8 @@ fun TvSearchScreen(
             when {
                 state.isBrowsing -> BrowsePane(
                     recent = state.recent,
-                    trending = state.trending,
                     onSearchRecent = viewModel::submit,
-                    onGenre = viewModel::selectGenre,
-                    onOpen = open
+                    onGenre = viewModel::selectGenre
                 )
                 state.error != null && results.isEmpty() -> TvErrorState(onRetry = viewModel::retry)
                 state.isLoading && results.isEmpty() -> TvLoading()
@@ -282,10 +280,8 @@ private fun Key(
 @Composable
 private fun BrowsePane(
     recent: List<String>,
-    trending: List<AnimeDto>,
     onSearchRecent: (String) -> Unit,
-    onGenre: (BrowseGenre) -> Unit,
-    onOpen: (AnimeDto) -> Unit
+    onGenre: (BrowseGenre) -> Unit
 ) {
     androidx.compose.foundation.lazy.LazyColumn(
         contentPadding = PaddingValues(top = 36.dp, bottom = 48.dp),
@@ -304,15 +300,6 @@ private fun BrowsePane(
             PillRow(title = stringResource(R.string.search_browse_genre)) {
                 items(BrowseGenre.entries.toList(), key = { it.name }) { genre ->
                     TvPill(label = stringResource(genre.labelRes), onClick = { onGenre(genre) })
-                }
-            }
-        }
-        if (trending.isNotEmpty()) {
-            item(key = "trending") {
-                TvRail(title = stringResource(R.string.home_trending_now), start = 8.dp) {
-                    items(trending, key = { it.id }) { item ->
-                        TvPosterCard(title = item.name, posterPath = item.posterPath, onClick = { onOpen(item) })
-                    }
                 }
             }
         }
