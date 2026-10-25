@@ -155,7 +155,10 @@ fun SearchScreen(
 
     // Tapping the Search tab while already on it focuses the field.
     LaunchedEffect(focusTrigger) {
-        if (focusTrigger > 0L) focusRequester.requestFocus()
+        if (focusTrigger > 0L) {
+            focusRequester.requestFocus()
+            if (!state.isBrowsing) viewModel.retry()
+        }
     }
 
     // Infinite scroll: fetch the next page as the grid nears its end.
