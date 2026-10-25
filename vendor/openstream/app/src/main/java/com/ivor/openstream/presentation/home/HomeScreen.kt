@@ -140,6 +140,7 @@ fun HomeScreen(
         while (true) {
             delay(15L * 60 * 1000L)
             viewModel.refreshIfStale()
+            keylessViewModel.refreshIfStale()
         }
     }
     val keylessCatalogState by keylessViewModel.state.collectAsState()
