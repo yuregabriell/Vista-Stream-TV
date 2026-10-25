@@ -49,7 +49,7 @@ class KeylessCatalogClient @Inject constructor(
     private val gatewayStore: MetadataGatewayStore
 ) {
     private val prefs = context.getSharedPreferences("vista_keyless_catalog_v1", Context.MODE_PRIVATE)
-    val tmdbConfigured: Boolean get() = keyStore.current().isNotBlank() || gatewayStore.active()
+    val tmdbConfigured: Boolean get() = true // Public, throttled server is bundled by URL only; no TMDB secret
 
     /** Cinemeta is a Stremio metadata/catalog service; it does NOT host the movies. */
     suspend fun titles(type: String, query: String = "", page: Int = 1, force: Boolean = false, genre: String = "", year: Int? = null): List<KeylessTitle> = withContext(Dispatchers.IO) {
