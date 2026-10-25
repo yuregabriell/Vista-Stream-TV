@@ -90,7 +90,7 @@ class AnimeRepositoryImpl @Inject constructor(
                 // weekly trending pages so the general Top 10 still has ten titles
                 // after excluding Japanese animated series/films.
                 (1..3).map { page ->
-                    async { api.getTrendingAll("week", page).results }
+                    async { runCatching { api.getTrendingAll("week", page).results }.getOrDefault(emptyList()) }
                 }.awaitAll().flatten()
                     .filter { it.mediaType == "movie" || it.mediaType == "tv" }
             }
