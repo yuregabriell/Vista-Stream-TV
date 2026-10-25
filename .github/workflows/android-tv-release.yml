@@ -92,8 +92,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.3.1-build.${GITHUB_RUN_NUMBER}"
+          TAG="v0.4.0-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-TV-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "Vista Stream TV — $TAG" \
-            --notes "Correção de interface: removido o catálogo BR experimental da app e reparado o cabeçalho Extensões para título compacto numa única linha; marketplace original de fontes e player Media3 preservados. APK de desenvolvimento assinado temporariamente; para atualizar poderá ser necessário desinstalar a build anterior." \
+            --notes "Extensões nativas opcionais no marketplace: importação confirmada do Harvester Browser e adaptadores de anime PT-BR experimentais. Sem Catálogo BR separado, sem executar CloudStream .cs3 ou contornar DRM. APK de desenvolvimento assinado temporariamente; para atualizar poderá ser necessário desinstalar a build anterior." \
             --prerelease
