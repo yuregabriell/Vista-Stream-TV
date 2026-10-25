@@ -24,6 +24,7 @@ import com.ivor.openstream.data.repository.TitleRatingRepository
 import com.ivor.openstream.domain.repository.WatchLaterRepository
 import com.ivor.openstream.domain.matching.TitleMatcher
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +38,8 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+enum class HomeMode { FILMS_SERIES, ANIME }
 
 enum class RailStyle {
     /** Big rank numerals beside posters, for a top-ten list. */
@@ -89,6 +92,16 @@ class HomeViewModel @Inject constructor(
     private val tmdbKeyStore: TmdbKeyStore,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
+
+    // Keep the mode local to the device/profile session; no account or API key needed.
+    private val homePreferences = context.getSharedPreferences("vista_home_mode_v1", Context.MODE_PRIVATE)
+    private val _mode = MutableStateFlow(
+        if (homePreferences.getString("mode", "") == HomeMode.ANIME.name)
+            HomeMode.ANIME else HomeMode.FILMS_SERIES
+    )
+    val mode: StateFlow<HomeMode> = _mode
+    private val cachedHomes = mutableMapOf<HomeMode, HomeUiState.Success>()
+    private var feedJob: Job? = null
 
     /** The feed as loaded; [uiState] is this minus the titles the user hid. */
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
@@ -212,7 +225,12 @@ class HomeViewModel @Inject constructor(
                 .map { it?.isKids }
                 .distinctUntilChanged()
                 // Public gateway means a personal TMDB key is no longer required.
-                .collect { kids -> if (kids != null) loadData() }
+                .collect { kids ->
+                    if (kids != null) {
+                        cachedHomes.clear()
+                        loadData()
+                    }
+                }
         }
     }
 
@@ -234,45 +252,93 @@ class HomeViewModel @Inject constructor(
         return true
     }
 
-    /** Pull-to-refresh keeps the current feed on screen while the new one loads. */
+    fun setMode(target: HomeMode) {
+        if (_mode.value == target) return
+        _mode.value = target
+        homePreferences.edit().putString("mode", target.name).apply()
+        feedJob?.cancel()
+        val cached = cachedHomes[target]
+        if (cached != null) _uiState.value = cached
+        else loadData()
+    }
+
+    /** Pull-to-refresh refreshes only the currently visible home. */
     fun refresh() {
         val current = _uiState.value
         if (current is HomeUiState.Success) _uiState.value = current.copy(isRefreshing = true)
+        cachedHomes.remove(_mode.value)
         loadData(showLoading = current !is HomeUiState.Success, forceRefresh = true)
     }
 
     fun loadData(showLoading: Boolean = true, forceRefresh: Boolean = false) {
-        viewModelScope.launch {
+        feedJob?.cancel()
+        val selectedMode = _mode.value
+        feedJob = viewModelScope.launch {
             if (showLoading) _uiState.value = HomeUiState.Loading
-            val catalogs = coroutineScope {
-                AnimeCatalog.entries.associateWith { catalog -> async { repository.getCatalog(catalog, forceRefresh) } }
-                    .mapValues { (_, request) -> request.await().getOrDefault(emptyList()) }
+            val needed = if (selectedMode == HomeMode.ANIME) {
+                listOf(
+                    AnimeCatalog.TRENDING_ANIME, AnimeCatalog.ANIME_POPULAR,
+                    AnimeCatalog.ANIME_NEW, AnimeCatalog.ANIME_TOP_RATED,
+                    AnimeCatalog.ANIME_MOVIES, AnimeCatalog.ANIME_ACTION,
+                    AnimeCatalog.ANIME_FANTASY
+                )
+            } else {
+                listOf(
+                    AnimeCatalog.TRENDING, AnimeCatalog.NEW_EPISODES,
+                    AnimeCatalog.POPULAR_MOVIES, AnimeCatalog.POPULAR_SERIES,
+                    AnimeCatalog.TOP_RATED_MOVIES
+                )
             }
+            val catalogs = coroutineScope {
+                needed.associateWith { catalog ->
+                    async { repository.getCatalog(catalog, forceRefresh) }
+                }.mapValues { (_, deferred) -> deferred.await().getOrDefault(emptyList()) }
+            }
+            if (_mode.value != selectedMode) return@launch
             if (catalogs.values.all { it.isEmpty() }) {
                 _uiState.value = HomeUiState.Error(context.getString(R.string.st_could_not_catalog))
                 return@launch
             }
-
-            val trending = catalogs.getValue(AnimeCatalog.TRENDING)
-            val rails = listOf(
-                HomeRail("top10", context.getString(R.string.home_top10_week), RailStyle.RANKED, trending.take(10)),
-                HomeRail(
-                    "new-episodes",
-                    context.getString(R.string.home_new_episodes_week),
-                    RailStyle.LANDSCAPE,
-                    catalogs.getValue(AnimeCatalog.NEW_EPISODES).filter { it.backdropPath != null }
-                ),
-                HomeRail("popular-movies", context.getString(R.string.home_popular_movies), RailStyle.POSTER, catalogs.getValue(AnimeCatalog.POPULAR_MOVIES)),
-                HomeRail("popular-series", context.getString(R.string.home_popular_series), RailStyle.POSTER, catalogs.getValue(AnimeCatalog.POPULAR_SERIES)),
-                HomeRail("anime", context.getString(R.string.home_trending_anime), RailStyle.POSTER, catalogs.getValue(AnimeCatalog.TRENDING_ANIME)),
-                HomeRail("top-rated", context.getString(R.string.home_critically_acclaimed), RailStyle.POSTER, catalogs.getValue(AnimeCatalog.TOP_RATED_MOVIES)),
-                HomeRail("anime-movies", context.getString(R.string.home_anime_movies), RailStyle.POSTER, catalogs.getValue(AnimeCatalog.ANIME_MOVIES))
-            ).filter { it.items.isNotEmpty() }
-
-            val success = HomeUiState.Success(
-                hero = trending.filter { it.posterPath != null }.take(8),
-                rails = rails
-            )
+            val rails: List<HomeRail>
+            val hero: List<AnimeDto>
+            if (selectedMode == HomeMode.ANIME) {
+                val trending = catalogs.getValue(AnimeCatalog.TRENDING_ANIME)
+                val popular = catalogs.getValue(AnimeCatalog.ANIME_POPULAR)
+                hero = (trending + popular).distinctBy { it.id }.filter {
+                    it.posterPath != null
+                }.take(8)
+                rails = listOf(
+                    HomeRail("anime-trending", "Top 10 animes da semana", RailStyle.RANKED,
+                        (trending + popular).distinctBy { it.id }.take(10)),
+                    HomeRail("anime-new", "Novidades e estreias", RailStyle.POSTER,
+                        catalogs.getValue(AnimeCatalog.ANIME_NEW)),
+                    HomeRail("anime-popular", "Animes mais populares", RailStyle.POSTER, popular),
+                    HomeRail("anime-rated", "Os mais bem avaliados", RailStyle.POSTER,
+                        catalogs.getValue(AnimeCatalog.ANIME_TOP_RATED)),
+                    HomeRail("anime-movies", "Filmes de anime", RailStyle.POSTER,
+                        catalogs.getValue(AnimeCatalog.ANIME_MOVIES)),
+                    HomeRail("anime-action", "Ação e aventura", RailStyle.POSTER,
+                        catalogs.getValue(AnimeCatalog.ANIME_ACTION)),
+                    HomeRail("anime-fantasy", "Fantasia e mundos extraordinários", RailStyle.POSTER,
+                        catalogs.getValue(AnimeCatalog.ANIME_FANTASY))
+                ).filter { it.items.isNotEmpty() }
+            } else {
+                val trending = catalogs.getValue(AnimeCatalog.TRENDING)
+                hero = trending.filter { it.posterPath != null }.take(8)
+                rails = listOf(
+                    HomeRail("top10", context.getString(R.string.home_top10_week), RailStyle.RANKED, trending.take(10)),
+                    HomeRail("new-episodes", context.getString(R.string.home_new_episodes_week),
+                        RailStyle.LANDSCAPE, catalogs.getValue(AnimeCatalog.NEW_EPISODES).filter { it.backdropPath != null }),
+                    HomeRail("popular-movies", context.getString(R.string.home_popular_movies),
+                        RailStyle.POSTER, catalogs.getValue(AnimeCatalog.POPULAR_MOVIES)),
+                    HomeRail("popular-series", context.getString(R.string.home_popular_series),
+                        RailStyle.POSTER, catalogs.getValue(AnimeCatalog.POPULAR_SERIES)),
+                    HomeRail("top-rated", context.getString(R.string.home_critically_acclaimed),
+                        RailStyle.POSTER, catalogs.getValue(AnimeCatalog.TOP_RATED_MOVIES))
+                ).filter { it.items.isNotEmpty() }
+            }
+            val success = HomeUiState.Success(hero = hero, rails = rails)
+            cachedHomes[selectedMode] = success
             _uiState.value = success
             prefetchArtwork(success)
         }
