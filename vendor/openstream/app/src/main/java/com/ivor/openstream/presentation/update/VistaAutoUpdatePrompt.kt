@@ -81,23 +81,39 @@ fun VistaAutoUpdatePrompt(
         }
         is UpdateUiState.ReadyToInstall -> {
             if (!accepted) return
+            // Never launch an installer that we already know will reject this APK.
+            val signatureOk = remember(current.apk) { viewModel.signingCompatible(current.apk) }
             AlertDialog(
                 onDismissRequest = { dismissed = true },
-                title = { Text("Atualização pronta") },
+                title = {
+                    Text(if (signatureOk == false) "Assinatura incompatível" else "Atualização pronta")
+                },
                 text = {
                     Text(
-                        "A APK já foi descarregada. O Android vai pedir a tua confirmação. " +
-                            "A assinatura das duas versões tem de coincidir para atualizar sem desinstalar."
+                        when (signatureOk) {
+                            false -> "Esta APK tem uma assinatura diferente da versão instalada. " +
+                                "Por segurança, o Android não permite instalá-la por cima. " +
+                                "Não desinstales sem guardar primeiro os teus dados: " +
+                                "o backup da biblioteca pode não incluir o progresso do catálogo online."
+                            null -> "A APK foi descarregada, mas não foi possível confirmar a assinatura. " +
+                                "O Android poderá recusar a instalação se a chave for diferente."
+                            true -> "A APK foi descarregada e a assinatura é compatível. " +
+                                "Confirma a instalação no Android para atualizar sem desinstalar."
+                        }
                     )
                 },
                 confirmButton = {
-                    Button(onClick = {
-                        if (viewModel.canInstall()) viewModel.install(current.apk)
-                        else context.startActivity(viewModel.installPermissionIntent())
-                    }) { Text(if (viewModel.canInstall()) "Instalar agora" else "Autorizar instalação") }
+                    if (signatureOk != false) {
+                        Button(onClick = {
+                            if (viewModel.canInstall()) viewModel.install(current.apk)
+                            else context.startActivity(viewModel.installPermissionIntent())
+                        }) { Text(if (viewModel.canInstall()) "Instalar agora" else "Autorizar instalação") }
+                    }
                 },
                 dismissButton = {
-                    TextButton(onClick = { dismissed = true }) { Text("Mais tarde") }
+                    TextButton(onClick = { dismissed = true }) {
+                        Text(if (signatureOk == false) "Manter versão instalada" else "Mais tarde")
+                    }
                 }
             )
         }
