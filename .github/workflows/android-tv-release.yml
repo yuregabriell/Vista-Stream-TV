@@ -45,8 +45,8 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-37" "build-tools;36.0.0" || "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
-      # Optional: configure these four private repository Actions secrets once.
-      # They must never be stored in the public repository or printed in logs.
+      # Required permanent signing secrets. Never publish temporary-signed APKs.
+      # Store all four as private repository Actions secrets (never in git).
       - name: Prepare stable APK signing
         env:
           VISTA_SIGNING_KEYSTORE_BASE64: ${{ secrets.VISTA_SIGNING_KEYSTORE_BASE64 }}
@@ -56,21 +56,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ -n "${VISTA_SIGNING_KEYSTORE_BASE64:-}" ]; then
-            test -n "${VISTA_KEYSTORE_PASSWORD:-}"
-            test -n "${VISTA_KEY_ALIAS:-}"
-            test -n "${VISTA_KEY_PASSWORD:-}"
-            printf '%s' "$VISTA_SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/vista-signing.jks"
-            chmod 600 "$RUNNER_TEMP/vista-signing.jks"
-            {
-              echo "OPENSTREAM_KEYSTORE_PATH=$RUNNER_TEMP/vista-signing.jks"
-              echo "OPENSTREAM_KEYSTORE_PASSWORD=$VISTA_KEYSTORE_PASSWORD"
-              echo "OPENSTREAM_KEY_ALIAS=$VISTA_KEY_ALIAS"
-              echo "OPENSTREAM_KEY_PASSWORD=$VISTA_KEY_PASSWORD"
-            } >> "$GITHUB_ENV"
-          else
-            echo "No signing secret configured. Temporary debug signing: in-place updates may fail."
-          fi
+          for name in VISTA_SIGNING_KEYSTORE_BASE64 VISTA_KEYSTORE_PASSWORD VISTA_KEY_ALIAS VISTA_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing permanent APK signing secret: $name. Refusing to publish an unrepeatably signed build."
+              exit 1
+            fi
+          done
+          printf '%s' "$VISTA_SIGNING_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/vista-signing.jks"
+          chmod 600 "$RUNNER_TEMP/vista-signing.jks"
+          keytool -list -keystore "$RUNNER_TEMP/vista-signing.jks" -storepass "$VISTA_KEYSTORE_PASSWORD" -alias "$VISTA_KEY_ALIAS" >/dev/null
+          {
+            echo "OPENSTREAM_KEYSTORE_PATH=$RUNNER_TEMP/vista-signing.jks"
+            echo "OPENSTREAM_KEYSTORE_PASSWORD=$VISTA_KEYSTORE_PASSWORD"
+            echo "OPENSTREAM_KEY_ALIAS=$VISTA_KEY_ALIAS"
+            echo "OPENSTREAM_KEY_PASSWORD=$VISTA_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
       - name: Build APK
         working-directory: vendor/openstream
         env:
@@ -86,6 +86,15 @@ jobs:
           APK="$(find vendor/openstream/app/build/outputs/apk/debug -type f -name '*universal*.apk' -print -quit)"
           test -n "$APK" || { echo "No universal APK found" >&2; exit 1; }
           cp "$APK" "VistaStream-${GITHUB_RUN_NUMBER}.apk"
+      - name: Verify APK signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="VistaStream-${GITHUB_RUN_NUMBER}.apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK"
+          # Verify package name and monotonic build number before publishing.
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | head -n 1 | grep "name='com.vistastream.tv.debug'"
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | head -n 1 | grep "versionCode='${GITHUB_RUN_NUMBER}'"
       - name: Publish in Releases
         env:
           GH_TOKEN: ${{ github.token }}
