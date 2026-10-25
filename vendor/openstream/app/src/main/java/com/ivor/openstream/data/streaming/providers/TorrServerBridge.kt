@@ -3,7 +3,6 @@ package com.ivor.openstream.data.streaming.providers
 import android.content.Context
 import android.net.Uri
 import java.net.HttpURLConnection
-import java.net.InetAddress
 import java.net.URI
 import java.net.URL
 import java.util.Locale
@@ -48,7 +47,7 @@ class TorrServerBridge(context: Context) {
             (parsed.path.isNotEmpty() && parsed.path != "/")) return null
         val host = parsed.host?.lowercase(Locale.ROOT) ?: return null
         val ip = host.split('.')
-        val privateIp = if (ip.size == 4 && ip.all { it.toIntOrNull() in 0..255 }) {
+        val privateIp = if (ip.size == 4 && ip.all { part -> part.toIntOrNull()?.let { n -> n in 0..255 } == true }) {
             val a = ip[0].toInt()
             val b = ip[1].toInt()
             a == 10 || a == 127 || (a == 192 && b == 168) || (a == 172 && b in 16..31) ||
