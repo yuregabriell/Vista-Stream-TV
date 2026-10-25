@@ -91,8 +91,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.10.0-build.${GITHUB_RUN_NUMBER}"
+          TAG="v0.11.0-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-TV-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "Vista Stream TV — $TAG" \
-            --notes "VS 0.10: integração TheTVDB v4 no backend Render para completar nomes e sinopses de episódios via IDs TMDB, sem alterar reprodução ou progresso. Créditos TheTVDB visíveis nos detalhes com ligação oficial. TMDB permanece principal e garante fallback se TVDB falhar. API keys protegidas no Render, sem segredos no APK. Chromecast, Harvester e P2P preservados." \
+            --notes "VS 0.11: Catálogo completo navegável de filmes e séries TMDB, com paginação real, pesquisa e filtro por ano; descoberta de animes mistura TMDB e AniList. Abre detalhes AniList com player existente. Secções Ver todos na página inicial. Sem chaves dentro do APK, Chromecast, Harvester, TVDB e P2P preservados." \
             --prerelease
