@@ -1,6 +1,11 @@
 package com.ivor.openstream.presentation.catalog
 
 import android.net.Uri
+import android.app.Activity
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.ivor.openstream.presentation.settings.TmdbKeyActivity
 import com.ivor.openstream.harvester.HarvesterShelf
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.window.Dialog
@@ -165,9 +170,16 @@ fun KeylessCatalogScreen(
     onOpenSources: () -> Unit = {},
     searchFirst: Boolean = false,
     viewModel: KeylessCatalogViewModel = hiltViewModel(),
-    castViewModel: KeylessCastViewModel = hiltViewModel()
+    castViewModel: KeylessCastViewModel = hiltViewModel(),
+    onTmdbConfigured: () -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
+    val configureTmdb = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) onTmdbConfigured()
+    }
     val castStatus by castViewModel.status.collectAsState()
     val tvNowPlaying by castViewModel.nowPlaying.collectAsState()
     val tvSubtitles by castViewModel.subtitles.collectAsState()
@@ -409,6 +421,11 @@ fun KeylessCatalogScreen(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+                TextButton(onClick = {
+                    configureTmdb.launch(Intent(context, TmdbKeyActivity::class.java))
+                }) {
+                    Text("TMDB", style = MaterialTheme.typography.labelSmall)
                 }
                 IconButton(onClick = viewModel::refresh) {
                     Icon(Icons.Default.Refresh, contentDescription = "Atualizar catálogo")
