@@ -175,7 +175,7 @@ fun HomeScreen(
                             onSettingsClick = onSettingsClick,
                             onUpdateClick = onUpdateClick,
                             castConnected = castStatus.isCasting,
-                            onCastClick = { showCastPicker = true },
+                            onCastClick = { if (castStatus.isCasting) castViewModel.stopCasting() else showCastPicker = true },
                             profile = profile,
                             onSwitchProfile = onSwitchProfile,
                             onKidsTap = {
