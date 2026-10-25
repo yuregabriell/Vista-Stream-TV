@@ -3,6 +3,7 @@ package com.ivor.openstream.data.catalog
 import android.content.Context
 import android.net.Uri
 import com.ivor.openstream.data.settings.TmdbKeyStore
+import com.ivor.openstream.data.settings.MetadataGatewayStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -44,10 +45,11 @@ class KeylessCatalogClient @Inject constructor(
     @Named("StreamingClient") private val http: OkHttpClient,
     private val json: Json,
     @ApplicationContext context: Context,
-    private val keyStore: TmdbKeyStore
+    private val keyStore: TmdbKeyStore,
+    private val gatewayStore: MetadataGatewayStore
 ) {
     private val prefs = context.getSharedPreferences("vista_keyless_catalog_v1", Context.MODE_PRIVATE)
-    val tmdbConfigured: Boolean get() = keyStore.current().isNotBlank()
+    val tmdbConfigured: Boolean get() = keyStore.current().isNotBlank() || gatewayStore.active()
 
     /** Cinemeta is a Stremio metadata/catalog service; it does NOT host the movies. */
     suspend fun titles(type: String, query: String = "", page: Int = 1, force: Boolean = false, genre: String = "", year: Int? = null): List<KeylessTitle> = withContext(Dispatchers.IO) {
