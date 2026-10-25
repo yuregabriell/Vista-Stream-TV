@@ -44,6 +44,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -192,21 +193,38 @@ fun UpdateScreen(
                             tone = Tone.Highlight,
                             leading = { StatusIcon(Icons.Default.InstallMobile) },
                             title = stringResource(R.string.st_ready_install),
-                            body = if (viewModel.canInstall()) {
-                                stringResource(R.string.st_android_confirm_update)
-                            } else {
-                                stringResource(R.string.st_allow_install_note)
+                            body = when {
+                                viewModel.signingCompatible(current.apk) == false ->
+                                    "A assinatura do APK é diferente da versão instalada. " +
+                                    "O Android não permite atualizar por cima. " +
+                                    "Guarda uma cópia dos teus dados antes de reinstalar " +
+                                    "pelo GitHub Releases."
+                                viewModel.canInstall() -> stringResource(R.string.st_android_confirm_update)
+                                else -> stringResource(R.string.st_allow_install_note)
                             }
                         ) {
+                            val signatureOk = remember(current.apk) {
+                                viewModel.signingCompatible(current.apk)
+                            }
                             Button(
                                 onClick = {
-                                    if (viewModel.canInstall()) viewModel.install(current.apk)
-                                    else context.startActivity(viewModel.installPermissionIntent())
+                                    when {
+                                        signatureOk == false -> uriHandler.openUri(current.release.htmlUrl)
+                                        viewModel.canInstall() -> viewModel.install(current.apk)
+                                        else -> context.startActivity(viewModel.installPermissionIntent())
+                                    }
                                 },
                                 shape = ExpressiveShapes.large,
                                 modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
                             ) {
-                                Text(if (viewModel.canInstall()) stringResource(R.string.action_install) else stringResource(R.string.action_allow_installs), fontWeight = FontWeight.Bold)
+                                Text(
+                                    when {
+                                        signatureOk == false -> "Abrir Release no GitHub"
+                                        viewModel.canInstall() -> stringResource(R.string.action_install)
+                                        else -> stringResource(R.string.action_allow_installs)
+                                    },
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
 
