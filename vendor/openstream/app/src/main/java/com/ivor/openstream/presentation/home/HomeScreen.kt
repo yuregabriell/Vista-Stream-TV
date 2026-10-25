@@ -113,8 +113,16 @@ fun HomeScreen(
     castViewModel: KeylessCastViewModel = hiltViewModel(),
     keylessViewModel: KeylessCatalogViewModel = hiltViewModel()
 ) {
-    if (!keylessViewModel.hasTmdbKey) {
-        KeylessCatalogScreen(onOpenSources = onOpenSources, viewModel = keylessViewModel)
+    var hasVerifiedTmdbKey by remember { mutableStateOf(keylessViewModel.hasTmdbKey) }
+    if (!hasVerifiedTmdbKey) {
+        KeylessCatalogScreen(
+            onOpenSources = onOpenSources,
+            viewModel = keylessViewModel,
+            onTmdbConfigured = {
+                hasVerifiedTmdbKey = true
+                viewModel.refresh()
+            }
+        )
         return
     }
     val uiState by viewModel.uiState.collectAsState()
