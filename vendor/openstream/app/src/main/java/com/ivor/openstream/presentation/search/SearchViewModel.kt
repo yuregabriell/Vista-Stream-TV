@@ -7,7 +7,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ivor.openstream.R
 import com.ivor.openstream.data.remote.model.AnimeDto
-import com.ivor.openstream.domain.model.AnimeCatalog
 import com.ivor.openstream.domain.model.BrowseGenre
 import com.ivor.openstream.domain.repository.AnimeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -93,7 +92,6 @@ data class SearchUiState(
     val query: String = "",
     val genre: BrowseGenre? = null,
     val recent: List<String> = emptyList(),
-    val trending: List<AnimeDto> = emptyList(),
     val results: List<AnimeDto> = emptyList(),
     val filter: SearchFilter = SearchFilter.ALL,
     val sort: SortOption = SortOption.BEST_MATCH,
@@ -103,7 +101,7 @@ data class SearchUiState(
     val endReached: Boolean = false,
     val error: String? = null
 ) {
-    /** Nothing typed and no genre picked: show recent searches, trending and genres. */
+    /** Nothing typed and no genre picked: show recent searches and genre discovery. */
     val isBrowsing: Boolean get() = query.isBlank() && genre == null
 
     /** Results after the client-side filters (anime, year, rating and language aren't TMDB search filters). */
@@ -137,14 +135,6 @@ class SearchViewModel @Inject constructor(
     private var page = 1
     /** Pages fetched only because filters hid most results; capped so a rare filter can't page forever. */
     private var autoLoadedPages = 0
-
-    init {
-        viewModelScope.launch {
-            repository.getCatalog(AnimeCatalog.TRENDING).onSuccess { list ->
-                _uiState.update { it.copy(trending = list.take(8)) }
-            }
-        }
-    }
 
     /** Typing searches automatically after a short pause. */
     fun onQueryChange(value: String) {
