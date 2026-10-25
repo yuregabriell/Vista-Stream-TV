@@ -283,7 +283,6 @@ fun SearchScreen(
                 },
                 onRemoveRecent = viewModel::removeRecent,
                 onClearRecent = viewModel::clearRecent,
-                onOpen = open,
                 onGenre = { genre ->
                     viewModel.selectGenre(genre)
                     focusManager.clearFocus()
@@ -358,7 +357,6 @@ private fun androidx.compose.foundation.lazy.grid.LazyGridScope.browseContent(
     onRecent: (String) -> Unit,
     onRemoveRecent: (String) -> Unit,
     onClearRecent: () -> Unit,
-    onOpen: (AnimeDto) -> Unit,
     onGenre: (BrowseGenre) -> Unit
 ) {
     if (state.recent.isNotEmpty()) {
@@ -436,51 +434,6 @@ private fun androidx.compose.foundation.lazy.grid.LazyGridScope.browseContent(
                     }
                     repeat(perRow - pair.size) { Box(Modifier.weight(1f)) }
                 }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun TrendingList(
-    items: List<AnimeDto>,
-    firstRank: Int,
-    onOpen: (AnimeDto) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
-    ) {
-        items.forEachIndexed { index, item ->
-            SegmentedListItem(
-                onClick = { onOpen(item) },
-                shapes = ListItemDefaults.segmentedShapes(index = index, count = items.size),
-                colors = ListItemDefaults.segmentedColors(),
-                leadingContent = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "${firstRank + index}",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Black,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.width(32.dp)
-                        )
-                        AsyncImage(
-                            model = "https://image.tmdb.org/t/p/w154${item.posterPath}",
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(width = 40.dp, height = 58.dp)
-                                .clip(ExpressiveShapes.extraSmall)
-                                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                        )
-                    }
-                },
-                supportingContent = { Text(metaLine(item)) }
-            ) {
-                Text(item.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
