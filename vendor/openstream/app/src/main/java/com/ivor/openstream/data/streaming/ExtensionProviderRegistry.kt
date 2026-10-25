@@ -17,6 +17,7 @@ import com.ivor.openstream.data.streaming.anime.MegaplayExtractor
 import com.ivor.openstream.data.streaming.anime.ReAnimeProvider
 import com.ivor.openstream.data.streaming.providers.VidkingDirectApi
 import com.ivor.openstream.data.streaming.providers.StremioAddonProvider
+import com.ivor.openstream.data.streaming.providers.TorrServerBridge
 import com.ivor.openstream.data.streaming.providers.VidkingDirectProvider
 import com.ivor.openstream.data.streaming.providers.VidkingServerSpec
 import com.ivor.openstream.data.streaming.providers.WebEmbedProvider
@@ -185,7 +186,8 @@ class ExtensionProviderRegistry @Inject constructor(
                 isFallback = manifest.isFallback,
                 baseUrl = engine.endpoint.removeSuffix("/manifest.json").trimEnd('/'),
                 client = streamingClient,
-                json = json
+                json = json,
+                torrentBridge = TorrServerBridge(context)
             )
             ExtensionEngineType.UNSUPPORTED -> return null
         }
