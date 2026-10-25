@@ -4,3 +4,10 @@
 build/
 local.properties
 .idea/
+
+# Never publish metadata gateway keys or locally provisioned tokens
+.env
+.env.*
+!**/.env.example
+services/metadata-api/__pycache__/
+services/metadata-api/.pytest_cache/
