@@ -70,6 +70,8 @@ class KeylessCatalogViewModel @Inject constructor(
     private var episodeJob: Job? = null
     private var resolutionJob: Job? = null
     private var browseJob: Job? = null
+    private var catalogJob: Job? = null
+    private var catalogUpdatedAt = 0L
 
     /** Full-category paging independent of the Home preview rails. */
     fun browse(type: String, query: String = "", genre: String = "", year: Int? = null) {
@@ -141,14 +143,38 @@ class KeylessCatalogViewModel @Inject constructor(
 
     fun refresh() = loadCatalog(force = true)
 
+    /** Public catalog caches are refreshed every three hours, not only on app restart. */
+    fun refreshIfStale() {
+        if (catalogJob?.isActive == true) return
+        val age = System.currentTimeMillis() - catalogUpdatedAt
+        if (catalogUpdatedAt == 0L || age < 0 || age >= 3L * 60 * 60 * 1000) {
+            loadCatalog(force = false)
+        }
+    }
+
     private fun loadCatalog(force: Boolean) {
-        viewModelScope.launch {
+        catalogJob?.cancel()
+        catalogJob = viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, error = null)
-            val sections = client.refresh(force = force)
-            _state.value = _state.value.copy(
-                sections = sections, loading = false,
-                error = if (sections.values.all { it.isEmpty() }) "Não foi possível consultar Cinemeta e AniList. Verifica a Internet." else null
-            )
+            try {
+                val sections = client.refresh(force = force)
+                if (sections.values.any { it.isNotEmpty() }) {
+                    catalogUpdatedAt = System.currentTimeMillis()
+                }
+                _state.value = _state.value.copy(
+                    sections = sections, loading = false,
+                    error = if (sections.values.all { it.isEmpty() })
+                        "Não foi possível consultar Cinemeta e AniList. Verifica a Internet."
+                        else null
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _state.value = _state.value.copy(
+                    loading = false,
+                    error = error.message ?: "Não foi possível atualizar o catálogo."
+                )
+            }
         }
     }
 
