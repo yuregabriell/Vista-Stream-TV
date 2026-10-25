@@ -23,6 +23,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -48,7 +49,8 @@ class StremioAddonProvider(
     override val isFallback: Boolean,
     private val baseUrl: String,
     private val client: OkHttpClient,
-    private val json: Json
+    private val json: Json,
+    private val torrentBridge: TorrServerBridge? = null
 ) : StreamProvider {
     override val isEnabled: Boolean = true
 
@@ -98,10 +100,19 @@ class StremioAddonProvider(
         val body = get(url.toString()) ?: return emptyList()
         val streams = (json.parseToJsonElement(body) as? JsonObject)?.get("streams") as? JsonArray ?: return emptyList()
 
+        // Optional: only use TorrServer when the addon returns torrent results.
+        // /echo verifies the local/LAN engine without downloading a torrent.
+        val hasTorrent = streams.any { element ->
+            (element as? JsonObject)?.let {
+                it.text("infoHash") != null || it.text("url")?.startsWith("magnet:") == true
+            } == true
+        }
+        val torrentBase = if (hasTorrent) torrentBridge?.availableBase() else null
+
         // Add-ons often list one release several times, once per file host; keep one entry each.
         val releases = LinkedHashMap<String, MutableList<VideoServer>>()
         streams.forEach { element ->
-            val candidate = (element as? JsonObject)?.let { toCandidate(it, title) } ?: return@forEach
+            val candidate = (element as? JsonObject)?.let { toCandidate(it, title, torrentBase) } ?: return@forEach
             releases.getOrPut(candidate.releaseKey) { mutableListOf() } += candidate.server
         }
         val seenIds = HashSet<String>()
@@ -129,7 +140,10 @@ class StremioAddonProvider(
             releases.mapIndexed { index, mirrors ->
                 launch(Dispatchers.IO) {
                     gate.withPermit {
-                        playable.set(index, mirrors.firstOrNull { looksPlayable(it) })
+                        playable.set(index, mirrors.firstOrNull {
+                            // Torrents are slow to preflight; start buffering only on play.
+                            it.id.contains(":p2p:") || looksPlayable(it)
+                        })
                     }
                 }
             }.joinAll()
@@ -168,9 +182,18 @@ class StremioAddonProvider(
     /** A stream as a server, plus the key that groups its mirrors on other hosts. */
     private class Candidate(val server: VideoServer, val releaseKey: String)
 
-    private fun toCandidate(stream: JsonObject, title: String): Candidate? {
-        val url = stream.text("url")?.trim()
-        if (url == null || !(url.startsWith("https://") || url.startsWith("http://"))) return null
+    private fun toCandidate(stream: JsonObject, title: String, torrentBase: String?): Candidate? {
+        val direct = stream.text("url")?.trim()
+            ?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+        val rawMagnet = stream.text("url")?.takeIf { it.startsWith("magnet:?") }
+        val hash = stream.text("infoHash")
+            ?: rawMagnet?.let { Regex("(?i)urn:btih:([a-f0-9]{40})").find(it)?.groupValues?.getOrNull(1) }
+        val fileIndex = (stream["fileIdx"] as? JsonPrimitive)?.intOrNull
+        val p2p = direct == null && hash != null && fileIndex != null && torrentBase != null
+        val url = direct ?: if (p2p) torrentBridge?.playUrl(
+            torrentBase!!, hash!!, fileIndex!!
+        ) else null
+        if (url == null) return null
 
         val hints = stream["behaviorHints"] as? JsonObject
         val filename = hints?.text("filename")
@@ -201,14 +224,15 @@ class StremioAddonProvider(
         val searchable = listOfNotNull(stream.text("name"), stream.text("title"), stream.text("description"), filename)
             .joinToString(" ")
         val server = VideoServer(
-            id = "$id-" + Integer.toHexString(releaseKey.hashCode()),
+            id = "$id-" + Integer.toHexString(releaseKey.hashCode()) + if (p2p) ":p2p:" else "",
             providerId = id,
             providerName = displayName,
-            name = label,
+            name = if (p2p) "$label · P2P" else label,
             url = url,
             quality = qualityOf(searchable),
             headers = mapOf("User-Agent" to BROWSER_USER_AGENT) + requestHeaders,
-            subtitles = subtitles
+            subtitles = subtitles,
+            isDownloadable = !p2p
         )
         return Candidate(server, releaseKey)
     }
