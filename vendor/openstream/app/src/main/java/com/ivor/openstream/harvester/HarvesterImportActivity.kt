@@ -16,8 +16,10 @@ class HarvesterImportActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val url = intent.getStringExtra(HarvesterContract.EXTRA_URL).orEmpty()
-        if (!NativeHarvesterStore.safeDirect(url)) {
-            Toast.makeText(this, "Link temporário, inválido ou não direto. Não foi guardado.", Toast.LENGTH_LONG).show()
+        val pageUrl = intent.getStringExtra(HarvesterContract.EXTRA_PAGE_URL).orEmpty()
+        val webOnly = !NativeHarvesterStore.safeDirect(url)
+        if (webOnly && !NativeHarvesterStore.safeWebPage(pageUrl)) {
+            Toast.makeText(this, "Sem página de origem válida para guardar a referência.", Toast.LENGTH_LONG).show()
             setResult(RESULT_CANCELED); finish(); return
         }
         val panel = LinearLayout(this).apply {
@@ -42,7 +44,8 @@ class HarvesterImportActivity : Activity() {
             setTypeface(null,Typeface.BOLD)
         })
         panel.addView(TextView(this).apply {
-            text = "Confirma o título, episódio e idioma. Nada é guardado sem esta confirmação."
+            text = if (webOnly) "Esta fonte pode expirar. Guardaremos a página de origem em Downloads + Web; não o vídeo temporário." else
+                "Confirma o título, episódio e idioma. Nada é guardado sem esta confirmação."
             setTextColor(0xffbac0d0.toInt()); setPadding(0,dp(8),0,dp(9))
         })
         val title=field("Título",intent.getStringExtra(HarvesterContract.EXTRA_TITLE).orEmpty())
@@ -66,8 +69,9 @@ class HarvesterImportActivity : Activity() {
             setOnClickListener {
                 val movie=types.checkedRadioButtonId==401
                 val item=NativeSavedStream(
-                    url=url,title=title.text.toString().trim().take(180),
-                    pageUrl=intent.getStringExtra(HarvesterContract.EXTRA_PAGE_URL).orEmpty(),
+                    url=if (webOnly) pageUrl else url,title=title.text.toString().trim().take(180),
+                    pageUrl=pageUrl,
+                    webOnly=webOnly,
                     mime=intent.getStringExtra(HarvesterContract.EXTRA_MIME_TYPE).orEmpty(),
                     kind=if(movie)"movie" else "tv",
                     season=if(movie)1 else (season.text.toString().toIntOrNull()?:0),
@@ -81,10 +85,11 @@ class HarvesterImportActivity : Activity() {
                     Toast.makeText(this@HarvesterImportActivity,"Título, episódio ou URL inválidos",Toast.LENGTH_LONG).show()
                 } else {
                     setResult(RESULT_OK,Intent()
-                        .putExtra(HarvesterContract.EXTRA_URL,item.url)
+                        .putExtra(HarvesterContract.EXTRA_URL,url)
                         .putExtra(HarvesterContract.EXTRA_TITLE,item.title))
                     Toast.makeText(this@HarvesterImportActivity,
-                        "Fonte guardada! Ativa Harvester Browser em Extensões.",Toast.LENGTH_LONG).show()
+                        if (webOnly) "Página guardada em Downloads + Web. A fonte deverá ser redescoberta." else
+                            "Vídeo guardado em Downloads + Web. Ativa a extensão Harvester em Extensões.",Toast.LENGTH_LONG).show()
                     finish()
                 }
             }
