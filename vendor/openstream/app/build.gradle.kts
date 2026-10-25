@@ -30,7 +30,7 @@ android {
         val vistaBuild = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull
             ?.toIntOrNull()?.coerceAtLeast(1) ?: 7
         versionCode = vistaBuild
-        versionName = "0.5.0-build.$vistaBuild"
+        versionName = "0.6.0-build.$vistaBuild"
         buildConfigField("int", "VISTA_BUILD_NUMBER", "$vistaBuild")
 
         val localProperties = Properties()
