@@ -141,6 +141,7 @@ async def health():
     return {
         "status": "ok",
         "tmdb_configured": bool(secret("TMDB_API_KEY")),
+        "tvdb_configured": bool(secret("TVDB_API_KEY")),
         "tvdb_licensed": bool(secret("TVDB_API_KEY")) and secret("TVDB_LICENSED") == "true",
     }
 
