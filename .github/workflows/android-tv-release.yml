@@ -91,8 +91,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.8.0-build.${GITHUB_RUN_NUMBER}"
+          TAG="v0.9.0-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-TV-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "Vista Stream TV — $TAG" \
-            --notes "Gateway opcional de metadados TMDB por servidor HTTPS: segredo em .env privado, token por dispositivo guardado com Android Keystore, sem chave global no APK. TVDB com licença/ativação separada. Chave TMDB pessoal e catálogo público continuam disponíveis." \
+            --notes "VS 0.9: catálogo premium OpenStream por padrão, com TMDB via backend público HTTPS no Render e sem chave no APK ou configuração manual. Mantém fonte pessoal e fallback Cinemeta/AniList para falhas, Chromecast, Harvester e P2P. TVDB já tem chave no servidor, mas utilização aguarda licença." \
             --prerelease
