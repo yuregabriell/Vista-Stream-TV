@@ -34,6 +34,10 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Cast
+import androidx.compose.material.icons.filled.CastConnected
+import com.ivor.openstream.presentation.catalog.KeylessCastViewModel
+import com.ivor.openstream.presentation.player.components.CastDeviceSheet
 import com.ivor.openstream.domain.model.Profile
 import com.ivor.openstream.presentation.profiles.ProfileSwitchButton
 import androidx.compose.material.icons.filled.Star
@@ -106,6 +110,7 @@ fun HomeScreen(
     profile: Profile? = null,
     onSwitchProfile: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
+    castViewModel: KeylessCastViewModel = hiltViewModel(),
     keylessViewModel: KeylessCatalogViewModel = hiltViewModel()
 ) {
     if (!keylessViewModel.hasTmdbKey) {
@@ -113,6 +118,17 @@ fun HomeScreen(
         return
     }
     val uiState by viewModel.uiState.collectAsState()
+    val castStatus by castViewModel.status.collectAsState()
+    val nowOnTv by castViewModel.nowPlaying.collectAsState()
+    var showCastPicker by remember { mutableStateOf(false) }
+    if (showCastPicker) {
+        CastDeviceSheet(
+            selector = castViewModel.routeSelector,
+            status = castStatus,
+            onStopCasting = castViewModel::stopCasting,
+            onDismiss = { showCastPicker = false }
+        )
+    }
     val continueWatching by viewModel.continueWatching.collectAsState()
     val matches by viewModel.matches.collectAsState()
     val open: (AnimeDto) -> Unit = { onAnimeClick(it.id, if (it.isMovie) "movie" else "tv") }
@@ -158,6 +174,8 @@ fun HomeScreen(
                             onOpen = open,
                             onSettingsClick = onSettingsClick,
                             onUpdateClick = onUpdateClick,
+                            castConnected = castStatus.isCasting,
+                            onCastClick = { showCastPicker = true },
                             profile = profile,
                             onSwitchProfile = onSwitchProfile,
                             onKidsTap = {
@@ -166,6 +184,30 @@ fun HomeScreen(
                         )
                     }
 
+                    if (castStatus.isCasting && nowOnTv != null) {
+                        item(key = "casting-now") {
+                            Surface(
+                                onClick = {
+                                    onOpenDetails(nowOnTv!!.mediaType, nowOnTv!!.tmdbId)
+                                },
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 10.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = com.ivor.openstream.ui.theme.ExpressiveShapes.large
+                            ) {
+                                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.CastConnected, contentDescription = null)
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text("Assistindo agora na TV",
+                                            style = MaterialTheme.typography.labelMedium)
+                                        Text(nowOnTv!!.title, fontWeight = FontWeight.Bold)
+                                        Text(castStatus.deviceName.orEmpty(),
+                                            style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+                            }
+                        }
+                    }
                     if (continueWatching.isNotEmpty()) {
                         item(key = "continue_watching") {
                             SectionHeader(title = stringResource(R.string.home_continue_watching))
@@ -218,6 +260,8 @@ private fun HeroSection(
     onOpen: (AnimeDto) -> Unit,
     onSettingsClick: () -> Unit,
     onUpdateClick: () -> Unit,
+    castConnected: Boolean,
+    onCastClick: () -> Unit,
     profile: Profile?,
     onSwitchProfile: () -> Unit,
     onKidsTap: () -> Unit
@@ -236,6 +280,14 @@ private fun HeroSection(
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.weight(1f)
             )
+            IconButton(onClick = onCastClick) {
+                Icon(
+                    if (castConnected) Icons.Default.CastConnected else Icons.Default.Cast,
+                    contentDescription = if (castConnected) "Chromecast conectado" else "Conectar Chromecast",
+                    tint = if (castConnected) MaterialTheme.colorScheme.primary
+                           else MaterialTheme.colorScheme.onSurface
+                )
+            }
             // A kids profile keeps Settings and updates out of reach; leaving takes a hold on the avatar.
             if (profile?.isKids != true) {
                 IconButton(onClick = onUpdateClick) {
