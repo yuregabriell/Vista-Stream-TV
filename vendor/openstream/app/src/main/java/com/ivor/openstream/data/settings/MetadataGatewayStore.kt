@@ -48,6 +48,9 @@ class MetadataGatewayStore @Inject constructor(@ApplicationContext context: Cont
     fun clear() { preferences.edit().clear().apply() }
 
     companion object {
+        // This is a public service ADDRESS, not an API credential.
+        // TMDB and TVDB credentials are never compiled into Android.
+        const val PUBLIC_GATEWAY_URL = "https://vista-stream-metadata.onrender.com"
         private const val KEY_ALIAS = "vista_metadata_gateway_aes_v1"
 
         /** Require HTTPS and a bare host. Never accept LAN/http or URL credentials. */
