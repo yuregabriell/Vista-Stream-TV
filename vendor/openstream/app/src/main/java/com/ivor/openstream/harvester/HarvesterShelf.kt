@@ -1,6 +1,7 @@
 package com.ivor.openstream.harvester
 
 import android.net.Uri
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -27,15 +28,20 @@ fun HarvesterShelf() {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val store = remember(context) { HarvesterLibraryStore(context) }
+    val nativeStore = remember(context) { NativeHarvesterStore(context) }
     var entries by remember { mutableStateOf(store.all()) }
+    var nativeEntries by remember { mutableStateOf(nativeStore.all()) }
     DisposableEffect(lifecycleOwner, store) {
         val observer = object : DefaultLifecycleObserver {
-            override fun onResume(owner: LifecycleOwner) { entries = store.all() }
+            override fun onResume(owner: LifecycleOwner) {
+                entries = store.all()
+                nativeEntries = nativeStore.all()
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    if (entries.isEmpty()) return
+    if (entries.isEmpty() && nativeEntries.isEmpty()) return
     Column(
         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -51,12 +57,65 @@ fun HarvesterShelf() {
                 modifier = Modifier.weight(1f)
             )
             Text(
-                entries.size.toString() + " guardados",
+                (entries.size + nativeEntries.size).toString() + " guardados",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        LazyRow(
+        if (nativeEntries.isNotEmpty()) {
+            Text("Do Harvester Browser · Guardados em Downloads + Web",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 22.dp))
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(horizontal = 20.dp)
+            ) {
+                items(nativeEntries.take(30), key = { it.url }) { video ->
+                    Column(
+                        modifier = Modifier.width(208.dp)
+                            .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(15.dp))
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().height(92.dp)
+                                .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null,
+                                modifier = Modifier.size(40.dp),
+                                tint = MaterialTheme.colorScheme.primary)
+                        }
+                        Text(video.title, maxLines = 2, minLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.titleSmall)
+                        Text(if(video.webOnly) "Página web · redescobrir fonte" else "Vídeo online",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.labelSmall)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = {
+                                val action = if(video.webOnly)
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(video.pageUrl))
+                                else HarvesterContract.directPlay(
+                                    HarvesterMedia(url=video.url,title=video.title,
+                                        pageUrl=video.pageUrl,mimeType=video.mime),
+                                    context.packageName
+                                )
+                                runCatching { context.startActivity(action) }
+                            }, modifier = Modifier.weight(1f)) {
+                                Text(if(video.webOnly) "Abrir página" else "Assistir")
+                            }
+                            IconButton(onClick = {
+                                nativeStore.remove(video.url)
+                                nativeEntries = nativeStore.all()
+                            }) { Icon(Icons.Default.DeleteOutline, contentDescription = "Remover") }
+                        }
+                    }
+                }
+            }
+        }
+        if(entries.isNotEmpty()) LazyRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(horizontal = 20.dp)
         ) {
