@@ -279,6 +279,7 @@ async def enrich_tmdb_season(path: str, params: dict[str, str], original: Respon
                 used += 1
         if used == 0:
             return original
+        body["_metadata_sources"] = ["TMDB", "TheTVDB"]
         encoded = __import__("json").dumps(body, ensure_ascii=False).encode("utf-8")
         if len(season_overlay_cache) >= 250:
             season_overlay_cache.pop(next(iter(season_overlay_cache)))
@@ -304,8 +305,28 @@ async def public_tmdb(path: str, request: Request):
     params["api_key"] = secret("TMDB_API_KEY")
     tmdb_result = await upstream(f"{TMDB_BASE}/{path}", params)
     if path.startswith("tv/") and "/season/" in path:
-        return await enrich_tmdb_season(path, params, tmdb_result)
+        try:
+            return await asyncio.wait_for(
+                enrich_tmdb_season(path, params, tmdb_result), timeout=8.0
+            )
+        except Exception:
+            # TheTVDB never makes TMDB metadata unavailable to the viewer.
+            return tmdb_result
     return tmdb_result
+
+
+@app.get("/api/public/tvdb/status")
+async def tvdb_status(request: Request):
+    # Readiness probe confirms actual TVDB API login, without publishing a token.
+    await limit_public(request)
+    if not tvdb_enabled():
+        return {"configured": bool(secret("TVDB_API_KEY")), "enabled": False,
+                "authenticated": False}
+    try:
+        await asyncio.wait_for(tvdb_bearer(), timeout=9.0)
+        return {"configured": True, "enabled": True, "authenticated": True}
+    except (HTTPException, asyncio.TimeoutError, ValueError, KeyError):
+        return {"configured": True, "enabled": True, "authenticated": False}
 
 
 @app.get("/api/tmdb/3/{path:path}")
