@@ -256,6 +256,20 @@ fun SettingsScreen(
                     }
                 }
 
+                item(key = "gateway") {
+                    SettingsGroup(title = "Catálogo partilhado (opcional)") {
+                        NavigationRow(
+                            index = 0, count = 1,
+                            icon = Icons.Default.Public,
+                            title = "Servidor de metadados seguro",
+                            supporting = "Liga um backend VS HTTPS, com token individual. TMDB/TVDB ficam fora do APK.",
+                            onClick = {
+                                context.startActivity(Intent(context, MetadataGatewayActivity::class.java))
+                            }
+                        )
+                    }
+                }
+
                 item(key = "tmdb-key") {
                     SettingsGroup(title = "Metadados do catálogo") {
                         NavigationRow(
