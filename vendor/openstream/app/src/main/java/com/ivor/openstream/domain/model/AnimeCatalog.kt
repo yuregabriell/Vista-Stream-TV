@@ -17,5 +17,12 @@ enum class AnimeCatalog {
     /** Trending series narrowed to Japanese animation. */
     TRENDING_ANIME,
 
-    ANIME_MOVIES
+    ANIME_MOVIES,
+
+    /** Anime-only premium home: independent pages by series and genre. */
+    ANIME_POPULAR,
+    ANIME_NEW,
+    ANIME_TOP_RATED,
+    ANIME_ACTION,
+    ANIME_FANTASY
 }
