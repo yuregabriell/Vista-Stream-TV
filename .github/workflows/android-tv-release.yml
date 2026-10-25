@@ -74,7 +74,6 @@ jobs:
       - name: Build APK
         working-directory: vendor/openstream
         env:
-          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx5g"
         run: |
           chmod +x gradlew
@@ -92,8 +91,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.7.0-build.${GITHUB_RUN_NUMBER}"
+          TAG="v0.8.0-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-TV-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "Vista Stream TV — $TAG" \
-            --notes "Corrige Chromecast: um toque no ícone ligado desconecta a TV. HTTP 401 nos detalhes: opção para validar chave TMDB v3 dentro do VS. Catálogo público ampliado para quatro páginas por categoria com cache. Chave TVDB não é exigida." \
+            --notes "Gateway opcional de metadados TMDB por servidor HTTPS: segredo em .env privado, token por dispositivo guardado com Android Keystore, sem chave global no APK. TVDB com licença/ativação separada. Chave TMDB pessoal e catálogo público continuam disponíveis." \
             --prerelease
