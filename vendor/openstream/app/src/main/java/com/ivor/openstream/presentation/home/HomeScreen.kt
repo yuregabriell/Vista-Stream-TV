@@ -164,7 +164,13 @@ fun HomeScreen(
         when (val state = uiState) {
             HomeUiState.Loading -> HomeSkeleton()
 
-            is HomeUiState.Error -> CatalogSetupError(onRetry = viewModel::refresh, onSaveKey = viewModel::configureCatalogKey, onOpenSources = onSettingsClick)
+            // If the public TMDB service is offline or rate-limited, keep the
+            // app usable through Cinemeta/AniList rather than asking for a key.
+            is HomeUiState.Error -> KeylessCatalogScreen(
+                onOpenSources = onOpenSources,
+                viewModel = keylessViewModel,
+                onTmdbConfigured = { viewModel.refresh() }
+            )
 
             is HomeUiState.Success -> PullToRefreshBox(
                 isRefreshing = state.isRefreshing,
