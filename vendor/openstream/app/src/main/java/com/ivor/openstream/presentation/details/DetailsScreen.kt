@@ -165,6 +165,7 @@ fun DetailsScreen(
     viewModel: DetailsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val tvdbAttributionLink = LocalUriHandler.current
     val isSaved by viewModel.isWatchLater.collectAsState()
     val episodeDownloads by viewModel.episodeDownloads.collectAsState()
     val episodeProgress by viewModel.episodeProgress.collectAsState()
@@ -344,6 +345,14 @@ fun DetailsScreen(
                     if (!isMovie && !details.seasons.isNullOrEmpty()) {
                         item(key = "episodes-header") {
                             SectionTitle(stringResource(R.string.details_episodes))
+                            Text(
+                                text = "Metadados de episódios: TMDB e TheTVDB (quando disponíveis) · thetvdb.com",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                                    .clickable { tvdbAttributionLink.openUri("https://thetvdb.com") }
+                            )
                             SeasonPicker(
                                 details = details,
                                 selected = state.selectedSeasonDetails?.seasonNumber,
