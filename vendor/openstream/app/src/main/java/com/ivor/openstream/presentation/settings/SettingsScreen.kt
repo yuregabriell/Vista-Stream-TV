@@ -1,6 +1,7 @@
 package com.ivor.openstream.presentation.settings
 
 import android.Manifest
+import android.content.Intent
 import com.ivor.openstream.presentation.components.CenteredListBox
 import com.ivor.openstream.presentation.downloads.formatBytes
 import android.app.Activity
@@ -252,6 +253,20 @@ fun SettingsScreen(
                                 onClick = onOpenMarketplace
                             )
                         }
+                    }
+                }
+
+                item(key = "torrent-p2p") {
+                    SettingsGroup(title = "Streaming P2P (opcional)") {
+                        NavigationRow(
+                            index = 0, count = 1,
+                            icon = Icons.Default.Wifi,
+                            title = "Motor Torrent · TorrServer",
+                            supporting = "Automático / local / servidor na rede. Sem baixar filmes inteiros no VS.",
+                            onClick = {
+                                context.startActivity(Intent(context, TorrentSettingsActivity::class.java))
+                            }
+                        )
                     }
                 }
 
