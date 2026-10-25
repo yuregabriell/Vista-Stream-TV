@@ -50,31 +50,51 @@ object NetworkModule {
     ): Interceptor = Interceptor { chain ->
         val original = chain.request()
         val source = original.url
-        val isTmdb = source.host == "api.themoviedb.org"
-        val gateway = if (isTmdb) gatewayStore.current() else null
-
-        val builder = source.newBuilder()
-        if (isTmdb) {
-            // Gateway accepts /api/tmdb/3/... (the Retrofit API base stays unchanged).
-            if (gateway != null) {
-                val endpoint = gateway.baseUrl.toHttpUrl()
-                builder.scheme(endpoint.scheme)
-                    .host(endpoint.host)
-                    .port(endpoint.port)
-                    .encodedPath("/api/tmdb" + source.encodedPath)
-                    .removeAllQueryParameters("api_key")
-            } else {
-                // User-owned local key for private usage, never part of the APK.
-                val personalKey = keyStore.current()
-                if (personalKey.isNotBlank()) builder.setQueryParameter("api_key", personalKey)
-            }
-            if (source.queryParameter("language") == null)
-                builder.addQueryParameter("language", "pt-BR")
-            builder.setQueryParameter("include_adult", "false")
+        if (source.host != "api.themoviedb.org") {
+            return@Interceptor chain.proceed(original)
         }
-        val requestBuilder = original.newBuilder().url(builder.build())
-        if (gateway != null) requestBuilder.header("X-VS-Access-Token", gateway.accessToken)
-        chain.proceed(requestBuilder.build())
+
+        val privateGateway = gatewayStore.current()
+        val baseUrl = (privateGateway?.baseUrl ?: MetadataGatewayStore.PUBLIC_GATEWAY_URL).toHttpUrl()
+        // The default route needs no token, and never exposes the TMDB key.
+        // Explicit private gateways still use locally encrypted per-user access tokens.
+        val routePrefix = if (privateGateway != null) "/api/tmdb" else "/api/public/tmdb"
+        val remoteUrl = source.newBuilder()
+            .scheme(baseUrl.scheme)
+            .host(baseUrl.host)
+            .port(baseUrl.port)
+            .encodedPath(routePrefix + source.encodedPath)
+            .removeAllQueryParameters("api_key")
+            .setQueryParameter("include_adult", "false")
+            .apply {
+                if (source.queryParameter("language") == null)
+                    addQueryParameter("language", "pt-BR")
+            }.build()
+
+        val request = original.newBuilder().url(remoteUrl).apply {
+            if (privateGateway != null) {
+                header("X-VS-Access-Token", privateGateway.accessToken)
+            }
+        }.build()
+        val response = chain.proceed(request)
+
+        // If the shared service is temporarily unavailable, someone who previously
+        // added their personal TMDB key keeps access. Never send this key to our server.
+        val personalKey = keyStore.current()
+        if (privateGateway == null && personalKey.isNotBlank() &&
+            (response.code == 401 || response.code == 429 || response.code >= 500)) {
+            response.close()
+            val fallbackUrl = source.newBuilder()
+                .setQueryParameter("api_key", personalKey)
+                .setQueryParameter("include_adult", "false")
+                .apply {
+                    if (source.queryParameter("language") == null)
+                        addQueryParameter("language", "pt-BR")
+                }.build()
+            chain.proceed(original.newBuilder().url(fallbackUrl).build())
+        } else {
+            response
+        }
     }
 
     /** TMDB answers on disk, sized by the Cache size setting (read once, at start). */
