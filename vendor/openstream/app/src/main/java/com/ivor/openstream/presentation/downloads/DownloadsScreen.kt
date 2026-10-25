@@ -310,7 +310,17 @@ fun DownloadsScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        if (state.selectedTab == DownloadTab.LOCAL_FILES) {
+        if (state.selectedTab == DownloadTab.WEB) {
+            WebSourcesView(onHeader = {
+                DownloadsHeader(
+                    selectedTab = DownloadTab.WEB,
+                    onTabSelect = viewModel::setSelectedTab,
+                    completedCount = state.completedCount,
+                    localCount = state.localFiles.size,
+                    onBackClick = onBackClick
+                )
+            })
+        } else if (state.selectedTab == DownloadTab.LOCAL_FILES) {
             LocalFilesView(
                 state = state,
                 onBackClick = onBackClick,
@@ -462,16 +472,23 @@ private fun DownloadsHeader(
             SegmentedButton(
                 selected = selectedTab == DownloadTab.DOWNLOADS,
                 onClick = { onTabSelect(DownloadTab.DOWNLOADS) },
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3)
             ) {
                 Text(stringResource(R.string.dl_tab_downloads))
             }
             SegmentedButton(
                 selected = selectedTab == DownloadTab.LOCAL_FILES,
                 onClick = { onTabSelect(DownloadTab.LOCAL_FILES) },
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3)
             ) {
                 Text(stringResource(R.string.dl_tab_local_files))
+            }
+            SegmentedButton(
+                selected = selectedTab == DownloadTab.WEB,
+                onClick = { onTabSelect(DownloadTab.WEB) },
+                shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3)
+            ) {
+                Text("Web")
             }
         }
     }
