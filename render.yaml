@@ -1,0 +1,21 @@
+# Vista Stream optional metadata backend.
+# Deploy with Render Blueprint. NO credentials are stored in this public file.
+# TMDB/TVDB keys are supplied privately to the hosting provider.
+services:
+  - type: web
+    name: vista-stream-metadata
+    runtime: docker
+    plan: free
+    dockerfilePath: services/metadata-api/Dockerfile
+    dockerContext: services/metadata-api
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: TMDB_API_KEY
+        sync: false
+      - key: VS_ACCESS_TOKENS
+        generateValue: true
+      - key: TVDB_API_KEY
+        sync: false
+      - key: TVDB_LICENSED
+        value: "false"
