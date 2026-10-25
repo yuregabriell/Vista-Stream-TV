@@ -186,6 +186,110 @@ async def limit_public(request: Request) -> None:
                     public_throttle.pop(stale_key, None)
 
 
+
+# TVDB adds missing episode metadata to the existing TMDB season response.
+# The client retains TMDB episode IDs and numbering, so playback/history stay
+# stable. Never send the project's TheTVDB key or bearer token to Android.
+season_overlay_cache: dict[str, tuple[float, bytes]] = {}
+
+
+def tvdb_enabled() -> bool:
+    # Enable only where the key's project license permits the intended usage.
+    return bool(secret("TVDB_API_KEY")) and secret("TVDB_LICENSED").lower() == "true"
+
+
+def tvdb_episode_index(payload: dict, season: int) -> dict[int, dict]:
+    data = payload.get("data") or {}
+    episodes = data.get("episodes", []) if isinstance(data, dict) else []
+    if not isinstance(episodes, list):
+        return {}
+    matched: dict[int, dict] = {}
+    for item in episodes:
+        if not isinstance(item, dict):
+            continue
+        if item.get("seasonNumber") != season:
+            continue
+        number = item.get("number")
+        if isinstance(number, int) and number > 0:
+            matched[number] = item
+    return matched
+
+
+async def enrich_tmdb_season(path: str, params: dict[str, str], original: Response) -> Response:
+    if not tvdb_enabled() or original.status_code != 200:
+        return original
+    key = path + "?" + str(sorted((k, v) for k, v in params.items() if k != "api_key"))
+    saved = season_overlay_cache.get(key)
+    if saved and time.monotonic() - saved[0] < 1800:
+        return Response(saved[1], media_type="application/json",
+                        headers={"Cache-Control": "public, max-age=300",
+                                 "X-VS-Metadata": "TMDB+TheTVDB"})
+    try:
+        match = re.fullmatch(r"tv/([0-9]{1,12})/season/([0-9]{1,4})", path)
+        if not match:
+            return original
+        tmdb_id, season_number = int(match.group(1)), int(match.group(2))
+        raw = original.body
+        body = __import__("json").loads(raw)
+        if not isinstance(body.get("episodes"), list):
+            return original
+        external = await upstream(
+            f"{TMDB_BASE}/tv/{tmdb_id}/external_ids",
+            {"api_key": secret("TMDB_API_KEY"), "language": "pt-BR", "include_adult": "false"}
+        )
+        if external.status_code != 200:
+            return original
+        tvdb_id = __import__("json").loads(external.body).get("tvdb_id")
+        if not isinstance(tvdb_id, int) or tvdb_id < 1:
+            return original
+
+        bearer = await tvdb_bearer()
+        # Three-letter ISO language codes are required by TVDB v4.
+        tvdb = await upstream(
+            f"{TVDB_BASE}/series/{tvdb_id}/episodes/official/por",
+            {},
+            headers={"Authorization": f"Bearer {bearer}"}
+        )
+        if tvdb.status_code != 200:
+            tvdb = await upstream(
+                f"{TVDB_BASE}/series/{tvdb_id}/episodes/official",
+                {}, headers={"Authorization": f"Bearer {bearer}"}
+            )
+        if tvdb.status_code != 200:
+            return original
+        candidates = tvdb_episode_index(__import__("json").loads(tvdb.body), season_number)
+        used = 0
+        for ep in body["episodes"]:
+            if not isinstance(ep, dict):
+                continue
+            number = ep.get("episode_number")
+            tv = candidates.get(number) if isinstance(number, int) else None
+            if not tv:
+                continue
+            name = (ep.get("name") or "").strip()
+            tv_name = (tv.get("name") or "").strip()
+            # TMDB IDs and original episode numbers are never changed.
+            if tv_name and (not name or name.lower() in
+                    ("episode " + str(number), "episódio " + str(number))):
+                ep["name"] = tv_name[:300]
+                used += 1
+            tv_overview = (tv.get("overview") or "").strip()
+            if tv_overview and not (ep.get("overview") or "").strip():
+                ep["overview"] = tv_overview[:4000]
+                used += 1
+        if used == 0:
+            return original
+        encoded = __import__("json").dumps(body, ensure_ascii=False).encode("utf-8")
+        if len(season_overlay_cache) >= 250:
+            season_overlay_cache.pop(next(iter(season_overlay_cache)))
+        season_overlay_cache[key] = (time.monotonic(), encoded)
+        return Response(encoded, media_type="application/json",
+                        headers={"Cache-Control": "public, max-age=300",
+                                 "X-VS-Metadata": "TMDB+TheTVDB"})
+    except (ValueError, TypeError, KeyError, HTTPException, httpx.HTTPError):
+        return original
+
+
 @app.get("/api/public/tmdb/3/{path:path}")
 async def public_tmdb(path: str, request: Request):
     if secret("VS_PUBLIC_CATALOG").lower() == "false":
@@ -198,7 +302,10 @@ async def public_tmdb(path: str, request: Request):
         raise HTTPException(400, "Invalid page")
     await limit_public(request)
     params["api_key"] = secret("TMDB_API_KEY")
-    return await upstream(f"{TMDB_BASE}/{path}", params)
+    tmdb_result = await upstream(f"{TMDB_BASE}/{path}", params)
+    if path.startswith("tv/") and "/season/" in path:
+        return await enrich_tmdb_season(path, params, tmdb_result)
+    return tmdb_result
 
 
 @app.get("/api/tmdb/3/{path:path}")
@@ -237,7 +344,7 @@ async def tvdb_bearer() -> str:
 @app.get("/api/tvdb/v4/{path:path}")
 async def tvdb(path: str, request: Request):
     await authorize(request)
-    if not secret("TVDB_API_KEY") or secret("TVDB_LICENSED") != "true":
+    if not tvdb_enabled():
         raise HTTPException(503, "TVDB integration disabled pending valid license")
     require_allowed(path, TVDB_ALLOWED)
     params = sanitized_params(request)
