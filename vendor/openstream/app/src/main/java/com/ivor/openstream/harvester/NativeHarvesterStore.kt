@@ -19,7 +19,8 @@ data class NativeSavedStream(
     val mime: String = "", val kind: String = "movie",
     val season: Int = 1, val episode: Int = 1,
     val year: Int = 0, val audioMode: String = "", val language: String = "",
-    val quality: String = "", val savedAt: Long = System.currentTimeMillis()
+    val quality: String = "", val webOnly: Boolean = false,
+    val savedAt: Long = System.currentTimeMillis()
 )
 
 class NativeHarvesterStore(context: Context) {
@@ -39,12 +40,13 @@ class NativeHarvesterStore(context: Context) {
                 titles.any { it == fold(item.title) } &&
                 (item.year == 0 || identity.year == null || item.year == identity.year) &&
                 (isMovie || (item.season == identity.season && item.episode == identity.episode)) &&
-                safeDirect(item.url)
+                !item.webOnly && safeDirect(item.url)
         }
     }
 
     @Synchronized fun save(item: NativeSavedStream): Boolean {
-        if (!safeDirect(item.url) || item.title.isBlank() ||
+        if ((!item.webOnly && !safeDirect(item.url)) ||
+            (item.webOnly && !safeWebPage(item.pageUrl)) || item.title.isBlank() ||
             item.season !in 1..999 || item.episode !in 1..9999) return false
         val old = all()
         val merged = listOf(item) + old.filterNot {
@@ -59,6 +61,12 @@ class NativeHarvesterStore(context: Context) {
     }
 
     companion object {
+        fun safeWebPage(raw: String): Boolean {
+            val uri = runCatching { Uri.parse(raw) }.getOrNull() ?: return false
+            return uri.scheme in listOf("https","http") &&
+                !uri.host.isNullOrBlank() && raw.length < 2048 &&
+                uri.encodedUserInfo.isNullOrBlank()
+        }
         fun fold(s: String): String =
             Normalizer.normalize(s, Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
                 .lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()
