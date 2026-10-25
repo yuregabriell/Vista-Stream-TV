@@ -276,7 +276,7 @@ class ExtensionRepositoryImpl @Inject constructor(
             .associate { manifest ->
                 manifest.key to InstallRecord(
                     versionCode = manifest.versionCode,
-                    enabled = true,
+                    enabled = !manifest.engine.type.key.startsWith("native-"),
                     installedAt = System.currentTimeMillis()
                 )
             }
