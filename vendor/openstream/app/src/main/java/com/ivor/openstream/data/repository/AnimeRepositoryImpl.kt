@@ -85,9 +85,15 @@ class AnimeRepositoryImpl @Inject constructor(
         val movieKids = kids.movieDiscoverParams()
         val tvKids = kids.tvDiscoverParams()
         val results = when (catalog) {
-            AnimeCatalog.TRENDING -> api.getTrendingAll("week").results
-                // The mixed feed also lists people.
-                .filter { it.mediaType == "movie" || it.mediaType == "tv" }
+            AnimeCatalog.TRENDING -> coroutineScope {
+                // A single TMDB page can be dominated by anime. Read three ordered
+                // weekly trending pages so the general Top 10 still has ten titles
+                // after excluding Japanese animated series/films.
+                (1..3).map { page ->
+                    async { api.getTrendingAll("week", page).results }
+                }.awaitAll().flatten()
+                    .filter { it.mediaType == "movie" || it.mediaType == "tv" }
+            }
             AnimeCatalog.NEW_EPISODES -> api.getOnTheAir().results
             AnimeCatalog.POPULAR_MOVIES -> api.discoverMovieWith(
                 mapOf("sort_by" to "popularity.desc", "vote_count.gte" to "300", "include_adult" to "false") + movieKids
@@ -135,8 +141,17 @@ class AnimeRepositoryImpl @Inject constructor(
         }
         val moviesPreFiltered = catalog == AnimeCatalog.POPULAR_MOVIES || catalog == AnimeCatalog.TOP_RATED_MOVIES ||
             catalog == AnimeCatalog.ANIME_MOVIES
+        // General home = live-action and non-anime animated productions.
+        // Anime has its own premium home; filtering here also covers the
+        // popular, top-rated and newly airing rails, not only the hero.
+        val generalHome = catalog in setOf(
+            AnimeCatalog.TRENDING, AnimeCatalog.NEW_EPISODES,
+            AnimeCatalog.POPULAR_MOVIES, AnimeCatalog.POPULAR_SERIES,
+            AnimeCatalog.TOP_RATED_MOVIES
+        )
+        val separated = if (generalHome) results.filterNot { it.isJapaneseAnimeTitle() } else results
         kids.filter(
-            results.filter { it.posterPath != null }.distinctBy { "${it.mediaType}:${it.id}" },
+            separated.filter { it.posterPath != null }.distinctBy { "${it.mediaType}:${it.id}" },
             moviesPreFiltered = moviesPreFiltered
         )
     }
@@ -246,3 +261,11 @@ class AnimeRepositoryImpl @Inject constructor(
         const val CATALOG_TTL_MS = 3 * 60 * 60 * 1000L
     }
 }
+
+/** Exclude Japanese animated productions from the main Films & Series home,
+ * while keeping Western animated films and Japanese live-action dramas.
+ * Metadata cannot identify every co-production; the dedicated anime feed
+ * additionally uses TMDB's original-language and animation-genre filters.
+ */
+internal fun AnimeDto.isJapaneseAnimeTitle(): Boolean =
+    originalLanguage.equals("ja", ignoreCase = true) && genreIds.orEmpty().contains(16)
