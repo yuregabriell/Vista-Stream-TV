@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 
 import com.ivor.openstream.presentation.components.CenteredListBox
+import com.ivor.openstream.presentation.components.bottomContentPadding
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -119,7 +120,14 @@ fun MarketplaceScreen(
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = MaterialTheme.colorScheme.surface,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        // The main navigation uses a floating toolbar rendered over this screen.
+        // Scaffold's default bottom Snackbar position would sit behind that toolbar.
+        snackbarHost = {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(bottom = bottomContentPadding)
+            )
+        },
         topBar = {
             TopAppBar(
                 title = {
