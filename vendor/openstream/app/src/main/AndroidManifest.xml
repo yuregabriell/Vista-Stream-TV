@@ -80,6 +80,7 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".presentation.settings.TorrentSettingsActivity" android:exported="false" android:theme="@style/Theme.OpenStream" />
         <activity android:name=".harvester.HarvesterImportActivity"
             android:exported="true" android:theme="@style/Theme.OpenStream">
             <intent-filter>
