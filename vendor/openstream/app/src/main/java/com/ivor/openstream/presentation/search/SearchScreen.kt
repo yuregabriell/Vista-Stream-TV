@@ -393,27 +393,6 @@ private fun androidx.compose.foundation.lazy.grid.LazyGridScope.browseContent(
         }
     }
 
-    if (state.trending.isNotEmpty()) {
-        item(key = "trending", span = FullWidth) {
-            Column {
-                SectionLabel(stringResource(R.string.home_trending_now))
-                // Tablets split the chart into two columns instead of one long, stretched list.
-                val columns = byWidth(compact = 1, medium = 2)
-                val perColumn = (state.trending.size + columns - 1) / columns
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    state.trending.chunked(perColumn).forEachIndexed { column, chunk ->
-                        TrendingList(
-                            items = chunk,
-                            firstRank = column * perColumn + 1,
-                            onOpen = onOpen,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-        }
-    }
-
     item(key = "genres", span = FullWidth) {
         Column {
             SectionLabel(stringResource(R.string.search_browse_genre))
