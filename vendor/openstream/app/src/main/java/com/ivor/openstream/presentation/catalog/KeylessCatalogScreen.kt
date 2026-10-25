@@ -6,6 +6,7 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.ivor.openstream.presentation.settings.TmdbKeyActivity
+import com.ivor.openstream.presentation.settings.MetadataGatewayActivity
 import com.ivor.openstream.harvester.HarvesterShelf
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.window.Dialog
@@ -175,6 +176,11 @@ fun KeylessCatalogScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    val configureGateway = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) onTmdbConfigured()
+    }
     val configureTmdb = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -421,6 +427,11 @@ fun KeylessCatalogScreen(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+                TextButton(onClick = {
+                    configureGateway.launch(Intent(context, MetadataGatewayActivity::class.java))
+                }) {
+                    Text("Servidor", style = MaterialTheme.typography.labelSmall)
                 }
                 TextButton(onClick = {
                     configureTmdb.launch(Intent(context, TmdbKeyActivity::class.java))
