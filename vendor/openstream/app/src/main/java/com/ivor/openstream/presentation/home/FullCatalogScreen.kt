@@ -23,11 +23,13 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -51,6 +53,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -80,8 +83,10 @@ fun FullCatalogScreen(
     val state by viewModel.state.collectAsState()
     val keyboard = LocalSoftwareKeyboardController.current
 
-    LaunchedEffect(category, query, yearInput) {
-        viewModel.setFilters(category, query, yearInput.toIntOrNull())
+    // Partial values ("2", "20", "202") must never be interpreted as a real year.
+    val appliedYear = yearInput.takeIf { it.length == 4 }?.toIntOrNull()
+    LaunchedEffect(category, query, appliedYear) {
+        viewModel.setFilters(category, query, appliedYear)
     }
 
     if (selectedAniList != null) {
@@ -95,6 +100,11 @@ fun FullCatalogScreen(
 
     BackHandler(onBack = onBack)
     val gridState = rememberLazyGridState()
+    // A new search/category starts at its header; normal scrolling moves
+    // both filters and posters together. There is no overlay above the grid.
+    LaunchedEffect(category, query, appliedYear) {
+        gridState.scrollToItem(0)
+    }
     // Each page is requested only when the viewport approaches its end.
     LaunchedEffect(state.page, state.loading, state.hasMore, state.items.size) {
         if (!state.loading && state.hasMore && state.items.isNotEmpty()) {
@@ -124,101 +134,166 @@ fun FullCatalogScreen(
         else -> localized.format(count) + " resultados · TMDB"
     }
 
-    Column(
+
+    // All controls are the first FULL-SPAN item of the scrolling grid.
+    // They scroll out of view naturally instead of covering title artwork.
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(132.dp),
+        state = gridState,
         modifier = Modifier.fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
+            .statusBarsPadding(),
+        contentPadding = PaddingValues(
+            start = 16.dp, end = 16.dp, top = 10.dp, bottom = bottomContentPadding
+        ),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 10.dp, end = 18.dp, top = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar à página inicial")
-            }
-            Column(Modifier.weight(1f)) {
-                Text("Catálogo completo", style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold)
-                Text("Filmes · Séries · Anime", style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
+        item(key = "catalog-controls", span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Voltar à página inicial"
+                        )
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Catálogo completo",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            "Filmes · Séries · Animes",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
 
-        LazyRow(contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            val categories = listOf("all" to "Tudo", "movie" to "Filmes",
-                "tv" to "Séries", "anime" to "Animes")
-            items(categories.size) { index ->
-                val (id, label) = categories[index]
-                FilterChip(
-                    selected = category == id, onClick = {
-                        category = id
-                        typed = ""
-                        query = ""
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val categories = listOf(
+                        "all" to "Tudo", "movie" to "Filmes",
+                        "tv" to "Séries", "anime" to "Animes"
+                    )
+                    items(categories.size) { index ->
+                        val (id, label) = categories[index]
+                        FilterChip(
+                            selected = category == id,
+                            onClick = {
+                                category = id
+                                typed = ""
+                                query = ""
+                                keyboard?.hide()
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            label = { Text(label, maxLines = 1) }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = typed,
+                    onValueChange = {
+                        typed = it
+                        if (it.isBlank()) query = ""
                     },
-                    label = { Text(label) }
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    placeholder = { Text("Pesquisar no catálogo...", maxLines = 1) },
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = null)
+                    },
+                    trailingIcon = {
+                        if (typed.isNotBlank() && typed.trim() == query) {
+                            IconButton(onClick = {
+                                typed = ""
+                                query = ""
+                            }) {
+                                Icon(Icons.Default.Close, contentDescription = "Limpar pesquisa")
+                            }
+                        } else {
+                            IconButton(onClick = {
+                                query = typed.trim()
+                                keyboard?.hide()
+                            }) {
+                                Icon(Icons.Default.Search, contentDescription = "Buscar")
+                            }
+                        }
+                    },
+                    shape = RoundedCornerShape(16.dp),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = {
+                        query = typed.trim()
+                        keyboard?.hide()
+                    })
                 )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = yearInput,
+                        onValueChange = { yearInput = it.filter(Char::isDigit).take(4) },
+                        modifier = Modifier.width(124.dp).height(56.dp),
+                        placeholder = { Text("Ano") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(16.dp),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(onDone = { keyboard?.hide() }),
+                        trailingIcon = {
+                            if (yearInput.isNotEmpty()) {
+                                IconButton(onClick = { yearInput = "" }) {
+                                    Icon(Icons.Default.Close, contentDescription = "Limpar ano")
+                                }
+                            }
+                        }
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Ano de lançamento",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            "Explora mais títulos filtrando por ano.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        countText,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        localized.format(state.items.size) + " títulos carregados · Desliza para ver mais",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
             }
         }
 
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = typed,
-                onValueChange = { typed = it },
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Pesquisar no catálogo...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = {
-                    query = typed.trim()
-                    keyboard?.hide()
-                })
-            )
-            OutlinedButton(onClick = { query = typed.trim(); keyboard?.hide() }) {
-                Text("Buscar")
-            }
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 5.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = yearInput, onValueChange = { yearInput = it.filter(Char::isDigit).take(4) },
-                label = { Text("Ano") }, placeholder = { Text("Todos") },
-                modifier = Modifier.width(105.dp), singleLine = true
-            )
-            Text(
-                "Filtra por ano para explorar além do limite de páginas do TMDB",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f)
-            )
-        }
-        Text(
-            countText,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 3.dp)
-        )
-        Text(
-            localized.format(state.items.size) + " títulos carregados · Desliza para ver mais",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 3.dp)
-        )
-
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(125.dp), state = gridState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 15.dp, end = 15.dp,
-                top = 9.dp, bottom = bottomContentPadding),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(17.dp)
-        ) {
             items(state.items, key = { it.key }) { item ->
                 Column(modifier = Modifier
                     .clickable {
@@ -268,6 +343,5 @@ fun FullCatalogScreen(
                     }
                 }
             }
-        }
     }
 }
