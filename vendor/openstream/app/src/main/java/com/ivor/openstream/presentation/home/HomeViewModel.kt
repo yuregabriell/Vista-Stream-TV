@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.map
 import com.ivor.openstream.domain.model.AnimeCatalog
 import com.ivor.openstream.domain.model.WatchProgress
 import com.ivor.openstream.domain.repository.AnimeRepository
+import com.ivor.openstream.data.repository.isJapaneseAnimeTitle
 import com.ivor.openstream.domain.repository.WatchProgressRepository
 import com.ivor.openstream.data.repository.CustomListRepository
 import com.ivor.openstream.data.repository.TitleRatingRepository
@@ -101,6 +102,7 @@ class HomeViewModel @Inject constructor(
     )
     val mode: StateFlow<HomeMode> = _mode
     private val cachedHomes = mutableMapOf<HomeMode, HomeUiState.Success>()
+    private val lastHomeLoadedAt = mutableMapOf<HomeMode, Long>()
     private var feedJob: Job? = null
 
     /** The feed as loaded; [uiState] is this minus the titles the user hid. */
@@ -228,6 +230,7 @@ class HomeViewModel @Inject constructor(
                 .collect { kids ->
                     if (kids != null) {
                         cachedHomes.clear()
+                        lastHomeLoadedAt.clear()
                         loadData()
                     }
                 }
@@ -258,8 +261,23 @@ class HomeViewModel @Inject constructor(
         homePreferences.edit().putString("mode", target.name).apply()
         feedJob?.cancel()
         val cached = cachedHomes[target]
-        if (cached != null) _uiState.value = cached
-        else loadData()
+        if (cached != null) {
+            _uiState.value = cached
+            refreshIfStale()
+        } else loadData()
+    }
+
+    /** Refresh the visible mode when the 3-hour catalog TTL expires.
+     * Called periodically and whenever this screen resumes.
+     */
+    fun refreshIfStale() {
+        if (feedJob?.isActive == true) return
+        val last = lastHomeLoadedAt[_mode.value] ?: 0L
+        val age = System.currentTimeMillis() - last
+        if (last == 0L || age < 0L || age >= HOME_REFRESH_MS) {
+            val hasContent = _uiState.value is HomeUiState.Success
+            loadData(showLoading = !hasContent, forceRefresh = true)
+        }
     }
 
     /** Pull-to-refresh refreshes only the currently visible home. */
@@ -267,6 +285,7 @@ class HomeViewModel @Inject constructor(
         val current = _uiState.value
         if (current is HomeUiState.Success) _uiState.value = current.copy(isRefreshing = true)
         cachedHomes.remove(_mode.value)
+        lastHomeLoadedAt.remove(_mode.value)
         loadData(showLoading = current !is HomeUiState.Success, forceRefresh = true)
     }
 
@@ -323,22 +342,28 @@ class HomeViewModel @Inject constructor(
                         catalogs.getValue(AnimeCatalog.ANIME_FANTASY))
                 ).filter { it.items.isNotEmpty() }
             } else {
-                val trending = catalogs.getValue(AnimeCatalog.TRENDING)
+                // Apply the separation again when showing an old offline cache,
+                // so v0.13's saved anime rankings do not leak into Films & Series.
+                val noAnime: (List<AnimeDto>) -> List<AnimeDto> = { items ->
+                    items.filterNot { it.isJapaneseAnimeTitle() }
+                }
+                val trending = noAnime(catalogs.getValue(AnimeCatalog.TRENDING))
                 hero = trending.filter { it.posterPath != null }.take(8)
                 rails = listOf(
                     HomeRail("top10", context.getString(R.string.home_top10_week), RailStyle.RANKED, trending.take(10)),
                     HomeRail("new-episodes", context.getString(R.string.home_new_episodes_week),
-                        RailStyle.LANDSCAPE, catalogs.getValue(AnimeCatalog.NEW_EPISODES).filter { it.backdropPath != null }),
+                        RailStyle.LANDSCAPE, noAnime(catalogs.getValue(AnimeCatalog.NEW_EPISODES)).filter { it.backdropPath != null }),
                     HomeRail("popular-movies", context.getString(R.string.home_popular_movies),
-                        RailStyle.POSTER, catalogs.getValue(AnimeCatalog.POPULAR_MOVIES)),
+                        RailStyle.POSTER, noAnime(catalogs.getValue(AnimeCatalog.POPULAR_MOVIES))),
                     HomeRail("popular-series", context.getString(R.string.home_popular_series),
-                        RailStyle.POSTER, catalogs.getValue(AnimeCatalog.POPULAR_SERIES)),
+                        RailStyle.POSTER, noAnime(catalogs.getValue(AnimeCatalog.POPULAR_SERIES))),
                     HomeRail("top-rated", context.getString(R.string.home_critically_acclaimed),
-                        RailStyle.POSTER, catalogs.getValue(AnimeCatalog.TOP_RATED_MOVIES))
+                        RailStyle.POSTER, noAnime(catalogs.getValue(AnimeCatalog.TOP_RATED_MOVIES)))
                 ).filter { it.items.isNotEmpty() }
             }
             val success = HomeUiState.Success(hero = hero, rails = rails)
             cachedHomes[selectedMode] = success
+            lastHomeLoadedAt[selectedMode] = System.currentTimeMillis()
             _uiState.value = success
             prefetchArtwork(success)
         }
