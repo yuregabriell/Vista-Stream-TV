@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -181,6 +182,17 @@ fun AppNavigation(
     var toolbarHeightPx by remember { mutableIntStateOf(0) }
 
     fun openTab(screen: Screen) {
+        // A second tap on the active tab repositions it at the top and
+        // refreshes its content; do not add another copy to the back stack.
+        if (currentDestination?.route == screen.route) {
+            val currentEntry = navController.currentBackStackEntry
+            val nonce = System.nanoTime()
+            currentEntry?.savedStateHandle?.set("tabReselect", nonce)
+            if (screen.route == Screen.Search.route) {
+                currentEntry?.savedStateHandle?.set("focusSearch", nonce)
+            }
+            return
+        }
         navController.navigate(screen.route) {
             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
@@ -245,12 +257,6 @@ fun AppNavigation(
                         selected = selected,
                         railExpanded = windowSizeClass == WindowWidthSizeClass.Expanded,
                         onClick = {
-                            if (selected && screen.route == Screen.Search.route) {
-                                navController.currentBackStackEntry?.savedStateHandle?.set(
-                                    "focusSearch",
-                                    System.currentTimeMillis()
-                                )
-                            }
                             openTab(screen)
                         },
                         icon = { Icon(screen.icon!!, contentDescription = null) },
@@ -272,8 +278,12 @@ fun AppNavigation(
                 popEnterTransition = { with(NavTransitions) { popEnter(animatedNav) } },
                 popExitTransition = { with(NavTransitions) { popExit(animatedNav) } }
             ) {
-                composable(Screen.Home.route) {
+                composable(Screen.Home.route) { backStackEntry ->
+                    val reselectNonce = backStackEntry.savedStateHandle
+                        .getStateFlow("tabReselect", 0L).collectAsState().value
+                    key(reselectNonce) {
                     HomeScreen(
+                        reselectTrigger = reselectNonce,
                         onAnimeClick = { animeId, mediaType ->
                             navController.navigate(Screen.Details.createRoute(mediaType, animeId))
                         },
@@ -296,9 +306,13 @@ fun AppNavigation(
                         profile = activeProfile,
                         onSwitchProfile = { showProfilePicker = true }
                     )
+                    }
                 }
 
                 composable(Screen.Search.route) { backStackEntry ->
+                    val reselectNonce = backStackEntry.savedStateHandle
+                        .getStateFlow("tabReselect", 0L).collectAsState().value
+                    key(reselectNonce) {
                     val focusTrigger =
                         backStackEntry.savedStateHandle.getStateFlow("focusSearch", 0L).collectAsState().value
                     SearchScreen(
@@ -306,12 +320,16 @@ fun AppNavigation(
                         onAnimeClick = { animeId, mediaType ->
                             navController.navigate(Screen.Details.createRoute(mediaType, animeId))
                         },
-                        focusTrigger = focusTrigger,
+                        focusTrigger = maxOf(focusTrigger, reselectNonce),
                         onOpenSources = { navController.navigate(Screen.Marketplace.route) }
                     )
+                    }
                 }
 
-                composable(Screen.WatchLater.route) {
+                composable(Screen.WatchLater.route) { backStackEntry ->
+                    val reselectNonce = backStackEntry.savedStateHandle
+                        .getStateFlow("tabReselect", 0L).collectAsState().value
+                    key(reselectNonce) {
                     WatchLaterScreen(
                         onBackClick = { navController.popBackStack() },
                         onAnimeClick = { animeId, mediaType ->
@@ -321,6 +339,7 @@ fun AppNavigation(
                             navController.navigate(Screen.CustomList.createRoute(listId))
                         }
                     )
+                    }
                 }
 
                 composable(
@@ -335,7 +354,10 @@ fun AppNavigation(
                     )
                 }
 
-                composable(Screen.Downloads.route) {
+                composable(Screen.Downloads.route) { backStackEntry ->
+                    val reselectNonce = backStackEntry.savedStateHandle
+                        .getStateFlow("tabReselect", 0L).collectAsState().value
+                    key(reselectNonce) {
                     DownloadsScreen(
                         onBackClick = { navController.popBackStack() },
                         onDownloadClick = { download ->
@@ -361,9 +383,13 @@ fun AppNavigation(
                             )
                         }
                     )
+                    }
                 }
 
-                composable(Screen.History.route) {
+                composable(Screen.History.route) { backStackEntry ->
+                    val reselectNonce = backStackEntry.savedStateHandle
+                        .getStateFlow("tabReselect", 0L).collectAsState().value
+                    key(reselectNonce) {
                     WatchHistoryScreen(
                         onBackClick = { navController.popBackStack() },
                         onResume = { entry ->
@@ -375,6 +401,7 @@ fun AppNavigation(
                             navController.navigate(Screen.Details.createRoute(mediaType, id))
                         }
                     )
+                    }
                 }
 
                 composable(Screen.Update.route) {
@@ -405,11 +432,20 @@ fun AppNavigation(
                     )
                 }
 
-                composable(Screen.Marketplace.route) {
+                composable(Screen.Marketplace.route) { backStackEntry ->
+                    val reselectNonce = backStackEntry.savedStateHandle
+                        .getStateFlow("tabReselect", 0L).collectAsState().value
+                    key(reselectNonce) {
+                    val marketplaceModel: com.ivor.openstream.presentation.marketplace.MarketplaceViewModel = hiltViewModel()
+                    LaunchedEffect(reselectNonce) {
+                        if (reselectNonce > 0) marketplaceModel.refresh()
+                    }
                     MarketplaceScreen(
+                        viewModel = marketplaceModel,
                         onBackClick = { navController.popBackStack() },
                         onSettingsClick = { navController.navigate(Screen.Settings.route) }
                     )
+                    }
                 }
 
                 composable(
@@ -613,12 +649,6 @@ fun AppNavigation(
                         bottomNavItems.forEachIndexed { index, screen ->
                             val isSelected = index == shownIndex
                             val onClick = {
-                                if (isSelected && screen.route == Screen.Search.route) {
-                                    navController.currentBackStackEntry?.savedStateHandle?.set(
-                                        "focusSearch",
-                                        System.currentTimeMillis()
-                                    )
-                                }
                                 openTab(screen)
                             }
                             // Icon-only tabs: expose which one is active so screen readers
