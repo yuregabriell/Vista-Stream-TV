@@ -109,6 +109,7 @@ fun HomeScreen(
     onSettingsClick: () -> Unit,
     onOpenSources: () -> Unit = {},
     onUpdateClick: () -> Unit = {},
+    reselectTrigger: Long = 0L,
     profile: Profile? = null,
     onSwitchProfile: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
@@ -137,6 +138,9 @@ fun HomeScreen(
         return
     }
 
+    LaunchedEffect(reselectTrigger) {
+        if (reselectTrigger != 0L) viewModel.refresh()
+    }
     val uiState by viewModel.uiState.collectAsState()
     val castStatus by castViewModel.status.collectAsState()
     val nowOnTv by castViewModel.nowPlaying.collectAsState()
