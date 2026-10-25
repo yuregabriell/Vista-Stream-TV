@@ -137,6 +137,17 @@ fun SearchScreen(
         return
     }
     val state by viewModel.uiState.collectAsState()
+    val appContext = androidx.compose.ui.platform.LocalContext.current
+    // Search honours the last premium Home mode, without permanently locking
+    // the user to anime: filter chips remain fully editable.
+    LaunchedEffect(Unit) {
+        val savedMode = appContext.getSharedPreferences(
+            "vista_home_mode_v1", android.content.Context.MODE_PRIVATE
+        ).getString("mode", "")
+        if (savedMode == "ANIME" && viewModel.uiState.value.filter == SearchFilter.ALL) {
+            viewModel.onFilterSelected(SearchFilter.ANIME)
+        }
+    }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val gridState = rememberLazyGridState()
