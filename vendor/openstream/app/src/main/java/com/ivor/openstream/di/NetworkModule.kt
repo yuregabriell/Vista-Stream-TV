@@ -11,6 +11,7 @@ import com.ivor.openstream.data.remote.GithubApi
 import com.ivor.openstream.data.settings.AppDns
 import com.ivor.openstream.data.settings.AppSettingsStore
 import com.ivor.openstream.data.settings.TmdbKeyStore
+import com.ivor.openstream.data.settings.MetadataGatewayStore
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -21,6 +22,7 @@ import okhttp3.Cache
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import javax.inject.Named
@@ -42,29 +44,37 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideAuthInterceptor(keyStore: TmdbKeyStore): Interceptor = Interceptor { chain ->
+    fun provideAuthInterceptor(
+        keyStore: TmdbKeyStore,
+        gatewayStore: MetadataGatewayStore
+    ): Interceptor = Interceptor { chain ->
         val original = chain.request()
-        val originalHttpUrl = original.url
-        val url = originalHttpUrl.newBuilder()
-            .apply {
-                if (originalHttpUrl.host == "api.themoviedb.org") {
-                    val key = keyStore.current()
-                    if (key.isNotBlank()) addQueryParameter("api_key", key)
-                    if (originalHttpUrl.queryParameter("language") == null) {
-                        addQueryParameter("language", "pt-BR")
-                    }
-                }
+        val source = original.url
+        val isTmdb = source.host == "api.themoviedb.org"
+        val gateway = if (isTmdb) gatewayStore.current() else null
+
+        val builder = source.newBuilder()
+        if (isTmdb) {
+            // Gateway accepts /api/tmdb/3/... (the Retrofit API base stays unchanged).
+            if (gateway != null) {
+                val endpoint = gateway.baseUrl.toHttpUrl()
+                builder.scheme(endpoint.scheme)
+                    .host(endpoint.host)
+                    .port(endpoint.port)
+                    .encodedPath("/api/tmdb" + source.encodedPath)
+                    .removeAllQueryParameters("api_key")
+            } else {
+                // User-owned local key for private usage, never part of the APK.
+                val personalKey = keyStore.current()
+                if (personalKey.isNotBlank()) builder.setQueryParameter("api_key", personalKey)
             }
-            .apply {
-                // No adult titles anywhere in the app, for every profile.
-                if (originalHttpUrl.host == "api.themoviedb.org" && originalHttpUrl.queryParameter("include_adult") == null) addQueryParameter("include_adult", "false")
-            }
-            .build()
-        
-        val request = original.newBuilder()
-            .url(url)
-            .build()
-        chain.proceed(request)
+            if (source.queryParameter("language") == null)
+                builder.addQueryParameter("language", "pt-BR")
+            builder.setQueryParameter("include_adult", "false")
+        }
+        val requestBuilder = original.newBuilder().url(builder.build())
+        if (gateway != null) requestBuilder.header("X-VS-Access-Token", gateway.accessToken)
+        chain.proceed(requestBuilder.build())
     }
 
     /** TMDB answers on disk, sized by the Cache size setting (read once, at start). */
