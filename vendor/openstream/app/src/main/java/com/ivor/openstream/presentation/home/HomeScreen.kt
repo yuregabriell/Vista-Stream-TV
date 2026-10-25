@@ -103,6 +103,7 @@ import com.ivor.openstream.domain.model.WatchProgress
 import com.ivor.openstream.ui.theme.ExpressiveShapes
 import java.util.Locale
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -133,6 +134,14 @@ fun HomeScreen(
         return
     }
     val homeMode by viewModel.mode.collectAsState()
+    // While the app stays open, check whether the last data refresh exceeded
+    // the three-hour TTL. Returning to the Home screen also restarts this timer.
+    LaunchedEffect(viewModel) {
+        while (true) {
+            delay(15L * 60 * 1000L)
+            viewModel.refreshIfStale()
+        }
+    }
     val keylessCatalogState by keylessViewModel.state.collectAsState()
     var selectedAniList by remember { mutableStateOf<KeylessTitle?>(null) }
     if (selectedAniList != null) {
