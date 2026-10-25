@@ -1,4 +1,4 @@
-name: Vista Stream TV APK
+name: VistaStream APK
 on:
   workflow_dispatch:
   push:
@@ -85,14 +85,14 @@ jobs:
           find vendor/openstream/app/build/outputs/apk -type f -name '*.apk'
           APK="$(find vendor/openstream/app/build/outputs/apk/debug -type f -name '*universal*.apk' -print -quit)"
           test -n "$APK" || { echo "No universal APK found" >&2; exit 1; }
-          cp "$APK" "VistaStream-TV-${GITHUB_RUN_NUMBER}.apk"
+          cp "$APK" "VistaStream-${GITHUB_RUN_NUMBER}.apk"
       - name: Publish in Releases
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.11.0-build.${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" "VistaStream-TV-${GITHUB_RUN_NUMBER}.apk" \
-            --target "$(git rev-parse HEAD)" --title "Vista Stream TV — $TAG" \
-            --notes "VS 0.11: Catálogo completo navegável de filmes e séries TMDB, com paginação real, pesquisa e filtro por ano; descoberta de animes mistura TMDB e AniList. Abre detalhes AniList com player existente. Secções Ver todos na página inicial. Sem chaves dentro do APK, Chromecast, Harvester, TVDB e P2P preservados." \
+          TAG="v0.12.0-build.${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" "VistaStream-${GITHUB_RUN_NUMBER}.apk" \
+            --target "$(git rev-parse HEAD)" --title "VistaStream — $TAG" \
+            --notes "VistaStream 0.12: marca VistaStream no launcher, cabeçalho compacto, Elenco em vez de Transmitir, filtros Ver resultados sem contagem parcial; toques repetidos no menu regressam ao topo e atualizam a vista, sem empilhar tabs; ligações do atualizador apontam para esta Release e a deteção numérica de versões foi corrigida. APK publicado como VistaStream. IMPORTANTE: builds antigas sem assinatura estável poderão exigir reinstalação; para futuras atualizações sem desinstalar, configurar assinatura estável privada no GitHub Actions." \
             --prerelease
