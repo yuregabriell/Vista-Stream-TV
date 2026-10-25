@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.content.pm.PackageManager
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
@@ -119,6 +120,34 @@ class UpdateViewModel @Inject constructor(
     fun installPermissionIntent(): Intent =
         Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    /**
+     * Debug APKs compiled on separate GitHub runners may be signed by different
+     * temporary keys. Android forbids installing one on top of the other.
+     * Detect this before showing a misleading "Install" action.
+     */
+    @Suppress("DEPRECATION")
+    fun signingCompatible(apk: File): Boolean? = runCatching {
+        val pm = context.packageManager
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+            PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
+        val current = pm.getPackageInfo(context.packageName, flags)
+        val incoming = pm.getPackageArchiveInfo(apk.absolutePath, flags)
+            ?: return@runCatching false
+        if (incoming.packageName != context.packageName) return@runCatching false
+        val installedSignatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+            current.signingInfo?.apkContentsSigners else current.signatures
+        val newSignatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+            incoming.signingInfo?.apkContentsSigners else incoming.signatures
+        if (installedSignatures.isNullOrEmpty() || newSignatures.isNullOrEmpty())
+            return@runCatching null
+        installedSignatures.size == newSignatures.size &&
+            installedSignatures.all { installed ->
+                newSignatures.any { candidate ->
+                    installed.toByteArray().contentEquals(candidate.toByteArray())
+                }
+            }
+    }.getOrNull()
 
     fun install(apk: File) {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", apk)
