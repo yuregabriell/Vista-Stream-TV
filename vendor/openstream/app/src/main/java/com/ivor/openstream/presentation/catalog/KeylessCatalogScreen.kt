@@ -172,9 +172,24 @@ fun KeylessCatalogScreen(
     searchFirst: Boolean = false,
     viewModel: KeylessCatalogViewModel = hiltViewModel(),
     castViewModel: KeylessCastViewModel = hiltViewModel(),
-    onTmdbConfigured: () -> Unit = {}
+    onTmdbConfigured: () -> Unit = {},
+    initialTitle: com.ivor.openstream.data.catalog.KeylessTitle? = null,
+    onInitialDismiss: () -> Unit = {}
 ) {
     val state by viewModel.state.collectAsState()
+    var hadInitialSelection by remember(initialTitle?.sourceId) { mutableStateOf(false) }
+    LaunchedEffect(initialTitle?.sourceId) {
+        initialTitle?.let { viewModel.select(it) }
+    }
+    LaunchedEffect(state.selected?.sourceId, initialTitle?.sourceId) {
+        if (initialTitle != null) {
+            if (state.selected?.sourceId == initialTitle.sourceId) {
+                hadInitialSelection = true
+            } else if (hadInitialSelection && state.selected == null) {
+                onInitialDismiss()
+            }
+        }
+    }
     val context = LocalContext.current
     val configureGateway = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
