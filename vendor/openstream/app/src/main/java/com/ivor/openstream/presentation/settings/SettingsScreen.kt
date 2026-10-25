@@ -256,6 +256,20 @@ fun SettingsScreen(
                     }
                 }
 
+                item(key = "tmdb-key") {
+                    SettingsGroup(title = "Metadados do catálogo") {
+                        NavigationRow(
+                            index = 0, count = 1,
+                            icon = Icons.Default.Public,
+                            title = "Chave TMDB · Filmes e temporadas",
+                            supporting = "Configurar e validar a API v3 para os detalhes e um catálogo maior",
+                            onClick = {
+                                context.startActivity(Intent(context, TmdbKeyActivity::class.java))
+                            }
+                        )
+                    }
+                }
+
                 item(key = "torrent-p2p") {
                     SettingsGroup(title = "Streaming P2P (opcional)") {
                         NavigationRow(
