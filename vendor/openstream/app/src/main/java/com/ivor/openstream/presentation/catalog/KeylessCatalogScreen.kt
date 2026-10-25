@@ -248,8 +248,9 @@ fun KeylessCatalogScreen(
     var currentUtcDay by remember { mutableLongStateOf(System.currentTimeMillis() / 86_400_000L) }
     LaunchedEffect(Unit) {
         while (true) {
-            delay(60L * 60L * 1000L)
+            delay(15L * 60L * 1000L)
             currentUtcDay = System.currentTimeMillis() / 86_400_000L
+            viewModel.refreshIfStale()
         }
     }
     val chosen = state.selected
