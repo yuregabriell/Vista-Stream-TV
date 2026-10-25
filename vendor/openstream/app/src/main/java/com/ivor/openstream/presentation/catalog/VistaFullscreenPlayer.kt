@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.Cast
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -74,7 +75,8 @@ fun VistaFullscreenPlayer(
     onSelectSource: (VideoServer) -> Unit,
     hasAlternative: Boolean,
     onTryAlternative: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onCastClick: () -> Unit = {}
 ) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current
@@ -286,8 +288,8 @@ fun VistaFullscreenPlayer(
                             style = MaterialTheme.typography.labelSmall)
                     }
                 }
-                IconButton(onClick = { trackSheet = true }) {
-                    Icon(Icons.Default.Subtitles, contentDescription = "Áudio e legendas", tint = Color.White)
+                IconButton(onClick = onCastClick) {
+                    Icon(Icons.Default.Cast, contentDescription = "Conectar Chromecast", tint = Color.White)
                 }
             }
             if (err == null) {
