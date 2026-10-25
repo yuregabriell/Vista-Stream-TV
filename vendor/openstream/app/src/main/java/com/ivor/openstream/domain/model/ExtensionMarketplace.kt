@@ -39,6 +39,8 @@ enum class ExtensionEngineType(val key: String) {
     ANIMEGG("animegg"),
     /** A Stremio add-on; `endpoint` is its base URL (the manifest URL without `/manifest.json`). */
     STREMIO("stremio"),
+    NATIVE_HARVESTER("native-harvester"),
+    NATIVE_ANIME_HTML("native-anime-html"),
     UNSUPPORTED("unsupported");
 
     companion object {
@@ -68,6 +70,8 @@ data class ExtensionEngine(
             ExtensionEngineType.ANIMEPAHE,
             ExtensionEngineType.FOURANIMO,
             ExtensionEngineType.ANIMEGG -> endpoint.startsWith("https://")
+            ExtensionEngineType.NATIVE_HARVESTER -> true
+            ExtensionEngineType.NATIVE_ANIME_HTML -> endpoint.startsWith("https://")
             ExtensionEngineType.STREMIO ->
                 endpoint.startsWith("https://") || endpoint.startsWith("http://")
             ExtensionEngineType.UNSUPPORTED -> false
