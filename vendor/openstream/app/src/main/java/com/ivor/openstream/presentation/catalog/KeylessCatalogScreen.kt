@@ -32,7 +32,10 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.Cast
+import androidx.compose.material.icons.filled.CastConnected
+import androidx.compose.material.icons.filled.Pause
+import com.ivor.openstream.presentation.player.components.CastDeviceSheet
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -67,6 +70,89 @@ import coil3.compose.AsyncImage
 import com.ivor.openstream.data.catalog.KeylessTitle
 import com.ivor.openstream.domain.model.VideoServer
 
+
+// Chromecast remote controls shared with the existing Media3 CastPlayer.
+@Composable
+private fun KeylessTvRemote(
+    castViewModel: KeylessCastViewModel,
+    title: String,
+    subtitleOptions: List<com.ivor.openstream.presentation.player.session.CastSubtitleOption>,
+    activeSubtitle: String?,
+    sources: List<VideoServer>,
+    onSelectSource: (VideoServer) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var showSources by remember { mutableStateOf(false) }
+    var showSubtitles by remember { mutableStateOf(false) }
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(
+                Modifier.padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(15.dp)
+            ) {
+                Text("Assistindo na TV", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary)
+                Text(title, style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(onClick = {
+                        val p = castViewModel.castPlayer
+                        if (p != null) p.seekTo((p.currentPosition - 10000).coerceAtLeast(0))
+                    }) { Text("−10s") }
+                    Button(onClick = castViewModel::pauseOrResume) {
+                        Text("Pausar / Reproduzir")
+                    }
+                    OutlinedButton(onClick = {
+                        val p = castViewModel.castPlayer
+                        if (p != null) p.seekTo(p.currentPosition + 10000)
+                    }) { Text("+10s") }
+                }
+                if (sources.isNotEmpty()) {
+                    TextButton(onClick = { showSources = true }) { Text("Alterar fonte") }
+                }
+                TextButton(onClick = { showSubtitles = true }) { Text("Legendas na TV") }
+                TextButton(onClick = onDismiss) { Text("Voltar ao catálogo") }
+            }
+        }
+    }
+    if (showSources) AlertDialog(
+        onDismissRequest = { showSources = false },
+        title = { Text("Fonte de reprodução") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                sources.forEach { server ->
+                    TextButton(onClick = {
+                        showSources = false
+                        onSelectSource(server)
+                    }) { Text(server.providerName + " · " + server.name) }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { showSources = false }) { Text("Fechar") } }
+    )
+    if (showSubtitles) AlertDialog(
+        onDismissRequest = { showSubtitles = false },
+        title = { Text("Legendas na TV") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                TextButton(onClick = {
+                    castViewModel.selectSubtitle(null)
+                    showSubtitles = false
+                }) { Text("Desativadas") }
+                subtitleOptions.forEach { option ->
+                    TextButton(onClick = {
+                        castViewModel.selectSubtitle(option.id)
+                        showSubtitles = false
+                    }) {
+                        Text((if (activeSubtitle == option.id) "✓ " else "") + option.label)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { showSubtitles = false }) { Text("Fechar") } }
+    )
+}
+
 /**
  * Independent, keyless title discovery. Metadata does NOT imply a stream exists:
  * only enabled compatible providers can supply playable HTTP media.
@@ -77,9 +163,34 @@ fun KeylessCatalogScreen(
     modifier: Modifier = Modifier,
     onOpenSources: () -> Unit = {},
     searchFirst: Boolean = false,
-    viewModel: KeylessCatalogViewModel = hiltViewModel()
+    viewModel: KeylessCatalogViewModel = hiltViewModel(),
+    castViewModel: KeylessCastViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val castStatus by castViewModel.status.collectAsState()
+    val tvNowPlaying by castViewModel.nowPlaying.collectAsState()
+    val tvSubtitles by castViewModel.subtitles.collectAsState()
+    var showCastPicker by remember { mutableStateOf(false) }
+    var showTvControls by remember { mutableStateOf(false) }
+    if (showCastPicker) {
+        CastDeviceSheet(
+            selector = castViewModel.routeSelector,
+            status = castStatus,
+            onStopCasting = castViewModel::stopCasting,
+            onDismiss = { showCastPicker = false }
+        )
+    }
+    if (showTvControls && castStatus.isCasting && tvNowPlaying != null) {
+        KeylessTvRemote(
+            castViewModel = castViewModel,
+            title = tvNowPlaying!!.title,
+            subtitleOptions = tvSubtitles.options,
+            activeSubtitle = tvSubtitles.activeId,
+            sources = state.servers,
+            onSelectSource = viewModel::play,
+            onDismiss = { showTvControls = false }
+        )
+    }
     var category by rememberSaveable { mutableStateOf("all") }
     var query by rememberSaveable { mutableStateOf("") }
     var discover by rememberSaveable { mutableStateOf(false) }
@@ -101,6 +212,26 @@ fun KeylessCatalogScreen(
     val chosen = state.selected
     val player = state.playing
 
+    LaunchedEffect(player?.url, castStatus.isCasting) {
+        val movie = state.selected
+        val selectedVideo = player
+        if (castStatus.isCasting && movie != null && selectedVideo != null) {
+            castViewModel.cast(movie, selectedVideo, state.season, state.episode, state.resumePositionMs)
+        }
+    }
+    if (player != null && castStatus.isCasting) {
+        KeylessTvRemote(
+            castViewModel = castViewModel,
+            title = state.selected?.title ?: "Vídeo na TV",
+            subtitleOptions = tvSubtitles.options,
+            activeSubtitle = tvSubtitles.activeId,
+            sources = state.servers,
+            onSelectSource = viewModel::play,
+            onDismiss = viewModel::closePlayer
+        )
+        return
+    }
+
     if (player != null) {
         // Full-window dialog lives above the parent navigation scaffold. The Home
         // bottom bar and its tabs can no longer cover the seek bar or player buttons.
@@ -121,7 +252,8 @@ fun KeylessCatalogScreen(
                 availableServers = state.servers,
                 onSelectSource = viewModel::play,
                 hasAlternative = state.servers.any { it.id != player.id && it.url != player.url },
-                onClose = viewModel::closePlayer
+                onClose = viewModel::closePlayer,
+                onCastClick = { showCastPicker = true }
             )
         }
         return
@@ -280,8 +412,39 @@ fun KeylessCatalogScreen(
                 IconButton(onClick = viewModel::refresh) {
                     Icon(Icons.Default.Refresh, contentDescription = "Atualizar catálogo")
                 }
-                IconButton(onClick = onOpenSources) {
-                    Icon(Icons.Default.Storefront, contentDescription = "Fontes e extensões")
+                IconButton(
+                    onClick = { if (castStatus.isCasting) showTvControls = true else showCastPicker = true }
+                ) {
+                    Icon(
+                        if (castStatus.isCasting) Icons.Default.CastConnected else Icons.Default.Cast,
+                        contentDescription = if (castStatus.isCasting) "Chromecast conectado" else "Conectar Chromecast",
+                        tint = if (castStatus.isCasting) MaterialTheme.colorScheme.primary
+                               else MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+        if (castStatus.isCasting && tvNowPlaying != null) {
+            item(key = "cast-now-playing") {
+                ElevatedCard(
+                    onClick = { showTvControls = true },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 7.dp)
+                ) {
+                    Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.CastConnected, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Assistindo agora na TV", style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary)
+                            Text(tvNowPlaying!!.title, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
+                            Text(castStatus.deviceName.orEmpty(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Icon(Icons.Default.PlayArrow, contentDescription = "Abrir controles da TV")
+                    }
                 }
             }
         }
