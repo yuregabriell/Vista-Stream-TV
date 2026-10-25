@@ -1,5 +1,10 @@
 package com.ivor.openstream.data.streaming
 
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import com.ivor.openstream.harvester.NativeHarvesterStore
+import com.ivor.openstream.harvester.NativeHarvesterProvider
+import com.ivor.openstream.harvester.NativeAnimeHtmlProvider
 import com.ivor.openstream.data.streaming.anime.AnikotoProvider
 import com.ivor.openstream.data.streaming.anime.AnimeEpisodeMapper
 import com.ivor.openstream.data.streaming.anime.AnimePaheProvider
@@ -71,7 +76,8 @@ class ExtensionProviderRegistry @Inject constructor(
     private val cloudflareClearance: CloudflareClearance,
     private val hosterExtractors: HosterExtractors,
     @Named("StreamingClient") private val streamingClient: OkHttpClient,
-    private val json: Json
+    private val json: Json,
+    @ApplicationContext private val context: Context
 ) {
     private val cache = ConcurrentHashMap<String, StreamProvider>()
 
@@ -165,6 +171,12 @@ class ExtensionProviderRegistry @Inject constructor(
                 spec = animeSiteSpec(manifest),
                 mapper = animeEpisodeMapper,
                 client = streamingClient
+            )
+            ExtensionEngineType.NATIVE_HARVESTER ->
+                NativeHarvesterProvider(NativeHarvesterStore(context))
+            ExtensionEngineType.NATIVE_ANIME_HTML -> NativeAnimeHtmlProvider(
+                id = manifest.id, displayName = manifest.name,
+                base = engine.endpoint, style = engine.qualityFilter.orEmpty()
             )
             ExtensionEngineType.STREMIO -> StremioAddonProvider(
                 id = "stremio-${manifest.id}",
