@@ -23,7 +23,7 @@ labels = root / "app/src/main/res/values/strings.xml"
 s = labels.read_text(encoding="utf-8")
 assert re.search(r'<string name="app_name"[^>]*>', s), "App label changed upstream"
 s = re.sub(r'<string name="app_name"[^>]*>.*?</string>',
-           '<string name="app_name">Vista Stream TV</string>', s, count=1, flags=re.S)
+           '<string name="app_name">VistaStream</string>', s, count=1, flags=re.S)
 labels.write_text(s, encoding="utf-8")
 
 xml = (root / "app/src/main/AndroidManifest.xml").read_text(encoding="utf-8")
@@ -38,4 +38,4 @@ github_api.write_text(api.replace(
     original_route, 'repos/yuregabriell/Vista-Stream-TV/releases?per_page=100'
 ), encoding="utf-8")
 
-print("App ID and branding changed. TV launcher intent present; D-pad still requires device testing.")
+print("VistaStream brand applied. TV launcher intent present; D-pad requires device testing.")
