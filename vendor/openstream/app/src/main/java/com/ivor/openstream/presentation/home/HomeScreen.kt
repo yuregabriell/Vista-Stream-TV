@@ -50,6 +50,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -67,6 +68,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -125,6 +127,16 @@ fun HomeScreen(
         )
         return
     }
+    var explorerCategory by rememberSaveable { mutableStateOf<String?>(null) }
+    if (explorerCategory != null) {
+        FullCatalogScreen(
+            initialCategory = explorerCategory ?: "all",
+            onBack = { explorerCategory = null },
+            onOpenDetails = onOpenDetails
+        )
+        return
+    }
+
     val uiState by viewModel.uiState.collectAsState()
     val castStatus by castViewModel.status.collectAsState()
     val nowOnTv by castViewModel.nowPlaying.collectAsState()
@@ -198,6 +210,30 @@ fun HomeScreen(
                         )
                     }
 
+                    item(key = "explore-full-catalog") {
+                        Surface(
+                            onClick = { explorerCategory = "all" },
+                            modifier = Modifier.fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 9.dp),
+                            shape = ExpressiveShapes.large,
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 18.dp, vertical = 15.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("Explorar catálogo completo", fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleMedium)
+                                    Text("Milhares de filmes, séries e animes · Carregamento contínuo",
+                                        style = MaterialTheme.typography.bodySmall)
+                                }
+                                Icon(Icons.Default.Star, contentDescription = null)
+                            }
+                        }
+                    }
+
                     if (castStatus.isCasting && nowOnTv != null) {
                         item(key = "casting-now") {
                             Surface(
@@ -243,7 +279,20 @@ fun HomeScreen(
 
                     state.rails.forEach { rail ->
                         item(key = rail.key) {
-                            SectionHeader(title = rail.title)
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(start = 5.dp, end = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(Modifier.weight(1f)) { SectionHeader(title = rail.title) }
+                                TextButton(onClick = {
+                                    explorerCategory = when(rail.key) {
+                                        "anime", "anime-movies" -> "anime"
+                                        "popular-movies", "top-rated" -> "movie"
+                                        "popular-series", "new-episodes" -> "tv"
+                                        else -> "all"
+                                    }
+                                }) { Text("Ver todos") }
+                            }
                             when (rail.style) {
                                 RailStyle.RANKED -> RankedRail(rail.items, open, hide)
                                 RailStyle.LANDSCAPE -> LandscapeRail(rail.items, open, hide)
