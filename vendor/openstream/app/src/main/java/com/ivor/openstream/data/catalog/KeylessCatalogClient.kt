@@ -10,6 +10,7 @@ import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -79,10 +80,37 @@ class KeylessCatalogClient @Inject constructor(
         results
     }
 
+    /**
+     * Home initially showed one tiny public feed per type. Fetch multiple pages
+     * and keep the larger aggregated index cached to reduce calls and startup work.
+     * Metadata does not imply playable streams.
+     */
     suspend fun refresh(force: Boolean = false): Map<String, List<KeylessTitle>> = supervisorScope {
-        listOf("movie", "series", "anime").map { type ->
-            async { type to runCatching { titles(type, force = force) }.getOrDefault(emptyList()) }
+        val cacheName = "home_public_catalog_v2"
+        val saved = prefs.getString(cacheName, null)?.let { raw ->
+            runCatching { json.decodeFromString<Map<String, List<KeylessTitle>>>(raw) }.getOrNull()
+        }
+        val fresh = System.currentTimeMillis() - prefs.getLong("${cacheName}_ts", 0L) <
+            3L * 60 * 60 * 1_000
+        if (!force && fresh && saved?.values?.any { it.isNotEmpty() } == true)
+            return@supervisorScope saved
+
+        val catalog = listOf("movie", "series", "anime").map { type ->
+            async {
+                val pages = (1..4).map { page ->
+                    runCatching { titles(type, page = page, force = force) }.getOrDefault(emptyList())
+                }
+                type to pages.flatten().distinctBy { it.sourceId }.take(360)
+            }
         }.map { it.await() }.toMap()
+        val merged = catalog.mapValues { (type, values) ->
+            values.ifEmpty { saved?.get(type).orEmpty() }
+        }
+        if (merged.values.any { it.isNotEmpty() }) {
+            prefs.edit().putString(cacheName, json.encodeToString(merged))
+                .putLong("${cacheName}_ts", System.currentTimeMillis()).apply()
+        }
+        merged
     }
 
     /**
