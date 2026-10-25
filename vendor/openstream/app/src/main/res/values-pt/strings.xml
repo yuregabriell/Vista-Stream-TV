@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">OpenStream</string>
+    <string name="app_name">VistaStream</string>
     <string name="download_channel_name">Downloads</string>
     <string name="nav_home">Início</string>
     <string name="nav_search">Buscar</string>
@@ -504,7 +504,7 @@
     <string name="up_attention">Atenção necessária</string>
     <string name="up_source_code">Código-fonte</string>
     <string name="up_website">Site</string>
-    <string name="up_version_format">OpenStream %1$s</string>
+    <string name="up_version_format">VistaStream %1$s</string>
     <string name="we_title">Bem-vindo ao OpenStream</string>
     <string name="we_body">OpenStream testa toda fonte ativa ao apertar Play e fica com o resultado mais rápido.</string>
     <string name="we_offline_note">Baixe episódios da página de qualquer série e assista sem conexão.</string>
@@ -668,7 +668,7 @@
     <string name="dl_progress_full">%1$d%% · %2$s de %3$s</string>
     <string name="dl_progress_short">%1$d%% · %2$s</string>
     <string name="dl_saved_suffix">%1$s · salvas em cada download</string>
-    <string name="up_latest_version">OpenStream %1$s é a versão mais recente.</string>
+    <string name="up_latest_version">VistaStream %1$s é a versão mais recente.</string>
     <string name="up_released_on">Lançado em %1$s</string>
     <string name="up_whats_in">Novidades em %1$s</string>
     <string name="up_starting_download">Iniciando download…</string>
@@ -699,13 +699,13 @@
     <string name="st_group_pip">Picture in picture</string>
     <string name="st_pip_footer">Reproduzir/pausar fica sempre no meio. O Android mostra no máximo três botões.</string>
     <string name="st_crash_include_other">Inclui %1$d relatórios de crash</string>
-    <string name="up_version_build">OpenStream %1$s (%2$d)</string>
+    <string name="up_version_build">VistaStream %1$s (%2$d)</string>
     <string name="cd_rated_format">Nota %1$s de 10</string>
 
     <!-- Round 3: itens restantes -->
     <string name="share_title">Compartilhar %1$s</string>
     <string name="next_airing_arrives">%1$s chega %2$s</string>
-    <string name="cast_title">Transmitir</string>
+    <string name="cast_title">Elenco</string>
     <string name="trailers_title">Trailers</string>
     <string name="status_airing">Em exibição</string>
     <string name="status_completed">Finalizada</string>
