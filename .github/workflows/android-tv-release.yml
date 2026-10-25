@@ -95,5 +95,5 @@ jobs:
           TAG="v0.5.0-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-TV-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "Vista Stream TV — $TAG" \
-            Streaming P2P opcional via TorrServer em LAN/localhost: Stremio infoHash + fileIdx vira URL HTTP no player Media3, configuração auto/local/remoto e teste de ligação. Não inclui motor BitTorrent embutido, exige TorrServer separado; não descarrega filmes inteiros no VS.
+            --notes "Streaming P2P opcional via TorrServer em LAN/localhost. Stremio infoHash + fileIdx transforma-se em URL HTTP no Media3. Modos automático, local e remoto; motor TorrServer separado necessário." \
             --prerelease
