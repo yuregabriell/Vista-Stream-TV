@@ -441,12 +441,12 @@ private fun DownloadsHeader(
         ExpressiveBackButton(onClick = onBackClick)
         Spacer(Modifier.height(24.dp))
         Text(
-            text = stringResource(R.string.download_channel_name),
+            text = "Downloads + Web",
             style = MaterialTheme.typography.displaySmall,
             fontWeight = FontWeight.Black,
             modifier = Modifier.semantics { heading() }
         )
-        val countText = if (selectedTab == DownloadTab.DOWNLOADS) {
+        val countText = if (selectedTab == DownloadTab.WEB) null else if (selectedTab == DownloadTab.DOWNLOADS) {
             if (completedCount == 1) {
                 stringResource(R.string.dl_video_one)
             } else if (completedCount > 1) {
