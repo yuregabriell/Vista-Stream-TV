@@ -1,7 +1,6 @@
 package com.ivor.openstream.data.settings
 
 import android.content.Context
-import com.ivor.openstream.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -13,7 +12,7 @@ class TmdbKeyStore @Inject constructor(@ApplicationContext context: Context) {
 
     fun current(): String {
         val saved = prefs.getString("tmdb_v3_api_key", null).orEmpty().trim()
-        return saved.ifBlank { BuildConfig.TMDB_API_KEY.takeUnless { it == "DEMO_KEY" }.orEmpty() }
+        return saved
     }
 
     fun save(key: String): Boolean {
