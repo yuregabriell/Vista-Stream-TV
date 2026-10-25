@@ -80,6 +80,14 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".harvester.HarvesterImportActivity"
+            android:exported="true" android:theme="@style/Theme.OpenStream">
+            <intent-filter>
+                <action android:name="com.vistastream.tv.action.IMPORT" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <!-- Harvester Browser / Android share official Vista player.
              Only recognized video links and explicit playback commands are accepted. -->
         <activity
