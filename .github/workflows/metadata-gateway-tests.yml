@@ -1,0 +1,28 @@
+name: Metadata Gateway Security Tests
+
+on:
+  push:
+    paths:
+      - "services/metadata-api/**"
+      - ".github/workflows/metadata-gateway-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gateway-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+        working-directory: services/metadata-api
+      - run: pytest -q
+        working-directory: services/metadata-api
+      - name: Assert no global TMDB secret compiled in Android
+        run: |
+          ! grep -R 'BuildConfig.TMDB_API_KEY' vendor/openstream/app/src/main/java
+          ! grep -q 'secrets.TMDB_API_KEY' .github/workflows/android-tv-release.yml
