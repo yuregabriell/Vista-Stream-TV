@@ -16,6 +16,8 @@ def env(monkeypatch):
     gateway.cache.clear()
     gateway.throttle.clear()
     gateway.public_throttle.clear()
+    gateway.season_overlay_cache.clear()
+    gateway.tvdb_auth = None
 
 def test_health_never_exposes_keys():
     response = client.get("/health")
@@ -89,3 +91,71 @@ def test_public_tmdb_limited(monkeypatch):
 def test_public_catalog_can_be_disabled(monkeypatch):
     monkeypatch.setenv("VS_PUBLIC_CATALOG", "false")
     assert client.get("/api/public/tmdb/3/trending/all/week").status_code == 503
+
+
+def test_tvdb_enabled_provides_privacy_safe_provider_status(monkeypatch):
+    monkeypatch.setenv("TVDB_API_KEY", "test-tvdb-secret")
+    monkeypatch.setenv("TVDB_LICENSED", "true")
+    async def fake_bearer():
+        return "never-share-the-bearer"
+    monkeypatch.setattr(gateway, "tvdb_bearer", fake_bearer)
+    response = client.get("/api/public/tvdb/status")
+    assert response.status_code == 200
+    assert response.json() == {"configured": True, "enabled": True, "authenticated": True}
+    assert "test-tvdb-secret" not in response.text
+    assert "never-share-the-bearer" not in response.text
+
+
+def test_tvdb_overlays_missing_episodes_preserving_tmdb_identity(monkeypatch):
+    monkeypatch.setenv("TVDB_API_KEY", "test-tvdb-secret")
+    monkeypatch.setenv("TVDB_LICENSED", "true")
+    async def fake_bearer():
+        return "mock-bearer"
+    monkeypatch.setattr(gateway, "tvdb_bearer", fake_bearer)
+    calls = []
+    async def fake_upstream(path, params, headers=None):
+        calls.append(path)
+        if path.endswith("/tv/77/season/1"):
+            return JSONResponse({"id": 888, "episodes": [
+                {"id": 11, "season_number": 1, "episode_number": 1, "name": "Episódio 1", "overview": ""},
+                {"id": 12, "season_number": 1, "episode_number": 2, "name": "Original TMDB", "overview": "Descrição TMDB"}
+            ]})
+        if path.endswith("/tv/77/external_ids"):
+            return JSONResponse({"tvdb_id": 999})
+        if path.endswith("/series/999/episodes/official/por"):
+            assert headers == {"Authorization": "Bearer mock-bearer"}
+            return JSONResponse({"data": {"episodes": [
+                {"seasonNumber": 1, "number": 1, "name": "Nome TVDB", "overview": "Descrição TVDB"},
+                {"seasonNumber": 1, "number": 2, "name": "Outro título", "overview": "Sobrescrever"}
+            ]}})
+        raise AssertionError(path)
+    monkeypatch.setattr(gateway, "upstream", fake_upstream)
+    result = client.get("/api/public/tmdb/3/tv/77/season/1")
+    assert result.status_code == 200
+    body = result.json()
+    assert body["episodes"][0]["id"] == 11
+    assert body["episodes"][0]["name"] == "Nome TVDB"
+    assert body["episodes"][0]["overview"] == "Descrição TVDB"
+    assert body["episodes"][1]["name"] == "Original TMDB"
+    assert body["episodes"][1]["overview"] == "Descrição TMDB"
+    assert body["_metadata_sources"] == ["TMDB", "TheTVDB"]
+    assert "test-tvdb-secret" not in result.text
+    assert result.headers["x-vs-metadata"] == "TMDB+TheTVDB"
+    assert any(p.endswith("/series/999/episodes/official/por") for p in calls)
+
+
+def test_season_still_available_when_tvdb_auth_fails(monkeypatch):
+    monkeypatch.setenv("TVDB_API_KEY", "test-tvdb-secret")
+    monkeypatch.setenv("TVDB_LICENSED", "true")
+    async def fail_login():
+        raise gateway.HTTPException(502, "TVDB rejected key")
+    monkeypatch.setattr(gateway, "tvdb_bearer", fail_login)
+    async def fake_upstream(path, params, headers=None):
+        if path.endswith("/tv/77/external_ids"):
+            return JSONResponse({"tvdb_id": 999})
+        return JSONResponse({"episodes": [{"id": 3, "name": "TMDB original"}]})
+    monkeypatch.setattr(gateway, "upstream", fake_upstream)
+    resp = client.get("/api/public/tmdb/3/tv/77/season/1")
+    assert resp.status_code == 200
+    assert resp.json()["episodes"][0]["name"] == "TMDB original"
+    assert "_metadata_sources" not in resp.json()
