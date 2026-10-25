@@ -92,8 +92,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.6.0-build.${GITHUB_RUN_NUMBER}"
+          TAG="v0.7.0-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-TV-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "Vista Stream TV — $TAG" \
-            --notes "Harvester Browser + VS: Web guardado em Downloads + Web (fontes temporárias ficam como páginas de origem), Chromecast acessível no player e na página inicial, estado ligado e painel Assistindo agora na TV. Streaming P2P opcional via TorrServer preservado." \
+            --notes "Corrige Chromecast: um toque no ícone ligado desconecta a TV. HTTP 401 nos detalhes: opção para validar chave TMDB v3 dentro do VS. Catálogo público ampliado para quatro páginas por categoria com cache. Chave TVDB não é exigida." \
             --prerelease
