@@ -97,7 +97,7 @@ def sanitized_params(request: Request) -> dict[str, str]:
         if key == "page" and (not value.isdigit() or int(value) > 500 or int(value) < 1):
             raise HTTPException(400, "Invalid page")
         if key == "append_to_response" and any(
-            part not in ("videos", "images", "credits", "external_ids", "release_dates",
+            part not in ("videos", "images", "credits", "combined_credits", "external_ids", "release_dates",
                          "content_ratings", "recommendations", "similar")
             for part in value.split(",")
         ):
@@ -154,6 +154,51 @@ async def status(request: Request):
         "tvdb": bool(secret("TVDB_API_KEY")) and secret("TVDB_LICENSED") == "true",
         "gatewayVersion": 1,
     }
+
+
+# Public, read-only, limited metadata access for the official VS app.
+# No embedded Android API key, token, arbitrary proxy target, or playback URL.
+# Access protection should additionally be enforced by the hosting provider/WAF
+# before promoting this hobby deployment to a multi-user commercial service.
+PUBLIC_LIMIT_PER_MINUTE = 45
+PUBLIC_GLOBAL_PER_MINUTE = 500
+public_throttle: dict[str, list[float]] = defaultdict(list)
+
+async def limit_public(request: Request) -> None:
+    now = time.monotonic()
+    # FastAPI's request.client.host is the connection peer, not a caller-
+    # supplied forwarded-IP header, so it cannot be spoofed by the requester.
+    client_ip = request.client.host if request.client else "unknown"
+    key = "ip:" + hashlib_sha256(client_ip)
+    async with gateway_lock:
+        for scope, limit in ((key, PUBLIC_LIMIT_PER_MINUTE),
+                             ("global", PUBLIC_GLOBAL_PER_MINUTE)):
+            stamps = [t for t in public_throttle[scope] if now - t < 60]
+            if len(stamps) >= limit:
+                raise HTTPException(429, "Public catalog rate limit exceeded")
+            public_throttle[scope] = stamps
+        public_throttle[key].append(now)
+        public_throttle["global"].append(now)
+        # Bound memory usage by dropping inactive addresses periodically.
+        if len(public_throttle) > 2000:
+            for stale_key in list(public_throttle.keys())[:1000]:
+                if stale_key != "global" and not public_throttle[stale_key]:
+                    public_throttle.pop(stale_key, None)
+
+
+@app.get("/api/public/tmdb/3/{path:path}")
+async def public_tmdb(path: str, request: Request):
+    if secret("VS_PUBLIC_CATALOG").lower() == "false":
+        raise HTTPException(503, "Public catalog disabled")
+    require_allowed(path, TMDB_ALLOWED)
+    if not secret("TMDB_API_KEY"):
+        raise HTTPException(503, "Metadata provider unavailable")
+    params = sanitized_params(request)
+    if int(params.get("page", "1")) > 100:
+        raise HTTPException(400, "Invalid page")
+    await limit_public(request)
+    params["api_key"] = secret("TMDB_API_KEY")
+    return await upstream(f"{TMDB_BASE}/{path}", params)
 
 
 @app.get("/api/tmdb/3/{path:path}")
