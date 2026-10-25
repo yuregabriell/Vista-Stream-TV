@@ -15,7 +15,6 @@ services:
         sync: false
       - key: VS_ACCESS_TOKENS
         generateValue: true
-      - key: TVDB_API_KEY
-        sync: false
+      # TVDB_API_KEY is configured only after license verification.
       - key: TVDB_LICENSED
         value: "false"
