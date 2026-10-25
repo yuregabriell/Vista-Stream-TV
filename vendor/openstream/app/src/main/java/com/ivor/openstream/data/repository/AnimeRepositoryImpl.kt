@@ -106,8 +106,32 @@ class AnimeRepositoryImpl @Inject constructor(
                     .filter { it.originalLanguage == "ja" && it.genreIds.orEmpty().contains(ANIMATION_GENRE) }
             }.ifEmpty { api.discoverTvWith(anime + ("sort_by" to "popularity.desc") + tvKids).results }
             AnimeCatalog.ANIME_MOVIES -> api.discoverMovieWith(
-                anime + mapOf("sort_by" to "popularity.desc", "vote_count.gte" to "100") + movieKids
+                anime + mapOf("sort_by" to "popularity.desc") + movieKids
             ).results.map { it.copy(mediaType = "movie") }
+
+            AnimeCatalog.ANIME_POPULAR -> api.discoverTvWith(
+                anime + mapOf("sort_by" to "popularity.desc") + tvKids
+            ).results.map { it.copy(mediaType = "tv") }
+
+            AnimeCatalog.ANIME_NEW -> api.discoverTvWith(
+                anime + mapOf(
+                    "sort_by" to "first_air_date.desc",
+                    "first_air_date.lte" to java.time.LocalDate.now().toString(),
+                    "first_air_date.gte" to java.time.LocalDate.now().minusMonths(18).toString()
+                ) + tvKids
+            ).results.map { it.copy(mediaType = "tv") }
+
+            AnimeCatalog.ANIME_TOP_RATED -> api.discoverTvWith(
+                anime + mapOf("sort_by" to "vote_average.desc", "vote_count.gte" to "100") + tvKids
+            ).results.map { it.copy(mediaType = "tv") }
+
+            AnimeCatalog.ANIME_ACTION -> api.discoverTvWith(
+                anime + mapOf("with_genres" to "16,10759", "sort_by" to "popularity.desc") + tvKids
+            ).results.map { it.copy(mediaType = "tv") }
+
+            AnimeCatalog.ANIME_FANTASY -> api.discoverTvWith(
+                anime + mapOf("with_genres" to "16,10765", "sort_by" to "popularity.desc") + tvKids
+            ).results.map { it.copy(mediaType = "tv") }
         }
         val moviesPreFiltered = catalog == AnimeCatalog.POPULAR_MOVIES || catalog == AnimeCatalog.TOP_RATED_MOVIES ||
             catalog == AnimeCatalog.ANIME_MOVIES
