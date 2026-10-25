@@ -323,7 +323,7 @@ fun HomeScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Box(Modifier.weight(1f)) {
-                                    SectionHeader(title = "Em alta no AniList")
+                                    SectionHeader(title = "Em alta agora")
                                 }
                                 TextButton(onClick = { explorerCategory = "anime" }) {
                                     Text("Ver todos")
