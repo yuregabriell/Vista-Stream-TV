@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -96,6 +97,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -420,7 +422,7 @@ fun DownloadsScreen(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 80.dp)
+                .padding(bottom = bottomContentPadding)
         )
     }
 }
@@ -437,58 +439,93 @@ private fun DownloadsHeader(
     localCount: Int,
     onBackClick: () -> Unit
 ) {
-    Column(modifier = Modifier.statusBarsPadding().padding(top = 16.dp, bottom = 20.dp)) {
-        ExpressiveBackButton(onClick = onBackClick)
-        Spacer(Modifier.height(24.dp))
-        Text(
-            text = "Downloads + Web",
-            style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.Black,
-            modifier = Modifier.semantics { heading() }
-        )
-        val countText = if (selectedTab == DownloadTab.WEB) null else if (selectedTab == DownloadTab.DOWNLOADS) {
-            if (completedCount == 1) {
-                stringResource(R.string.dl_video_one)
-            } else if (completedCount > 1) {
-                stringResource(R.string.dl_videos_on_device, completedCount)
-            } else null
-        } else {
-            if (localCount == 1) {
-                stringResource(R.string.dl_video_one)
-            } else if (localCount > 1) {
-                stringResource(R.string.dl_videos_on_device, localCount)
-            } else null
+    val countText = if (selectedTab == DownloadTab.WEB) null
+    else if (selectedTab == DownloadTab.DOWNLOADS) {
+        when {
+            completedCount == 1 -> stringResource(R.string.dl_video_one)
+            completedCount > 1 -> stringResource(R.string.dl_videos_on_device, completedCount)
+            else -> null
         }
-        if (countText != null) {
-            Text(
-                text = countText,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
+    } else {
+        when {
+            localCount == 1 -> stringResource(R.string.dl_video_one)
+            localCount > 1 -> stringResource(R.string.dl_videos_on_device, localCount)
+            else -> null
+        }
+    }
+
+    // Compact heading: leave space for content instead of a half-screen title.
+    Column(
+        modifier = Modifier.statusBarsPadding().padding(top = 10.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ExpressiveBackButton(onClick = onBackClick)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Downloads + Web",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() }
+                )
+                if (countText != null) {
+                    Text(
+                        text = countText,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        // Three equal-width compact tabs. Short labels NEVER wrap or collide
+        // on narrow phones, unlike the former segmented buttons.
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .height(48.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainer),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            val tabs = listOf(
+                DownloadTab.DOWNLOADS to "Downloads",
+                DownloadTab.LOCAL_FILES to "Locais",
+                DownloadTab.WEB to "Web"
             )
-        }
-        Spacer(Modifier.height(16.dp))
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            SegmentedButton(
-                selected = selectedTab == DownloadTab.DOWNLOADS,
-                onClick = { onTabSelect(DownloadTab.DOWNLOADS) },
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3)
-            ) {
-                Text(stringResource(R.string.dl_tab_downloads))
-            }
-            SegmentedButton(
-                selected = selectedTab == DownloadTab.LOCAL_FILES,
-                onClick = { onTabSelect(DownloadTab.LOCAL_FILES) },
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3)
-            ) {
-                Text(stringResource(R.string.dl_tab_local_files))
-            }
-            SegmentedButton(
-                selected = selectedTab == DownloadTab.WEB,
-                onClick = { onTabSelect(DownloadTab.WEB) },
-                shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3)
-            ) {
-                Text("Web")
+            tabs.forEach { (tab, label) ->
+                val active = selectedTab == tab
+                Surface(
+                    onClick = { onTabSelect(tab) },
+                    modifier = Modifier.weight(1f).fillMaxHeight().padding(3.dp),
+                    shape = RoundedCornerShape(13.dp),
+                    color = if (active) MaterialTheme.colorScheme.primaryContainer
+                        else Color.Transparent,
+                    contentColor = if (active) MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
         }
     }
