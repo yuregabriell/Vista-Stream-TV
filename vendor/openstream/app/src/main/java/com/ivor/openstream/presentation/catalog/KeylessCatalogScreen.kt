@@ -1065,7 +1065,8 @@ private fun KeylessOnlinePlayer(
     onSelectSource: (VideoServer) -> Unit,
     hasAlternative: Boolean,
     onTryAlternative: () -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    onCastClick: () -> Unit
 ) {
     VistaFullscreenPlayer(
         server = server,
@@ -1077,6 +1078,7 @@ private fun KeylessOnlinePlayer(
         onSelectSource = onSelectSource,
         hasAlternative = hasAlternative,
         onTryAlternative = onTryAlternative,
-        onClose = onClose
+        onClose = onClose,
+        onCastClick = onCastClick
     )
 }
