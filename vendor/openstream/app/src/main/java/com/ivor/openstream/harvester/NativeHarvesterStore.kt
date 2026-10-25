@@ -95,7 +95,7 @@ class NativeHarvesterProvider(private val store: NativeHarvesterStore) : StreamP
                     else -> StreamAudio.UNKNOWN
                 },
                 audioLanguage = item.language.takeIf { it.isNotBlank() },
-                mimeType = item.mime.ifBlank { null },
+                mimeType = item.mime.takeIf { it.isNotBlank() },
                 headers = item.pageUrl.takeIf { it.startsWith("https://") }
                     ?.let { mapOf("Referer" to it) } ?: emptyMap()
             )
