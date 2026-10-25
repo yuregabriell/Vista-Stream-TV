@@ -69,7 +69,7 @@ import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private const val REPO_URL = "https://github.com/Ivorisnoob/OpenStream"
+private const val REPO_URL = "https://github.com/yuregabriell/Vista-Stream-TV"
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
