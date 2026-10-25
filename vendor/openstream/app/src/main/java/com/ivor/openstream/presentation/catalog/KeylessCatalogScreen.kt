@@ -111,6 +111,7 @@ private fun KeylessTvRemote(
                     TextButton(onClick = { showSources = true }) { Text("Alterar fonte") }
                 }
                 TextButton(onClick = { showSubtitles = true }) { Text("Legendas na TV") }
+                TextButton(onClick = { castViewModel.stopCasting(); onDismiss() }) { Text("Desconectar Chromecast") }
                 TextButton(onClick = onDismiss) { Text("Voltar ao catálogo") }
             }
         }
@@ -413,7 +414,7 @@ fun KeylessCatalogScreen(
                     Icon(Icons.Default.Refresh, contentDescription = "Atualizar catálogo")
                 }
                 IconButton(
-                    onClick = { if (castStatus.isCasting) showTvControls = true else showCastPicker = true }
+                    onClick = { if (castStatus.isCasting) castViewModel.stopCasting() else showCastPicker = true }
                 ) {
                     Icon(
                         if (castStatus.isCasting) Icons.Default.CastConnected else Icons.Default.Cast,
