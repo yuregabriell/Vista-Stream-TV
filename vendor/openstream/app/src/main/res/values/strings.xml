@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Brand / system -->
-    <string name="app_name">Vista Stream TV</string>
+    <string name="app_name">VistaStream</string>
     <string name="download_channel_name">Downloads</string>
 
     <!-- Bottom navigation / rail -->
@@ -384,8 +384,8 @@
     <string name="st_restored_counts">Restored %1$s</string>
     <string name="st_restored_settings">Restored settings; your library was already up to date</string>
     <string name="st_could_not_restore">Couldn\'t restore that file</string>
-    <string name="st_not_backup">This isn\'t an OpenStream backup</string>
-    <string name="st_backup_newer">This backup is from a newer version of OpenStream</string>
+    <string name="st_not_backup">This isn\'t an VistaStream backup</string>
+    <string name="st_backup_newer">This backup is from a newer version of VistaStream</string>
     <string name="st_merge_note">Merges in; nothing on this device is deleted</string>
     <string name="st_export_diag">Export diagnostics</string>
     <string name="st_diag_hint">Device details and the recent log, for bug reports</string>
@@ -405,15 +405,15 @@
     <string name="st_could_not_github">Couldn\'t reach GitHub. Check your connection and try again.</string>
     <string name="st_could_not_catalog">Couldn\'t reach the catalog</string>
     <string name="st_android_confirm_update">Android will ask you to confirm the update. Your history, saved titles and downloads are kept.</string>
-    <string name="st_allow_install_note">Allow OpenStream to install updates first, then come back and tap Install.</string>
+    <string name="st_allow_install_note">Allow VistaStream to install updates first, then come back and tap Install.</string>
     <string name="st_storage_help">Storage and help</string>
     <string name="st_on_device">On this device</string>
     <string name="st_crash_include">Includes %1$d crash report</string>
     <string name="st_repo_data_note">Repositories ship data, not code</string>
-    <string name="st_repo_data_body">An extension only picks and configures a resolver that already ships inside OpenStream, so a third-party list cannot run its own code on your device.</string>
+    <string name="st_repo_data_body">An extension only picks and configures a resolver that already ships inside VistaStream, so a third-party list cannot run its own code on your device.</string>
     <string name="st_source_install_note">Install at least one source extension or playback will have nothing to resolve.</string>
     <string name="st_extensions_data_only">Extensions are data only: they configure resolvers that ship with the app and can\'t run code.</string>
-    <string name="st_race_note">OpenStream races every enabled source when you press Play and keeps the fastest result.</string>
+    <string name="st_race_note">VistaStream races every enabled source when you press Play and keeps the fastest result.</string>
     <string name="st_add_repo_hint">Add a repository or Stremio add-on</string>
     <string name="st_add_repository">Add repository</string>
     <string name="st_repo_placeholder">Paste a link to an index.json, or a Stremio add-on\'s manifest.json (stremio:// links work too)</string>
@@ -480,8 +480,8 @@
     <string name="pf_keep_one">Keep at least one profile</string>
     <string name="pf_this_history">This profile\'s history, Continue Watching and resume positions</string>
     <string name="pf_clear_profile_history">This clears its watch history and resume points, including Continue Watching.</string>
-    <string name="pf_welcome">Welcome to OpenStream</string>
-    <string name="pf_thanks">Thanks for trying OpenStream.</string>
+    <string name="pf_welcome">Welcome to VistaStream</string>
+    <string name="pf_thanks">Thanks for trying VistaStream.</string>
     <string name="pf_needs_playback">Not everything plays yet</string>
 
     <!-- Lists / saved -->
@@ -533,11 +533,11 @@
     <string name="up_attention">Attention Required</string>
     <string name="up_source_code">Source code</string>
     <string name="up_website">Website</string>
-    <string name="up_version_format">OpenStream %1$s</string>
+    <string name="up_version_format">VistaStream %1$s</string>
 
     <!-- Welcome -->
-    <string name="we_title">Welcome to OpenStream</string>
-    <string name="we_body">OpenStream races every enabled source when you press Play and keeps the fastest result.</string>
+    <string name="we_title">Welcome to VistaStream</string>
+    <string name="we_body">VistaStream races every enabled source when you press Play and keeps the fastest result.</string>
     <string name="we_offline_note">Download episodes from any show\'s page and watch them without a connection.</string>
 
     <!-- Person -->
@@ -562,7 +562,7 @@
     <string name="er_vidking_integrity">Vidking payload failed integrity validation</string>
     <string name="er_vidking_empty">Vidking returned an empty payload</string>
     <string name="er_subsource_no_token">SubSource gave no download token</string>
-    <string name="er_tmdb_links">OpenStream opens TMDB movie and TV links</string>
+    <string name="er_tmdb_links">VistaStream opens TMDB movie and TV links</string>
     <string name="er_offline_short">You\'re offline</string>
     <string name="er_download_started">Downloading. Find it in Downloads.</string>
     <string name="er_downloading_update">Downloading update</string>
@@ -731,7 +731,7 @@
     <string name="dl_saved_suffix">%1$s · saved with every download</string>
 
     <!-- Supplement: update screen -->
-    <string name="up_latest_version">OpenStream %1$s is the latest version.</string>
+    <string name="up_latest_version">VistaStream %1$s is the latest version.</string>
     <string name="up_released_on">Released %1$s</string>
     <string name="up_whats_in">What\'s in %1$s</string>
     <string name="up_starting_download">Starting download…</string>
@@ -766,13 +766,13 @@
     <string name="st_group_pip">Picture-in-picture</string>
     <string name="st_pip_footer">Play/pause always sits in the middle. Android shows three buttons at most.</string>
     <string name="st_crash_include_other">Includes %1$d crash reports</string>
-    <string name="up_version_build">OpenStream %1$s (%2$d)</string>
+    <string name="up_version_build">VistaStream %1$s (%2$d)</string>
     <string name="cd_rated_format">Rated %1$s out of 10</string>
 
     <!-- Round 3: delegate-reported leftovers -->
     <string name="share_title">Share %1$s</string>
     <string name="next_airing_arrives">%1$s arrives %2$s</string>
-    <string name="cast_title">Cast</string>
+    <string name="cast_title">Cast &amp; Crew</string>
     <string name="trailers_title">Trailers</string>
     <string name="status_airing">Airing</string>
     <string name="status_completed">Completed</string>
@@ -936,7 +936,7 @@
         <item quantity="other">%1$d videos imported</item>
     </plurals>
     <string name="local_no_files_title">No local videos</string>
-    <string name="local_no_files_body">Import video files from your device to watch them in OpenStream</string>
+    <string name="local_no_files_body">Import video files from your device to watch them in VistaStream</string>
     <string name="local_file">Local video</string>
     <string name="local_delete_confirm_title">Remove local video?</string>
     <string name="local_delete_confirm_body">It only leaves this list. The file stays on your device.</string>
@@ -952,7 +952,7 @@
     <string name="dl_save_in_progress">Already saving this one to Downloads</string>
     <string name="dl_storage_permission_needed">Allow storage access to save videos to your Downloads folder</string>
     <string name="dl_save_unsupported">This download can’t be saved as a single video file</string>
-    <string name="dl_save_protected">This stream is protected, so it can only play inside OpenStream</string>
+    <string name="dl_save_protected">This stream is protected, so it can only play inside VistaStream</string>
 
     <!-- Issue 19: delete confirmation + download source picker -->
     <string name="dl_delete_confirm">Delete download?</string>
