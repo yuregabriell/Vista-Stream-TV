@@ -388,6 +388,8 @@ private val AnimeDto.homeMediaType: String get() = if (isMovie) "movie" else "tv
 
 /** Rails show 20 titles; the first screenfuls of each are worth having ready. */
 private const val PREFETCH_PER_RAIL = 12
+/** Keep rankings reasonably current without reloading on every tab change. */
+private const val HOME_REFRESH_MS = 3L * 60 * 60 * 1000
 
 private fun HomeUiState.Success.without(hidden: Set<String>): HomeUiState.Success {
     fun List<AnimeDto>.visible() = filterNot { HiddenTitlesRepository.key(it.homeMediaType, it.id) in hidden }
