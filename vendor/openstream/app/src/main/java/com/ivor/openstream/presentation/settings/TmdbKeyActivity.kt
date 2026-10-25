@@ -16,17 +16,17 @@ import java.util.concurrent.Executors
 class TmdbKeyActivity : Activity() {
     private val pool = Executors.newSingleThreadExecutor()
     private val store by lazy { TmdbKeyStore(this) }
-    private val background = 0xff10131c.toInt()
+    private val screenBg = 0xff10131c.toInt()
     private fun dp(x: Int) = (x * resources.displayMetrics.density + .5f).toInt()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = background
-        window.navigationBarColor = background
+        window.statusBarColor = screenBg
+        window.navigationBarColor = screenBg
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(22), dp(26), dp(22), dp(20))
-            setBackgroundColor(background)
+            setBackgroundColor(screenBg)
         }
         fun label(value: String, size: Float, color: Int = Color.WHITE) =
             TextView(this).apply { text = value; textSize = size; setTextColor(color) }
