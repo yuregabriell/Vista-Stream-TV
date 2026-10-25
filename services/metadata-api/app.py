@@ -137,7 +137,12 @@ async def upstream(path: str, params: dict[str, str], headers: dict[str, str] | 
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    # Only booleans, never disclose any credentials or authorization material.
+    return {
+        "status": "ok",
+        "tmdb_configured": bool(secret("TMDB_API_KEY")),
+        "tvdb_licensed": bool(secret("TVDB_API_KEY")) and secret("TVDB_LICENSED") == "true",
+    }
 
 
 @app.get("/api/status")
