@@ -91,8 +91,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.12.0-build.${GITHUB_RUN_NUMBER}"
+          TAG="v0.13.0-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "VistaStream — $TAG" \
-            --notes "VistaStream 0.12: marca VistaStream no launcher, cabeçalho compacto, Elenco em vez de Transmitir, filtros Ver resultados sem contagem parcial; toques repetidos no menu regressam ao topo e atualizam a vista, sem empilhar tabs; ligações do atualizador apontam para esta Release e a deteção numérica de versões foi corrigida. APK publicado como VistaStream. IMPORTANTE: builds antigas sem assinatura estável poderão exigir reinstalação; para futuras atualizações sem desinstalar, configurar assinatura estável privada no GitHub Actions." \
+            --notes "VistaStream v0.13: nova experiência premium Animes com alternador compacto Filmes & Séries | Animes logo abaixo do cabeçalho, seleção persistida no dispositivo, hero e secções próprias (estreias, populares, clássicos bem avaliados, ação, fantasia, filmes), AniList integrado na Home e no player, busca que prioriza animes neste modo. TMDB e TVDB continuam no servidor Render sem chaves no APK. Atualizador passa a diagnosticar assinaturas incompatíveis. Atenção: a v0.12 usa assinatura de depuração temporária e pode não permitir instalação por cima; faça backup antes de qualquer reinstalação." \
             --prerelease
