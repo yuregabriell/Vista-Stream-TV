@@ -147,7 +147,6 @@ fun SearchScreen(
     if (showFilters) {
         FiltersSheet(
             filters = state.filters,
-            matchCount = results.size,
             onChange = viewModel::onFiltersChange,
             onReset = viewModel::resetFilters,
             onDismiss = { showFilters = false }
@@ -568,7 +567,6 @@ private fun RemovableChip(label: String, what: String, onRemove: () -> Unit) {
 @Composable
 private fun FiltersSheet(
     filters: ResultFilters,
-    matchCount: Int,
     onChange: (ResultFilters) -> Unit,
     onReset: () -> Unit,
     onDismiss: () -> Unit
@@ -621,7 +619,7 @@ private fun FiltersSheet(
                 TextButton(onClick = onReset, enabled = filters.activeCount > 0) { Text(stringResource(R.string.action_reset)) }
                 Spacer(Modifier.weight(1f))
                 Button(onClick = onDismiss, shape = ExpressiveShapes.medium) {
-                    Text(if (matchCount == 1) stringResource(R.string.action_show_one_result) else stringResource(R.string.search_show_results, matchCount))
+                    Text("Ver resultados")
                 }
             }
         }
