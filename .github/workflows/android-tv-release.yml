@@ -100,8 +100,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.14.0-build.${GITHUB_RUN_NUMBER}"
+          TAG="v0.14.1-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "VistaStream — $TAG" \
-            --notes "VistaStream v0.14: redesenho mobile do Catálogo completo, com pesquisa de largura total e ação embutida, filtro de ano compacto com teclado numérico, filtros de categoria e cabeçalho agora dentro da própria grelha rolável (deixam de tapar os cartazes ao deslizar). Downloads + Web recebe cabeçalho compacto e novas abas premium Downloads | Locais | Web com larguras iguais e textos sem quebra de linha. Mensagens de downloads acima da barra flutuante. Preservados ranking Filmes & Séries sem anime, atualização do catálogo e assinatura Android permanente, permitindo atualização por cima a partir da build 200." \
+            --notes "VistaStream v0.14.1: página Buscar mais limpa, sem a lista Em alta agora; continuam a pesquisa, o histórico recente e a exploração por géneros. A secção Em alta no AniList da Home Animes passa a chamar-se Em alta agora, mantendo os títulos em tendência fornecidos pelo AniList. Corrigida consulta desnecessária de trending ao abrir a pesquisa. Mantidas as melhorias anteriores do catálogo, downloads, ranking de Filmes e Séries, atualização automática e assinatura permanente." \
             --prerelease
