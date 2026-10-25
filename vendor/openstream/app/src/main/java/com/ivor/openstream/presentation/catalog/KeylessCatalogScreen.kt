@@ -225,7 +225,16 @@ fun KeylessCatalogScreen(
             onDismiss = { showTvControls = false }
         )
     }
-    var category by rememberSaveable { mutableStateOf("all") }
+    // The public AniList/Cinemeta home must honour the same premium mode as the TMDB home.
+    val homeModePrefs = remember(context) {
+        context.getSharedPreferences("vista_home_mode_v1", android.content.Context.MODE_PRIVATE)
+    }
+    var animeHome by rememberSaveable {
+        mutableStateOf(homeModePrefs.getString("mode", "") == "ANIME")
+    }
+    var category by rememberSaveable {
+        mutableStateOf(if (searchFirst && animeHome) "anime" else "all")
+    }
     var query by rememberSaveable { mutableStateOf("") }
     var discover by rememberSaveable { mutableStateOf(false) }
     var genre by rememberSaveable { mutableStateOf("") }
@@ -323,20 +332,43 @@ fun KeylessCatalogScreen(
     var sort by rememberSaveable { mutableStateOf("popular") }
     val searching = query.isNotBlank() && state.query.isNotBlank() && query == state.query
     val browsing = discover || category != "all" || searching || searchFirst
-    val browseType = if (category == "all") "all" else category
+    val browseType = if (category == "all") {
+        if (animeHome) "anime" else "all"
+    } else category
     LaunchedEffect(browsing, browseType, genre, year, searching, state.query) {
         if (browsing) viewModel.browse(
             browseType, if (searching) state.query else "", genre, year
         )
     }
     val categoryItems = state.sections.values.flatten().distinctBy { it.sourceId }
-    val sections = if (!browsing) listOf(
-        "Filmes populares" to state.sections["movie"].orEmpty(),
-        "Séries para descobrir" to state.sections["series"].orEmpty(),
-        "Animes em alta" to state.sections["anime"].orEmpty(),
-        "Adicionados recentemente" to recentFirst.take(24)
-    ) else emptyList()
-    val continueWatching = if (!browsing) viewModel.continueWatching(categoryItems) else emptyList()
+    val animeItems = state.sections["anime"].orEmpty()
+    val sections = when {
+        browsing -> emptyList()
+        animeHome -> listOf(
+            "Em alta no mundo dos animes" to animeItems.take(40),
+            "Novidades e estreias" to animeItems.filter { it.year != null }
+                .sortedByDescending { it.year }.take(40),
+            "Ação e aventura" to animeItems.filter { anime ->
+                anime.genres.any { it.equals("Action", true) || it.equals("Adventure", true) }
+            }.take(40),
+            "Romance e emoções" to animeItems.filter { anime ->
+                anime.genres.any { it.equals("Romance", true) || it.equals("Drama", true) }
+            }.take(40),
+            "Fantasia e outros mundos" to animeItems.filter { anime ->
+                anime.genres.any { it.equals("Fantasy", true) || it.equals("Supernatural", true) }
+            }.take(40),
+            "Filmes de anime" to animeItems.filter { it.format == "MOVIE" }.take(40),
+            "Clássicos para rever" to animeItems.filter { (it.year ?: Int.MAX_VALUE) < 2012 }.take(40)
+        )
+        else -> listOf(
+            "Filmes populares" to state.sections["movie"].orEmpty(),
+            "Séries para descobrir" to state.sections["series"].orEmpty(),
+            "Animes em alta" to animeItems,
+            "Adicionados recentemente" to recentFirst.take(24)
+        )
+    }
+    val continueWatching = if (!browsing) viewModel.continueWatching(categoryItems)
+        .filter { !animeHome || it.type == "anime" } else emptyList()
     val wideLayout = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600
     val posterWidth = if (wideLayout) 178.dp else 138.dp
     val browseItems = remember(state.browseItems, sort) {
@@ -468,6 +500,55 @@ fun KeylessCatalogScreen(
                 }
             }
         }
+        if (!searchFirst) {
+            item(key = "premium-home-mode") {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 2.dp)
+                        .height(42.dp)
+                        .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(14.dp)),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    listOf(false to "Filmes & Séries", true to "Animes").forEach { (target, label) ->
+                        val active = animeHome == target
+                        Surface(
+                            onClick = {
+                                if (animeHome != target) {
+                                    animeHome = target
+                                    homeModePrefs.edit().putString(
+                                        "mode", if (target) "ANIME" else "FILMS_SERIES"
+                                    ).apply()
+                                    category = "all"
+                                    discover = false
+                                    query = ""
+                                    viewModel.search("")
+                                    genre = ""
+                                    year = null
+                                    sort = "popular"
+                                    focusManager.clearFocus()
+                                }
+                            },
+                            modifier = Modifier.weight(1f).fillMaxHeight().padding(3.dp),
+                            shape = RoundedCornerShape(11.dp),
+                            color = if (active) MaterialTheme.colorScheme.primaryContainer
+                                else Color.Transparent,
+                            contentColor = if (active) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                        ) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if (castStatus.isCasting && tvNowPlaying != null) {
             item(key = "cast-now-playing") {
                 ElevatedCard(
@@ -496,7 +577,7 @@ fun KeylessCatalogScreen(
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = { Text("Filmes, séries e animes") },
+                placeholder = { Text(if (animeHome) "Pesquisar animes" else "Filmes, séries e animes") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
                 shape = RoundedCornerShape(16.dp),
@@ -520,7 +601,10 @@ fun KeylessCatalogScreen(
                 contentPadding = PaddingValues(horizontal = 20.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(listOf(
+                items(if (animeHome) listOf(
+                    "all" to "Início",
+                    "anime" to "Explorar animes"
+                ) else listOf(
                     "all" to "Tudo",
                     "movie" to "Filmes",
                     "series" to "Séries",
@@ -616,7 +700,8 @@ fun KeylessCatalogScreen(
             }
         }
         if (!browsing && !state.loading) {
-            val candidates = state.sections.values.flatten().distinctBy { it.sourceId }
+            val candidates = (if (animeHome) animeItems else state.sections.values.flatten())
+                .distinctBy { it.sourceId }
                 .filter { !it.background.isNullOrBlank() || !it.poster.isNullOrBlank() }
             val featured = candidates.takeIf { it.isNotEmpty() }?.let {
                 it[Math.floorMod(currentUtcDay.toInt(), it.size)]
@@ -670,7 +755,14 @@ fun KeylessCatalogScreen(
                                     fontWeight = FontWeight.Bold, maxLines = 2,
                                     overflow = TextOverflow.Ellipsis)
                                 Text(
-                                    listOfNotNull(featured.year?.toString(), "Filme · Ver detalhes").joinToString("  •  "),
+                                    listOfNotNull(
+                                        featured.year?.toString(),
+                                        (when (featured.type) {
+                                            "anime" -> "Anime"
+                                            "movie" -> "Filme"
+                                            else -> "Série"
+                                        }) + " · Ver detalhes"
+                                    ).joinToString("  •  "),
                                     color = Color.White.copy(alpha = 0.85f),
                                     style = MaterialTheme.typography.labelMedium
                                 )
@@ -680,7 +772,7 @@ fun KeylessCatalogScreen(
                 }
             }
         }
-        if (!browsing) {
+        if (!browsing && !animeHome) {
             item(key = "harvester-browser-library") {
                 HarvesterShelf()
             }
@@ -758,9 +850,20 @@ fun KeylessCatalogScreen(
                                 fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f),
                                 maxLines = 1, overflow = TextOverflow.Ellipsis
                             )
-                            if (!browsing && index < 3) {
-                                val destination = listOf("movie", "series", "anime")[index]
-                                TextButton(onClick = { category = destination; genre = ""; year = null; sort = "popular"; focusManager.clearFocus() }) { Text("Ver mais  ›") }
+                            if (!browsing && (animeHome || index < 3)) {
+                                TextButton(onClick = {
+                                    category = if (animeHome) "anime"
+                                        else listOf("movie", "series", "anime")[index]
+                                    genre = if (animeHome) when (index) {
+                                        2 -> "Action"
+                                        3 -> "Romance"
+                                        4 -> "Fantasy"
+                                        else -> ""
+                                    } else ""
+                                    year = null
+                                    sort = "popular"
+                                    focusManager.clearFocus()
+                                }) { Text("Ver mais  ›") }
                             }
                         }
                         LazyRow(
