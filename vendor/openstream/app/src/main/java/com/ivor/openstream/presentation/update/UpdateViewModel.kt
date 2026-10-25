@@ -84,7 +84,7 @@ class UpdateViewModel @Inject constructor(
     }
 
     private fun releaseBuild(tag: String): Int? =
-        Regex("""build[.\\-_](\\d+)""", RegexOption.IGNORE_CASE)
+        Regex("""build[._-](\d+)""", RegexOption.IGNORE_CASE)
             .find(tag)?.groupValues?.getOrNull(1)?.toIntOrNull()
 
     fun download(release: GithubReleaseDto, asset: GithubAssetDto) {
