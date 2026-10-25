@@ -23,6 +23,10 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import com.ivor.openstream.presentation.components.SkeletonBox
 import android.content.Intent
+import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.ivor.openstream.presentation.settings.TmdbKeyActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
@@ -1769,6 +1773,13 @@ private fun InfoList(details: AnimeDetailsDto, isMovie: Boolean) {
 
 @Composable
 private fun DetailsError(message: String, onRetry: () -> Unit) {
+    val context = LocalContext.current
+    val unauthorized = message.contains("401") || message.contains("unauthorized", ignoreCase = true)
+    val keyPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) onRetry()
+    }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1778,11 +1789,20 @@ private fun DetailsError(message: String, onRetry: () -> Unit) {
     ) {
         Text(stringResource(R.string.home_could_not_load_title), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text(
-            message,
+            if (unauthorized) "O TMDB recusou a autenticação (HTTP 401). " +
+                "Configura a tua chave API v3 do TMDB dentro do VS. " +
+                "A chave do AIOStreams não é importada automaticamente." else message,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 8.dp)
         )
+        if (unauthorized) {
+            Button(
+                onClick = { keyPicker.launch(Intent(context, TmdbKeyActivity::class.java)) },
+                modifier = Modifier.padding(top = 20.dp),
+                shape = ExpressiveShapes.medium
+            ) { Text("Configurar chave TMDB no VS") }
+        }
         Button(onClick = onRetry, shape = ExpressiveShapes.medium, modifier = Modifier.padding(top = 24.dp)) {
             Text(stringResource(R.string.action_try_again))
         }
