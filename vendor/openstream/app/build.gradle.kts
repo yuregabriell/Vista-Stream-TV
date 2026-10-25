@@ -30,7 +30,7 @@ android {
         val vistaBuild = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull
             ?.toIntOrNull()?.coerceAtLeast(1) ?: 7
         versionCode = vistaBuild
-        versionName = "0.7.0-build.$vistaBuild"
+        versionName = "0.8.0-build.$vistaBuild"
         buildConfigField("int", "VISTA_BUILD_NUMBER", "$vistaBuild")
 
         val localProperties = Properties()
@@ -38,21 +38,11 @@ android {
         if (localPropertiesFile.exists()) {
             localProperties.load(localPropertiesFile.inputStream())
         }
-        val tmdbApiKey = listOfNotNull(
-            localProperties.getProperty("TMDB_API_KEY"),
-            providers.environmentVariable("TMDB_API_KEY").orNull
-        )
-            .firstOrNull { it.isNotBlank() }
-            .orEmpty()
-            .ifBlank { "DEMO_KEY" }
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
         val vidkingApiBaseUrl = localProperties
             .getProperty("VIDKING_API_BASE_URL", "https://api.speedracelight.com")
             .replace("\\", "\\\\")
             .replace("\"", "\\\"")
 
-        buildConfigField("String", "TMDB_API_KEY", "\"$tmdbApiKey\"")
         buildConfigField("String", "VIDKING_API_BASE_URL", "\"$vidkingApiBaseUrl\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
