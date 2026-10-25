@@ -211,7 +211,8 @@ class HomeViewModel @Inject constructor(
             profileRepository.activeProfile
                 .map { it?.isKids }
                 .distinctUntilChanged()
-                .collect { kids -> if (kids != null) loadData() // TMDB now works via public gateway without a user-entered key }
+                // Public gateway means a personal TMDB key is no longer required.
+                .collect { kids -> if (kids != null) loadData() }
         }
     }
 
