@@ -33,7 +33,8 @@ import javax.inject.Inject
 
 enum class DownloadTab {
     DOWNLOADS,
-    LOCAL_FILES
+    LOCAL_FILES,
+    WEB
 }
 
 /** Finished downloads of one show or movie. */
