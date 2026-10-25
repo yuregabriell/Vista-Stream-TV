@@ -65,7 +65,7 @@ class NativeHarvesterStore(context: Context) {
             val uri = runCatching { Uri.parse(raw) }.getOrNull() ?: return false
             return uri.scheme in listOf("https","http") &&
                 !uri.host.isNullOrBlank() && raw.length < 2048 &&
-                uri.encodedUserInfo.isNullOrBlank()
+                uri.authority?.contains('@') != true
         }
         fun fold(s: String): String =
             Normalizer.normalize(s, Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
