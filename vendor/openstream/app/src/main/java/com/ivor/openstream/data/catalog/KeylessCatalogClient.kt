@@ -56,7 +56,7 @@ class KeylessCatalogClient @Inject constructor(
     suspend fun titles(type: String, query: String = "", page: Int = 1, force: Boolean = false, genre: String = "", year: Int? = null): List<KeylessTitle> = withContext(Dispatchers.IO) {
         val cacheKey = "${type}_${query.trim().lowercase()}_${genre}_${year ?: 0}_$page"
         if (!force && query.isBlank() && genre.isBlank() && year == null && page == 1 &&
-            System.currentTimeMillis() - prefs.getLong("${cacheKey}_ts", 0L) < 6 * 60 * 60 * 1000L) {
+            System.currentTimeMillis() - prefs.getLong("${cacheKey}_ts", 0L) < 3 * 60 * 60 * 1000L) {
             prefs.getString(cacheKey, null)?.let { raw ->
                 runCatching { json.decodeFromString<List<KeylessTitle>>(raw) }.getOrNull()
                     ?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
