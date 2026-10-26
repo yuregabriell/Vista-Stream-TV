@@ -6,6 +6,8 @@ import com.ivor.openstream.data.catalog.KeylessCatalogClient
 import com.ivor.openstream.data.catalog.KeylessTitle
 import com.ivor.openstream.data.catalog.KeylessEpisode
 import com.ivor.openstream.data.catalog.VistaWatchHistory
+import com.ivor.openstream.harvester.NativeSavedStream
+import com.ivor.openstream.harvester.NativeHarvesterStore
 import com.ivor.openstream.domain.model.MediaIdentity
 import com.ivor.openstream.domain.model.VideoServer
 import com.ivor.openstream.domain.repository.StreamingRepository
@@ -72,6 +74,7 @@ class KeylessCatalogViewModel @Inject constructor(
     private var browseJob: Job? = null
     private var catalogJob: Job? = null
     private var catalogUpdatedAt = 0L
+    private var preferredImportedSource: String? = null
 
     /** Full-category paging independent of the Home preview rails. */
     fun browse(type: String, query: String = "", genre: String = "", year: Int? = null) {
@@ -194,12 +197,44 @@ class KeylessCatalogViewModel @Inject constructor(
         }
     }
 
-    fun select(item: KeylessTitle) {
+    /** A saved title is opened within Downloads + Web. Exact identity is
+      * preserved, even when the remote catalog is temporarily offline. */
+    suspend fun resolveImportedTitle(entry: NativeSavedStream): KeylessTitle {
+        val type=if(entry.kind=="movie")"movie" else
+            if(entry.anilistId!=null)"anime" else "series"
+        val seed=KeylessTitle(
+            sourceId=entry.catalogSourceId ?: "vistabrowser:${entry.url.hashCode()}",
+            title=entry.title,type=type,
+            year=entry.year.takeIf {it>0},
+            poster=entry.poster,background=entry.background,
+            imdbId=entry.imdbId,tmdbId=entry.tmdbId,anilistId=entry.anilistId
+        )
+        if(!entry.catalogSourceId.isNullOrBlank() && !entry.poster.isNullOrBlank())return seed
+        return runCatching {
+            val enriched=if(!entry.imdbId.isNullOrBlank())client.enrich(seed) else seed
+            if(!enriched.poster.isNullOrBlank())enriched else {
+                val matches=client.titles(type,entry.title)
+                val match=matches.firstOrNull {
+                    it.sourceId==entry.catalogSourceId ||
+                    (entry.imdbId!=null && it.imdbId==entry.imdbId) ||
+                    (entry.tmdbId!=null && it.tmdbId==entry.tmdbId) ||
+                    (entry.anilistId!=null && it.anilistId==entry.anilistId)
+                }
+                seed.copy(poster=match?.poster ?: seed.poster,
+                    background=match?.background ?: seed.background,
+                    description=match?.description.orEmpty())
+            }
+        }.getOrDefault(seed)
+    }
+
+    fun select(item: KeylessTitle, initialSeason: Int? = null,
+               initialEpisode: Int? = null, preferredSourceUrl: String? = null) {
         resolutionJob?.cancel()
         episodeJob?.cancel()
         val last = history.lastEpisode(item.sourceId)
-        val startSeason = last?.first ?: 1
-        val startEpisode = last?.second ?: 1
+        val startSeason = initialSeason?.coerceAtLeast(1) ?: last?.first ?: 1
+        val startEpisode = initialEpisode?.coerceAtLeast(1) ?: last?.second ?: 1
+        preferredImportedSource=preferredSourceUrl
         _state.value = _state.value.copy(
             selected = item, episodes = emptyList(), season = startSeason, episode = startEpisode,
             resolving = true, servers = emptyList(), playing = null, resolveFinished = false,
@@ -226,6 +261,7 @@ class KeylessCatalogViewModel @Inject constructor(
     }
 
     fun chooseEpisode(season: Int, episode: Int) {
+        preferredImportedSource=null
         resolutionJob?.cancel()
         val title = _state.value.selected ?: return
         _state.value = _state.value.copy(
@@ -237,6 +273,7 @@ class KeylessCatalogViewModel @Inject constructor(
     }
 
     fun closeDetails() {
+        preferredImportedSource=null
         episodeJob?.cancel()
         resolutionJob?.cancel()
         _state.value = _state.value.copy(selected = null, servers = emptyList(), playing = null, resolving = false)
@@ -270,7 +307,10 @@ class KeylessCatalogViewModel @Inject constructor(
                             servers = resolution.servers.filter {
                                 it.url.startsWith("https://") || it.url.startsWith("http://") ||
                                     it.url.startsWith("rtsp://")
-                            },
+                            }.sortedWith(compareByDescending<VideoServer> {
+                                !preferredImportedSource.isNullOrBlank() &&
+                                    it.url==preferredImportedSource
+                            }.thenByDescending { it.providerId=="native-harvester" }),
                             resolving = !resolution.isComplete, resolveFinished = resolution.isComplete,
                             resolvedProviders = resolution.completedProviders,
                             totalProviders = resolution.totalProviders,
