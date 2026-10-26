@@ -10,11 +10,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.ivor.openstream.domain.model.StreamQuality
+import com.ivor.openstream.presentation.player.session.PlaybackSession
+import com.ivor.openstream.presentation.player.session.NowPlaying
+import com.ivor.openstream.presentation.player.components.CastDeviceSheet
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 import com.ivor.openstream.domain.model.StreamSubtitle
 import com.ivor.openstream.domain.model.VideoServer
 import com.ivor.openstream.presentation.catalog.VistaFullscreenPlayer
@@ -25,13 +31,16 @@ import com.ivor.openstream.ui.theme.OpenStreamTheme
  * This Activity stays separate from the Vista home scaffold and bottom toolbar.
  * It opens as a result of explicit user intent and never scrapes web pages.
  */
+@AndroidEntryPoint
 class HarvesterPlaybackActivity : ComponentActivity() {
+    @Inject lateinit var playbackSession: PlaybackSession
     private var current by mutableStateOf<HarvesterMedia?>(null)
     private lateinit var library: HarvesterLibraryStore
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         library = HarvesterLibraryStore(this)
+        playbackSession.initCast()
         current = HarvesterContract.parse(intent)
         if (current == null) {
             Toast.makeText(this, "Envia um link direto de vídeo válido pelo Harvester.", Toast.LENGTH_LONG).show()
@@ -42,6 +51,16 @@ class HarvesterPlaybackActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val item = current
+            val castStatus by playbackSession.castStatus.collectAsState()
+            var showCastPicker by remember { mutableStateOf(false) }
+            if (showCastPicker) {
+                CastDeviceSheet(
+                    selector = playbackSession.castRouteSelector,
+                    status = castStatus,
+                    onStopCasting = playbackSession::stopCasting,
+                    onDismiss = { showCastPicker = false }
+                )
+            }
             OpenStreamTheme(darkTheme = true, dynamicColor = false) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                     if (item != null) {
@@ -63,6 +82,21 @@ class HarvesterPlaybackActivity : ComponentActivity() {
                                 StreamSubtitle(url = it, label = "Legendas", language = item.subtitleLanguage)
                             })
                         )
+                        LaunchedEffect(castStatus.isCasting, item.url) {
+                            if (castStatus.isCasting) {
+                                playbackSession.setRequestHeaders(server.headers)
+                                playbackSession.update(NowPlaying(
+                                    mediaType = "movie",
+                                    tmdbId = item.url.hashCode().and(Int.MAX_VALUE),
+                                    season = 1, episode = 1, downloadId = null,
+                                    mediaUri = item.url, title = item.title,
+                                    episodeTitle = null, posterPath = null,
+                                    backdropPath = null, stillPath = null,
+                                    next = null, server = server,
+                                    startPositionMs = savedPosition
+                                ))
+                            }
+                        }
                         VistaFullscreenPlayer(
                             server = server,
                             title = item.title,
@@ -73,7 +107,9 @@ class HarvesterPlaybackActivity : ComponentActivity() {
                             onSelectSource = {},
                             hasAlternative = false,
                             onTryAlternative = {},
-                            onClose = { finish() }
+                            onClose = { finish() },
+                            onCastClick = { showCastPicker = true },
+                            externalCasting = castStatus.isCasting
                         )
                     }
                 }
