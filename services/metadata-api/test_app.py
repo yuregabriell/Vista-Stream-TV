@@ -79,6 +79,36 @@ def test_public_tmdb_not_an_open_proxy_and_api_key_override_forbidden():
     assert client.get("/api/public/tmdb/3/discover/movie?page=101").status_code == 400
 
 
+def test_public_tv_details_allow_aggregate_credits(monkeypatch):
+    """The Android details page requests aggregate_credits for TV casts.
+    An older whitelist returned HTTP 400 before forwarding to TMDB.
+    """
+    seen = {}
+    async def mock_upstream(url, params, headers=None):
+        seen["url"] = url
+        seen["append"] = params.get("append_to_response")
+        return JSONResponse({"id": 1396, "name": "Example series", "aggregate_credits": {"cast": []}})
+    monkeypatch.setattr(gateway, "upstream", mock_upstream)
+    result = client.get(
+        "/api/public/tmdb/3/tv/1396"
+        "?append_to_response=videos,aggregate_credits,recommendations"
+    )
+    assert result.status_code == 200
+    assert seen["url"].endswith("/tv/1396")
+    assert seen["append"] == "videos,aggregate_credits,recommendations"
+
+
+def test_private_tv_details_allow_aggregate_credits(monkeypatch):
+    async def mock_upstream(url, params, headers=None):
+        return JSONResponse({"id": 77, "aggregate_credits": {"cast": []}})
+    monkeypatch.setattr(gateway, "upstream", mock_upstream)
+    result = client.get(
+        "/api/tmdb/3/tv/77?append_to_response=videos,aggregate_credits,recommendations",
+        headers=HEADERS,
+    )
+    assert result.status_code == 200
+
+
 def test_public_tmdb_limited(monkeypatch):
     async def fake(path, params, headers=None):
         return JSONResponse({"results": []})
