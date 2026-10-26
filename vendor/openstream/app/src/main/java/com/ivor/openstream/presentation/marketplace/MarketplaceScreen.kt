@@ -45,6 +45,8 @@ import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -107,6 +109,7 @@ fun MarketplaceScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var selectedTab by rememberSaveable { mutableStateOf(MarketplaceTab.BROWSE) }
+    var confirmPreset by remember { mutableStateOf(false) }
     var detailsFor by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -209,7 +212,8 @@ fun MarketplaceScreen(
                     state = state,
                     viewModel = viewModel,
                     onOpenDetails = { detailsFor = it.key },
-                    onBrowse = { selectedTab = MarketplaceTab.BROWSE }
+                    onBrowse = { selectedTab = MarketplaceTab.BROWSE },
+                    onApplyPreset = { confirmPreset = true }
                 )
 
                 MarketplaceTab.REPOSITORIES -> RepositoriesTab(
@@ -218,6 +222,30 @@ fun MarketplaceScreen(
                 )
             }
         }
+    }
+
+    if (confirmPreset) {
+        AlertDialog(
+            onDismissRequest = { confirmPreset = false },
+            title = { Text("Ativar padrão em português?") },
+            text = {
+                Text(
+                    "Ativa as fontes em português identificadas no catálogo e " +
+                        "as rotas principais de reprodução. As restantes extensões " +
+                        "instaladas serão desativadas, mas continuarão disponíveis " +
+                        "para reativação a qualquer momento."
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    confirmPreset = false
+                    viewModel.applyPortuguesePreset()
+                }) { Text("Aplicar padrão") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmPreset = false }) { Text("Cancelar") }
+            }
+        )
     }
 
     val details = detailsFor?.let { key -> state.catalog.extensions.firstOrNull { it.key == key } }
@@ -384,7 +412,8 @@ private fun InstalledTab(
     state: MarketplaceUiState,
     viewModel: MarketplaceViewModel,
     onOpenDetails: (MarketplaceExtension) -> Unit,
-    onBrowse: () -> Unit
+    onBrowse: () -> Unit,
+    onApplyPreset: () -> Unit
 ) {
     val searchMode by viewModel.searchMode.collectAsState()
     CenteredListBox(Modifier.fillMaxSize(), minGutter = 16.dp) { gutter ->
@@ -398,6 +427,34 @@ private fun InstalledTab(
                     installed = state.installed.size,
                     enabled = state.catalog.enabled.size
                 )
+            }
+
+            item(key = "portuguese-preset") {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = ExpressiveShapes.large,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "Padrão português",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            "Fontes em português e as rotas principais ativas por padrão. " +
+                                "As outras são opcionais. Podes sempre ativá-las manualmente.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Button(onClick = onApplyPreset, modifier = Modifier.fillMaxWidth()) {
+                            Text("Aplicar padrão PT-BR")
+                        }
+                    }
+                }
             }
 
             if (state.installed.size > 1) {
