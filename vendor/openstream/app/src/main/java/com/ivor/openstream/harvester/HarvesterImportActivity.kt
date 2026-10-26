@@ -30,7 +30,7 @@ class HarvesterImportActivity : Activity() {
         val hintMime = intent.getStringExtra(HarvesterContract.EXTRA_MIME_TYPE).orEmpty()
         val path = uri?.path.orEmpty().lowercase()
         val playableTemporary = !stable &&
-            uri?.scheme in listOf("http", "https") && !uri.host.isNullOrBlank() &&
+            uri?.scheme in listOf("http", "https") && !uri?.host.isNullOrBlank() &&
             url.length <= 8192 && (
                 listOf(".m3u8",".mpd",".mp4",".m4v",".webm",".mkv",".mov")
                     .any { path.endsWith(it) } ||
