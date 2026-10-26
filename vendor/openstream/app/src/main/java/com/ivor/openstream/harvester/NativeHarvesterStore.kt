@@ -26,6 +26,7 @@ data class NativeSavedStream(
     val imdbId: String? = null,
     val tmdbId: Int? = null,
     val anilistId: Int? = null,
+    val posterUrl: String? = null,
     /** Signed/expiring URLs are explicitly marked as session-only. */
     val temporary: Boolean = false,
     val savedAt: Long = System.currentTimeMillis()
