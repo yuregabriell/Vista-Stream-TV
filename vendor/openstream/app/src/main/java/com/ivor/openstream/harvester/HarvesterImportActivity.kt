@@ -17,6 +17,9 @@ class HarvesterImportActivity : Activity() {
         super.onCreate(savedInstanceState)
         val url = intent.getStringExtra(HarvesterContract.EXTRA_URL).orEmpty()
         val pageUrl = intent.getStringExtra(HarvesterContract.EXTRA_PAGE_URL).orEmpty()
+        val confirmationToken = intent.getStringExtra("com.vistastream.tv.extra.CONFIRMATION_TOKEN").orEmpty()
+        @Suppress("DEPRECATION")
+        val callback = intent.getParcelableExtra<android.os.ResultReceiver>("com.vistastream.tv.extra.CONFIRMATION_RECEIVER")
         val webOnly = !NativeHarvesterStore.safeDirect(url)
         if (webOnly && !NativeHarvesterStore.safeWebPage(pageUrl)) {
             Toast.makeText(this, "Sem página de origem válida para guardar a referência.", Toast.LENGTH_LONG).show()
@@ -84,12 +87,24 @@ class HarvesterImportActivity : Activity() {
                 if (!store.save(item)) {
                     Toast.makeText(this@HarvesterImportActivity,"Título, episódio ou URL inválidos",Toast.LENGTH_LONG).show()
                 } else {
-                    setResult(RESULT_OK,Intent()
+                    val response=Intent()
                         .putExtra(HarvesterContract.EXTRA_URL,url)
-                        .putExtra(HarvesterContract.EXTRA_TITLE,item.title))
+                        .putExtra(HarvesterContract.EXTRA_TITLE,item.title)
+                        .putExtra("com.vistastream.tv.extra.SAVED_WEB_ONLY",webOnly)
+                        .putExtra("com.vistastream.tv.extra.CONFIRMATION_TOKEN",confirmationToken)
+                    setResult(RESULT_OK,response)
+                    // Optional explicit receipt for Android stacks which deliver a cancelled
+                    // activity result after the external editor finishes. This is sent
+                    // only after NativeHarvesterStore.save() returned success.
+                    callback?.send(Activity.RESULT_OK,Bundle().apply {
+                        putString(HarvesterContract.EXTRA_URL,url)
+                        putString(HarvesterContract.EXTRA_TITLE,item.title)
+                        putBoolean("com.vistastream.tv.extra.SAVED_WEB_ONLY",webOnly)
+                        putString("com.vistastream.tv.extra.CONFIRMATION_TOKEN",confirmationToken)
+                    })
                     Toast.makeText(this@HarvesterImportActivity,
-                        if (webOnly) "Página guardada em Downloads + Web. A fonte deverá ser redescoberta." else
-                            "Vídeo guardado em Downloads + Web. Ativa a extensão Harvester em Extensões.",Toast.LENGTH_LONG).show()
+                        if (webOnly) "Referência da página guardada no VistaStream. Reabra-a para encontrar a fonte válida." else
+                            "Fonte guardada em Vídeos do Harvester no VistaStream. Pode reproduzir e transmitir à TV.",Toast.LENGTH_LONG).show()
                     finish()
                 }
             }
