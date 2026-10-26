@@ -23,6 +23,8 @@ data class NativeSavedStream(
     /** Confirmed matching catalog IDs prevent captured page titles from
       * being mistaken for the real movie/series names. */
     val catalogSourceId: String? = null,
+    val poster: String? = null,
+    val background: String? = null,
     val imdbId: String? = null,
     val tmdbId: Int? = null,
     val anilistId: Int? = null,
@@ -53,13 +55,29 @@ class NativeHarvesterStore(context: Context) {
             if(item.year>0&&identity.year!=null&&item.year!=identity.year)
                 return@filter false
             if(item.webOnly)return@filter false
-            val identified=!item.imdbId.isNullOrBlank()||
-                (item.tmdbId?:0)>0||(item.anilistId?:0)>0
-            val matches=if(identified){
-                (item.tmdbId!=null && item.tmdbId>0 && item.tmdbId==identity.tmdbId) ||
-                (!item.imdbId.isNullOrBlank() && item.imdbId==identity.imdbId) ||
-                (item.anilistId!=null && item.anilistId==identity.anilistId)
-            }else titles.any {it==fold(item.title)}
+            // Compare authoritative identifiers whenever both sides have one.
+            // Some public catalog items provide only IMDb or only TMDB, so
+            // fall back to exact normalized title/year ONLY when no common ID
+            // exists; never override a contradicting known ID with title text.
+            val checks=buildList<Boolean> {
+                if(item.tmdbId!=null && item.tmdbId>0 && identity.tmdbId>0)
+                    add(item.tmdbId==identity.tmdbId)
+                if(!item.imdbId.isNullOrBlank() && !identity.imdbId.isNullOrBlank())
+                    add(item.imdbId==identity.imdbId)
+                if(item.anilistId!=null && identity.anilistId!=null)
+                    add(item.anilistId==identity.anilistId)
+            }
+            val sourceIdMatches=(
+                !item.catalogSourceId.isNullOrBlank() && (
+                    (!identity.imdbId.isNullOrBlank() &&
+                        item.catalogSourceId=="cinemeta:${identity.imdbId}") ||
+                    (identity.anilistId!=null &&
+                        item.catalogSourceId=="anilist:${identity.anilistId}")
+                )
+            )
+            val matches=sourceIdMatches ||
+                (if(checks.isNotEmpty()) checks.any {it}
+                 else titles.any {it==fold(item.title)})
             val usable=if(item.temporary)
                 now-item.savedAt in 0..(6L*60*60*1000) && safeTemporary(item.url)
                 else safeDirect(item.url)
