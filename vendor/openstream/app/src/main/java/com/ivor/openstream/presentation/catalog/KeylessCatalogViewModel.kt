@@ -8,6 +8,10 @@ import com.ivor.openstream.data.catalog.KeylessEpisode
 import com.ivor.openstream.data.catalog.VistaWatchHistory
 import com.ivor.openstream.domain.model.MediaIdentity
 import com.ivor.openstream.domain.model.VideoServer
+import com.ivor.openstream.harvester.NativeHarvesterStore
+import com.ivor.openstream.harvester.NativeHarvesterProvider
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import com.ivor.openstream.domain.repository.StreamingRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -55,7 +59,8 @@ data class KeylessCatalogState(
 class KeylessCatalogViewModel @Inject constructor(
     private val client: KeylessCatalogClient,
     private val streams: StreamingRepository,
-    private val history: VistaWatchHistory
+    private val history: VistaWatchHistory,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
     val hasTmdbKey: Boolean get() = client.tmdbConfigured
 
@@ -262,12 +267,19 @@ class KeylessCatalogViewModel @Inject constructor(
                     season = _state.value.season,
                     episode = _state.value.episode
                 )
+                // Library sources must appear even when their extension is disabled,
+                // remote providers time out, or the source cache is stale.
+                val localSources = NativeHarvesterProvider(NativeHarvesterStore(context))
+                    .resolve(identity).getOrDefault(emptyList())
+                if (_state.value.selected?.sourceId == item.sourceId) {
+                    _state.value = _state.value.copy(servers = localSources)
+                }
                 // On explicit "Encontrar fontes online", search *all* enabled compatible
                 // providers instead of stopping early when the first link appears.
                 streams.resolveServers(identity, includeFallbacks = true).collect { resolution ->
                     if (_state.value.selected?.sourceId == item.sourceId) {
                         _state.value = _state.value.copy(
-                            servers = resolution.servers.filter {
+                            servers = (localSources + resolution.servers).distinctBy { it.url }.filter {
                                 it.url.startsWith("https://") || it.url.startsWith("http://") ||
                                     it.url.startsWith("rtsp://")
                             },
