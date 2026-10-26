@@ -89,7 +89,12 @@ class HarvesterImportActivity : ComponentActivity() {
         panel.addView(types)
         val season=field("Temporada",seasonHint.coerceAtLeast(1).toString(),true)
         val episode=field("Episódio",episodeHint.coerceAtLeast(1).toString(),true)
-        val year=field("Ano (opcional)",intent.getIntExtra("com.vistastream.tv.extra.YEAR",0).takeIf { it>0 }?.toString().orEmpty(),true)
+        val parsedInitial=ImportSmartMatcher.inspect(
+            title.text.toString(), origin.text.toString(),
+            intent.getIntExtra("com.vistastream.tv.extra.YEAR",0).takeIf { it>0 }?.toString().orEmpty())
+        if(parsedInitial.title != "Vídeo encontrado" && parsedInitial.title.isNotBlank())
+            title.setText(parsedInitial.title)
+        val year=field("Ano (opcional)",parsedInitial.year?.toString().orEmpty(),true)
         val audio=field("Áudio sugerido (dub / sub / multi)",
             intent.getStringExtra("com.vistastream.tv.extra.AUDIO_MODE").orEmpty())
         val language=field("Idioma sugerido (ex.: pt-BR)",
@@ -119,40 +124,41 @@ class HarvesterImportActivity : ComponentActivity() {
         panel.addView(choices)
         var chosenCatalog: KeylessTitle?=null
 
-        fun simpleSearch(text: String): String {
-            return text.trim()
-                .replace(Regex("(?i)^\\s*(assistir|ver|watch|online)\\s+"),"")
-                .replace(Regex("(?i)\\b(s\\s*\\d{1,2}e\\s*\\d{1,3}|\\d{1,2}x\\d{1,3})\\b")," ")
-                .replace(Regex("(?i)\\b(dublado|legendado|dub|sub|1080p|720p|4k|hd|full hd|online|epis[oó]dio|ep\\.?)\\b")," ")
-                .replace(Regex("\\s+")," ").trim().take(80)
-        }
         var searchIndex=0
         fun searchCatalog() {
             val index=++searchIndex
-            val query=simpleSearch(title.text.toString())
+            val hints=ImportSmartMatcher.inspect(
+                title.text.toString(),origin.text.toString(),year.text.toString())
+            val wanted=if(types.checkedRadioButtonId==401)
+                setOf("movie") else setOf("series","anime")
             chosenCatalog=null
             choices.removeAllViews()
-            if(query.length<3){
+            if(hints.queries.isEmpty()){
                 matchState.text="Indique pelo menos 3 letras do título para procurar."
                 return
             }
-            matchState.text="A procurar «$query» no catálogo…"
-            val wanted=if(types.checkedRadioButtonId==401)
-                listOf("movie") else listOf("series","anime")
+            matchState.text="A identificar «${hints.title}» no catálogo…"
             lifecycleScope.launch {
-                val results=runCatching {
-                    wanted.map { type ->
-                        async { runCatching { catalogClient.titles(type,query) }.getOrDefault(emptyList()) }
-                    }.awaitAll().flatten().distinctBy { it.sourceId }.take(16)
+                val candidates=runCatching {
+                    hints.queries.take(2).flatMap { query ->
+                        wanted.map { type ->
+                            async { runCatching { catalogClient.importCandidates(type,query) }
+                                .getOrDefault(emptyList()) }
+                        }
+                    }.awaitAll().flatten()
                 }.getOrDefault(emptyList())
                 if(index!=searchIndex || isFinishing || isDestroyed)return@launch
+                val results=ImportSmartMatcher.rank(candidates,hints,wanted)
                 choices.removeAllViews()
-                matchState.text=if(results.isEmpty())
-                    "Nenhuma correspondência encontrada. Pode ajustar o nome e pesquisar novamente, ou guardar como vídeo separado."
-                    else "Escolha o resultado certo (não associamos automaticamente títulos ambíguos):"
-                for(candidate in results){
+                matchState.text=when {
+                    results.isEmpty() -> "Nenhuma correspondência convincente. Ajuste o título ou guarde separadamente."
+                    results.first().score>=75 -> "Melhor correspondência encontrada. Confirme antes de guardar:"
+                    else -> "Há candidatos semelhantes; confirme cuidadosamente o filme ou episódio:"
+                }
+                for(result in results){
+                    val candidate=result.item
                     val row=TextView(this@HarvesterImportActivity).apply {
-                        text="○   ${candidate.title}  ·  ${candidate.year ?: "—"}  ·  ${if(candidate.type=="movie")"Filme" else if(candidate.type=="anime")"Anime" else "Série"}"
+                        text="○   ${candidate.title}  ·  ${candidate.year ?: "—"}  ·  ${if(candidate.type=="movie")"Filme" else if(candidate.type=="anime")"Anime" else "Série"}\n      ${result.score}% · ${result.reason}"
                         textSize=14f;setTextColor(Color.WHITE)
                         setPadding(dp(12),dp(16),dp(9),dp(16))
                     }
@@ -168,7 +174,7 @@ class HarvesterImportActivity : ComponentActivity() {
                         types.check(if(candidate.type=="movie")401 else 402)
                         if(year.text.isNullOrBlank() && candidate.year!=null)
                             year.setText(candidate.year.toString())
-                        matchState.text="Associado a: ${candidate.title} · fonte do VistaBrowser"
+                        matchState.text="Selecionado: ${candidate.title} · ${result.reason}"
                     }
                     row.tag=row.text.toString().removePrefix("○   ")
                     row.setBackgroundColor(0xff1e2229.toInt())
