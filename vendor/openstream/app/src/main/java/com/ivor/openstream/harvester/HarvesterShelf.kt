@@ -2,6 +2,8 @@ package com.ivor.openstream.harvester
 
 import android.net.Uri
 import android.content.Intent
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -79,13 +81,18 @@ fun HarvesterShelf() {
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Box(
-                            modifier = Modifier.fillMaxWidth().height(92.dp)
+                            modifier = Modifier.fillMaxWidth().height(118.dp)
                                 .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(12.dp)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null,
-                                modifier = Modifier.size(40.dp),
-                                tint = MaterialTheme.colorScheme.primary)
+                            if (!video.posterUrl.isNullOrBlank()) {
+                                AsyncImage(model=video.posterUrl, contentDescription="Capa de "+video.title,
+                                    modifier=Modifier.fillMaxSize(),contentScale=ContentScale.Crop)
+                            } else {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null,
+                                    modifier = Modifier.size(40.dp),
+                                    tint = MaterialTheme.colorScheme.primary)
+                            }
                         }
                         Text(video.title, maxLines = 2, minLines = 2,
                             overflow = TextOverflow.Ellipsis,
