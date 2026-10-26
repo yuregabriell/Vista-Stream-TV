@@ -97,7 +97,7 @@ def sanitized_params(request: Request) -> dict[str, str]:
         if key == "page" and (not value.isdigit() or int(value) > 500 or int(value) < 1):
             raise HTTPException(400, "Invalid page")
         if key == "append_to_response" and any(
-            part not in ("videos", "images", "credits", "combined_credits", "external_ids", "release_dates",
+            part not in ("videos", "images", "credits", "aggregate_credits", "combined_credits", "external_ids", "release_dates",
                          "content_ratings", "recommendations", "similar")
             for part in value.split(",")
         ):
