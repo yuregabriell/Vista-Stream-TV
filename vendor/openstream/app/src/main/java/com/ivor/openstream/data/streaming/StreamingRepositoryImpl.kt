@@ -1,6 +1,10 @@
 package com.ivor.openstream.data.streaming
 
 import android.content.SharedPreferences
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import com.ivor.openstream.harvester.NativeHarvesterProvider
+import com.ivor.openstream.harvester.NativeHarvesterStore
 import com.ivor.openstream.domain.model.MediaIdentity
 import com.ivor.openstream.domain.model.ServerResolution
 import com.ivor.openstream.domain.model.VideoServer
@@ -36,6 +40,7 @@ import javax.inject.Singleton
 @Singleton
 class StreamingRepositoryImpl @Inject constructor(
     private val providerRegistry: ExtensionProviderRegistry,
+    @ApplicationContext private val appContext: Context,
     private val idMappingService: IdMappingService,
     @Named("StreamingClient") private val client: OkHttpClient,
     private val preferences: SharedPreferences,
@@ -72,7 +77,19 @@ class StreamingRepositoryImpl @Inject constructor(
         includeFallbacks: Boolean,
         preferLastWorking: Boolean
     ): Flow<ServerResolution> = channelFlow {
-        val installedProviders = withContext(Dispatchers.IO) { providerRegistry.activeProviders() }
+        // User-confirmed VistaBrowser sources are local library entries, not
+        // optional network marketplace scrapers. Always add the first-party
+        // provider, even if the old extension toggle was left disabled.
+        // A duplicate native extension entry is not invoked a second time.
+        val configuredProviders = withContext(Dispatchers.IO) { providerRegistry.activeProviders() }
+        val localHarvester = ExtensionStreamProvider(
+            extensionKey = "vista-native-harvester-local",
+            delegate = NativeHarvesterProvider(NativeHarvesterStore(appContext)),
+            priority = -1,
+            versionCode = 55
+        )
+        val installedProviders = (listOf(localHarvester) + configuredProviders)
+            .distinctBy { it.id }
         val providerPriorities = installedProviders.associate { it.id to it.priority }
         val inOrder = appSettings.current.sourceSearchMode == SourceSearchMode.IN_ORDER
         val cacheable = preferLastWorking && !includeFallbacks
