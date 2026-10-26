@@ -20,6 +20,14 @@ data class NativeSavedStream(
     val season: Int = 1, val episode: Int = 1,
     val year: Int = 0, val audioMode: String = "", val language: String = "",
     val quality: String = "", val webOnly: Boolean = false,
+    /** Confirmed matching catalog IDs prevent captured page titles from
+      * being mistaken for the real movie/series names. */
+    val catalogSourceId: String? = null,
+    val imdbId: String? = null,
+    val tmdbId: Int? = null,
+    val anilistId: Int? = null,
+    /** Signed/expiring URLs are explicitly marked as session-only. */
+    val temporary: Boolean = false,
     val savedAt: Long = System.currentTimeMillis()
 )
 
@@ -33,19 +41,34 @@ class NativeHarvesterStore(context: Context) {
     }.getOrDefault(emptyList())
 
     @Synchronized fun find(identity: MediaIdentity): List<NativeSavedStream> {
-        val titles = listOfNotNull(identity.title, identity.originalTitle).map(::fold).filter { it.length >= 3 }
+        val titles=listOfNotNull(identity.title,identity.originalTitle).map(::fold)
+            .filter { it.length>=3 }
+        val now=System.currentTimeMillis()
         return all().filter { item ->
-            val isMovie = identity.tmdbType == "movie"
-            (if (isMovie) item.kind == "movie" else item.kind != "movie") &&
-                titles.any { it == fold(item.title) } &&
-                (item.year == 0 || identity.year == null || item.year == identity.year) &&
-                (isMovie || (item.season == identity.season && item.episode == identity.episode)) &&
-                !item.webOnly && safeDirect(item.url)
+            val isMovie=identity.tmdbType=="movie"
+            if((if(isMovie)item.kind=="movie" else item.kind!="movie")
+                .not())return@filter false
+            if(!isMovie&&(item.season!=identity.season||item.episode!=identity.episode))
+                return@filter false
+            if(item.year>0&&identity.year!=null&&item.year!=identity.year)
+                return@filter false
+            if(item.webOnly)return@filter false
+            val identified=!item.imdbId.isNullOrBlank()||
+                (item.tmdbId?:0)>0||(item.anilistId?:0)>0
+            val matches=if(identified){
+                (item.tmdbId!=null && item.tmdbId>0 && item.tmdbId==identity.tmdbId) ||
+                (!item.imdbId.isNullOrBlank() && item.imdbId==identity.imdbId) ||
+                (item.anilistId!=null && item.anilistId==identity.anilistId)
+            }else titles.any {it==fold(item.title)}
+            val usable=if(item.temporary)
+                now-item.savedAt in 0..(6L*60*60*1000) && safeTemporary(item.url)
+                else safeDirect(item.url)
+            matches&&usable
         }
     }
 
     @Synchronized fun save(item: NativeSavedStream): Boolean {
-        if ((!item.webOnly && !safeDirect(item.url)) ||
+        if ((!item.webOnly && !(if(item.temporary) safeTemporary(item.url) else safeDirect(item.url))) ||
             (item.webOnly && !safeWebPage(item.pageUrl)) || item.title.isBlank() ||
             item.season !in 1..999 || item.episode !in 1..9999) return false
         val old = all()
@@ -71,6 +94,17 @@ class NativeHarvesterStore(context: Context) {
             Normalizer.normalize(s, Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
                 .lowercase().replace(Regex("[^a-z0-9]+"), " ").trim()
 
+        /** Temporary HTTP video sources are not guaranteed to remain playable.
+          * No referer cookies or authorization headers are kept in this store.
+          * Session links are shown for six hours at most, then they disappear
+          * from the title's source list until rediscovered. */
+        fun safeTemporary(raw: String): Boolean {
+            val uri=runCatching { Uri.parse(raw) }.getOrNull()?:return false
+            if(uri.scheme !in listOf("http","https")||uri.host.isNullOrBlank()||
+                !uri.userInfo.isNullOrEmpty()||raw.length>8192)return false
+            return Regex("(?i)\\.(mp4|m4v|webm|m3u8|mpd|mkv|mov|ts)$")
+                .containsMatchIn(uri.path.orEmpty())
+        }
         fun safeDirect(raw: String): Boolean {
             val uri = runCatching { Uri.parse(raw) }.getOrNull() ?: return false
             if (uri.scheme !in listOf("https", "http") || uri.host.isNullOrBlank()) return false
@@ -93,7 +127,8 @@ class NativeHarvesterProvider(private val store: NativeHarvesterStore) : StreamP
             VideoServer(
                 id = "native-harvester-" + item.url.hashCode() + "-" + i,
                 providerId = id, providerName = displayName,
-                name = "Harvester · " + item.quality.ifBlank { "Auto" } +
+                name = "VistaBrowser" + (if(item.temporary)" · temporária" else "") +
+                    " · " + item.quality.ifBlank { "Auto" } +
                     (if (item.language.isNotBlank()) " · " + item.language else ""),
                 url = item.url, quality = StreamQuality.parse(item.quality),
                 audio = when (item.audioMode.lowercase()) {
