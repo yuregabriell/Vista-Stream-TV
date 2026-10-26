@@ -2,7 +2,7 @@ name: VistaStream APK
 on:
   workflow_dispatch:
   push:
-    branches: [main, vista-v0152-harvester-cast-import-fix]
+    branches: [main, vista-v0152-harvester-cast-import-fix, vista-v0153-stable-import-editor]
 permissions:
   contents: write
 concurrency:
@@ -96,8 +96,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.15.2-build.${GITHUB_RUN_NUMBER}"
+          TAG="v0.15.3-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "VistaStream — $TAG" \
-            --notes "VistaStream v0.15.2: confirmações de importação com recibo explícito para VistaBrowser, diferencia referência Web e fonte HLS; Cast do player Harvester agora ligado à pesquisa de dispositivos e à sessão Cast Media3, com pausa local quando transmite. Mantém a assinatura permanente e as funções do catálogo." \
+            --notes "VistaStream v0.15.3: editor de importação corrigido, já não fecha quando falta a página original; permite editar a origem e importar HLS/DASH temporários como fontes de reprodução no separador Vídeos do Harvester, avisando que poderão expirar. Recebimento de confirmação protegido contra falhas de IPC; preserva a sessão Chromecast e o catálogo premium. Assinatura permanente preservada." \
             --prerelease
