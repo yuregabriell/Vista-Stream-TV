@@ -41,6 +41,7 @@ internal object ImportSmartMatcher {
         .let { junk.replace(it, " ") }
         .let { yearPattern.replace(it, " ") }
         .replace(Regex("""(?i)\b(?:x264|x265|h264|hevc|aac|mkv|mp4|m3u8|part\s*\d+)\b"""), " ")
+        .replace(Regex("""[()\[\]{}]+"""), " ")
         .replace(Regex("""\s+"""), " ")
         .trim(' ', '-', '_', '.')
         .take(100)
