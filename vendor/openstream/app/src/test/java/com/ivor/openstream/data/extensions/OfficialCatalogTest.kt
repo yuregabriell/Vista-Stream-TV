@@ -58,12 +58,19 @@ class OfficialCatalogTest {
     }
 
     @Test
-    fun `a default line-up is installed on a fresh device`() {
+    fun `Portuguese preset is limited to three PT addons and two essential routes`() {
         val repo = parser.parseRepo(bundled.readText())
-        val defaults = repo.extensions.filter { it.installedByDefault }
+        val defaults = repo.extensions
+            .mapNotNull { parser.toManifest(it, BundledExtensionCatalog.OFFICIAL_REPO_ID) }
+            .filter(PortugueseExtensionPreset::includes)
+            .map { it.id }
+            .toSet()
 
-        assertTrue(defaults.isNotEmpty())
-        assertTrue(defaults.any { it.engine.type == ExtensionEngineType.VIDKING_WEBVIEW.key })
+        assertEquals(setOf("zeus", "froststream", "fenixflix", "yoru", "cypher"), defaults)
+        assertTrue("Optional WebView fallback must never run by default", "web-fallback" !in defaults)
+        assertTrue("English-only source must be optional", "vyse" !in defaults)
+        assertTrue("Unreliable native experimental sources must be optional",
+            "vista-native-animefire" !in defaults)
     }
 
     @Test
