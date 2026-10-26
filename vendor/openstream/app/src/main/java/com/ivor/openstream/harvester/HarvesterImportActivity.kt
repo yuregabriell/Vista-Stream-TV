@@ -229,6 +229,8 @@ class HarvesterImportActivity : ComponentActivity() {
                         webOnly=false,
                         temporary=playableTemporary,
                         catalogSourceId=match.sourceId,
+                        poster=match.poster,
+                        background=match.background,
                         imdbId=match.imdbId,
                         tmdbId=match.tmdbId,
                         anilistId=match.anilistId,
