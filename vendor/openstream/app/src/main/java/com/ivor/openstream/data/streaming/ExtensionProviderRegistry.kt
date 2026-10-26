@@ -103,6 +103,9 @@ class ExtensionProviderRegistry @Inject constructor(
             }
 
     fun recordOutcome(provider: ExtensionStreamProvider, success: Boolean) {
+        // The built-in user library is not a marketplace extension and
+        // should never be marked disabled by extension health scoring.
+        if(provider.extensionKey=="vista-native-harvester-local")return
         extensionRepository.recordOutcome(provider.extensionKey, success)
     }
 
