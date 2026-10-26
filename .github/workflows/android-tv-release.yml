@@ -78,6 +78,9 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
+      - name: Test Portuguese preset
+        working-directory: vendor/openstream
+        run: ./gradlew :app:testDebugUnitTest --tests '*OfficialCatalogTest' --no-daemon
       - name: Select universal APK
         shell: bash
         run: |
@@ -100,8 +103,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.14.1-build.${GITHUB_RUN_NUMBER}"
+          TAG="v0.15.0-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "VistaStream — $TAG" \
-            --notes "VistaStream v0.14.1: página Buscar mais limpa, sem a lista Em alta agora; continuam a pesquisa, o histórico recente e a exploração por géneros. A secção Em alta no AniList da Home Animes passa a chamar-se Em alta agora, mantendo os títulos em tendência fornecidos pelo AniList. Corrigida consulta desnecessária de trending ao abrir a pesquisa. Mantidas as melhorias anteriores do catálogo, downloads, ranking de Filmes e Séries, atualização automática e assinatura permanente." \
+            --notes "VistaStream v0.15: Extensões em português pré-selecionadas para novas instalações (Zeus, FrostStream, FenixFlix) com Yoru e Cypher como rotas essenciais. As extensões internacionais, de fallback e fontes experimentais ficam opcionais; não são ativadas automaticamente. Em Instalada(s), o botão Aplicar padrão PT-BR permite aplicar o conjunto a instalações existentes, desativando fontes extra sem as remover. O utilizador pode reativar qualquer fonte manualmente. Inclui as melhorias da v0.14.1 e assinatura permanente compatível." \
             --prerelease
