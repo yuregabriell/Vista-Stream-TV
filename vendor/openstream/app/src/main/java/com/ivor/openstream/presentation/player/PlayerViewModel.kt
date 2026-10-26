@@ -802,12 +802,14 @@ class PlayerViewModel @Inject constructor(
     private fun startResolution(identity: MediaIdentity, includeFallbacks: Boolean = false) {
         resolutionJob?.cancel()
         resolutionJob = viewModelScope.launch {
-            // The automatic search asks the source that played last time first; a widened search
-            // ("Find more", failover) goes to everything.
+            // Do NOT early-stop on the previously working provider: that was
+            // responsible for "3 fontes" on first open and "1 fonte" on return.
+            // The source picker should query all active providers on each
+            // opening, while still preferring the previously selected server.
             streamingRepository.resolveServers(
                 identity,
-                includeFallbacks,
-                preferLastWorking = !includeFallbacks
+                includeFallbacks = true,
+                preferLastWorking = false
             ).collect { progress ->
                 // The server the user picked (or last picked for this episode) wins when it shows
                 // up, but only before playback starts: switching later would restart the video.
