@@ -1,8 +1,8 @@
-name: VistaStream APK
+name: VistaStream APK 0.15.6
 on:
   workflow_dispatch:
   push:
-    branches: [main, vista-v0152-harvester-cast-import-fix, vista-v0153-stable-import-editor, vista-v0154-harvester-catalog-binding, vista-v0155-linked-sources-stable-list-and-web-cards]
+    branches: [main, vista-v0152-harvester-cast-import-fix, vista-v0153-stable-import-editor, vista-v0154-harvester-catalog-binding, vista-v0155-linked-sources-stable-list-and-web-cards , vista-v0156-smart-media-identification]
 permissions:
   contents: write
 concurrency:
@@ -74,6 +74,9 @@ jobs:
       - name: Test Portuguese preset
         working-directory: vendor/openstream
         run: ./gradlew :app:testDebugUnitTest --tests '*OfficialCatalogTest' --no-daemon
+      - name: Test URL hints, title alternatives and year matching
+        working-directory: vendor/openstream
+        run: ./gradlew :app:testDebugUnitTest --tests '*ImportSmartMatcherTest' --no-daemon
       - name: Select universal APK
         shell: bash
         run: |
@@ -96,8 +99,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.15.5-build.${GITHUB_RUN_NUMBER}"
+          TAG="v0.15.6-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "VistaStream — $TAG" \
-            --notes "VistaStream 0.15.5 — corrige fontes do VistaBrowser não aparecerem nos episódios, tornando o fornecedor local de fontes confirmadas sempre disponível independentemente do marketplace. Associações por identificadores e temporada/episódio com fallback restrito, mantém 3+ opções visíveis ao voltar ao player (pesquisa completa sem parar no último fornecedor). Downloads + Web passa a apresentar cartazes do catálogo e abre diretamente o título/episódio, destacando a fonte guardada; cartazes antigos são recuperados pelo catálogo quando possível. Endereços HLS temporários continuam sujeitos à expiração. Mantém correções de importação e Cast." \
+            --notes "VistaStream 0.15.6 — pesquisa de fontes importadas com pistas do URL original, normalização de nomes, ano e metadados, ranking por correspondência e pesquisa em Cinemeta/AniList com TMDB PT-BR via gateway público como fallback. O filme ou episódio continua a exigir confirmação explícita antes de guardar, evitando associações ambíguas. Mantém as correções de fontes no episódio, biblioteca, Cast e ligações temporárias da v0.15.5." \
             --prerelease
