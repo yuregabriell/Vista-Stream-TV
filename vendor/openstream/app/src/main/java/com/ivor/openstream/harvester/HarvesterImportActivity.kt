@@ -232,6 +232,7 @@ class HarvesterImportActivity : ComponentActivity() {
                         imdbId=match.imdbId,
                         tmdbId=match.tmdbId,
                         anilistId=match.anilistId,
+                        posterUrl=match.poster,
                         mime=hintMime,
                         kind=if(match.type=="movie")"movie" else "tv",
                         season=if(match.type=="movie")1 else (season.text.toString().toIntOrNull()?:0),
