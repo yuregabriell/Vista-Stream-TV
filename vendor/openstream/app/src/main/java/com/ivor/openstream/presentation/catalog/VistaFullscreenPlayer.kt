@@ -76,7 +76,8 @@ fun VistaFullscreenPlayer(
     hasAlternative: Boolean,
     onTryAlternative: () -> Unit,
     onClose: () -> Unit,
-    onCastClick: () -> Unit = {}
+    onCastClick: () -> Unit = {},
+    externalCasting: Boolean = false
 ) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current
@@ -166,6 +167,9 @@ fun VistaFullscreenPlayer(
                     .build()
                 if (resumePositionMs > 15_000L) seekTo(resumePositionMs)
             }
+    }
+    LaunchedEffect(externalCasting, player) {
+        if (externalCasting) player.pause()
     }
 
     DisposableEffect(player) {
