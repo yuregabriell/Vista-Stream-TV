@@ -313,8 +313,15 @@ class ExtensionRepositoryImpl @Inject constructor(
                 (manifest.repoId != BundledExtensionCatalog.OFFICIAL_REPO_ID &&
                     manifest.installedByDefault && manifest.isSupported)
         }
+        // Upgrades must not silently re-enable a Portuguese source a user had
+        // previously declined. Existing users can opt in through Installed > PT-BR.
+        val existingLineup = alreadySeeded.isNotEmpty()
         val seeded = candidates
-            .filter { !installs.containsKey(it.key) && it.key !in alreadySeeded }
+            .filter { manifest ->
+                !installs.containsKey(manifest.key) &&
+                    manifest.key !in alreadySeeded &&
+                    (!existingLineup || manifest.repoId != BundledExtensionCatalog.OFFICIAL_REPO_ID)
+            }
             .associate { manifest ->
                 manifest.key to InstallRecord(
                     versionCode = manifest.versionCode,
