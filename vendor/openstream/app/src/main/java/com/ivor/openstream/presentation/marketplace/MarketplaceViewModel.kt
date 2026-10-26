@@ -112,6 +112,14 @@ class MarketplaceViewModel @Inject constructor(
         }
     }
 
+    fun applyPortuguesePreset() {
+        val count = repository.applyPortuguesePreset()
+        message.value = if (count > 0) {
+            "Padrão português aplicado: $count fontes recomendadas ativas. " +
+                "As restantes fontes instaladas ficaram desativadas e podem ser reativadas."
+        } else "Não foi possível encontrar extensões recomendadas no catálogo."
+    }
+
     fun install(extension: MarketplaceExtension) {
         repository.install(extension.key)
         message.value = context.getString(R.string.st_extension_installed, extension.manifest.name)
