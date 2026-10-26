@@ -143,6 +143,42 @@ class ExtensionRepositoryImpl @Inject constructor(
         return Result.success(Unit)
     }
 
+
+    /**
+     * Explicit action for existing installations. It enables the compact PT preset,
+     * disables optional installed sources (without deleting them), and remembers
+     * the new order. This never runs automatically for upgrading users.
+     */
+    override fun applyPortuguesePreset(): Int {
+        ensureLoaded()
+        val recommended = manifests
+            .filter(PortugueseExtensionPreset::includes)
+            .sortedWith(compareBy<ExtensionManifest> {
+                PortugueseExtensionPreset.rank(it)
+            }.thenBy { it.engine.priority })
+        if (recommended.isEmpty()) return 0
+        val currentlyInstalled = store.installs()
+        val now = System.currentTimeMillis()
+        val recommendedKeys = recommended.map { it.key }.toSet()
+        val updated = currentlyInstalled.mapValues { (_, record) ->
+            record.copy(enabled = false)
+        }.toMutableMap()
+        recommended.forEach { manifest ->
+            updated[manifest.key] = (
+                currentlyInstalled[manifest.key]
+                    ?: InstallRecord(versionCode = manifest.versionCode, installedAt = now)
+                ).copy(enabled = true)
+        }
+        store.putInstalls(updated)
+        store.markSeeded(recommendedKeys)
+        store.setSourceOrder(
+            recommended.map { it.key } +
+                store.sourceOrder().filterNot { it in recommendedKeys }
+        )
+        publish(isSyncing = _catalog.value.isSyncing)
+        return recommended.size
+    }
+
     override fun install(key: String) {
         ensureLoaded()
         val manifest = manifestFor(key) ?: return
@@ -270,18 +306,30 @@ class ExtensionRepositoryImpl @Inject constructor(
     private fun seedDefaultInstalls() {
         val installs = store.installs()
         val alreadySeeded = store.seededKeys()
-        val candidates = manifests.filter { it.installedByDefault && it.isSupported }
+        // The remote repository's old installedByDefault flags are not our preset:
+        // they previously installed unrelated languages and many fallback engines.
+        val candidates = manifests.filter { manifest ->
+            PortugueseExtensionPreset.includes(manifest) ||
+                (manifest.repoId != BundledExtensionCatalog.OFFICIAL_REPO_ID &&
+                    manifest.installedByDefault && manifest.isSupported)
+        }
         val seeded = candidates
             .filter { !installs.containsKey(it.key) && it.key !in alreadySeeded }
             .associate { manifest ->
                 manifest.key to InstallRecord(
                     versionCode = manifest.versionCode,
-                    enabled = !manifest.engine.type.key.startsWith("native-"),
+                    enabled = true,
                     installedAt = System.currentTimeMillis()
                 )
             }
         if (seeded.isNotEmpty()) store.putInstalls(seeded)
         store.markSeeded(candidates.map { it.key })
+        if (store.sourceOrder().isEmpty() && seeded.isNotEmpty()) {
+            val curated = candidates.filter(PortugueseExtensionPreset::includes)
+                .sortedBy(PortugueseExtensionPreset::rank)
+                .map { it.key }
+            if (curated.isNotEmpty()) store.setSourceOrder(curated)
+        }
     }
 
     private fun rebuildManifests() {
@@ -346,5 +394,44 @@ class ExtensionRepositoryImpl @Inject constructor(
 
     private companion object {
         val STALE_WINDOW_MS = 6 * 60 * 60 * 1000L
+    }
+}
+
+
+/**
+ * A safe, deliberately small set of default playback sources.
+ *
+ * Only the bundled OFFICIAL repository is eligible for automatic PT selection;
+ * an arbitrary community index cannot force its entries into a fresh install.
+ * A language claim is metadata, not proof of an available Portuguese stream.
+ */
+internal object PortugueseExtensionPreset {
+    private val core = setOf("yoru", "cypher")
+
+    fun includes(manifest: ExtensionManifest): Boolean {
+        if (manifest.repoId != BundledExtensionCatalog.OFFICIAL_REPO_ID ||
+            !manifest.isSupported || manifest.isNsfw ||
+            manifest.status == com.ivor.openstream.domain.model.ExtensionStatus.DOWN
+        ) return false
+        if (manifest.id in core) return true
+
+        // Experimental native scrapers require user opt-in, even if labelled PT-BR.
+        if ("experimental" in manifest.tags ||
+            manifest.engine.type.key.startsWith("native-")
+        ) return false
+        val language = manifest.language.lowercase(java.util.Locale.ROOT)
+        return "portuguese" in manifest.tags ||
+            "portuguese" in language || "português" in language ||
+            language == "pt" || language == "pt-br" || language == "pt-pt"
+    }
+
+    fun rank(manifest: ExtensionManifest): Int = when (manifest.id) {
+        // Prefer Portuguese results; direct core routes remain available.
+        "zeus" -> 0
+        "froststream" -> 1
+        "fenixflix" -> 2
+        "yoru" -> 100
+        "cypher" -> 101
+        else -> 10 + manifest.engine.priority
     }
 }
