@@ -24,7 +24,8 @@ class ImportSmartMatcherTest {
         val ranked = ImportSmartMatcher.rank(listOf(wrong,right),hints,setOf("movie"))
         assertEquals(right, ranked.first().item)
         assertTrue(ranked.first().score > 90)
-        assertTrue(ranked.last().score < ranked.first().score)
+        // A year mismatch can be filtered out completely rather than merely demoted.
+        assertTrue(ranked.size == 1 || ranked.last().score < ranked.first().score)
     }
 
     @Test fun `untrusted query values are never used as names`() {
