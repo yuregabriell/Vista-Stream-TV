@@ -52,6 +52,51 @@ class KeylessCatalogClient @Inject constructor(
     private val prefs = context.getSharedPreferences("vista_keyless_catalog_v1", Context.MODE_PRIVATE)
     val tmdbConfigured: Boolean get() = true // Public, throttled server is bundled by URL only; no TMDB secret
 
+    /**
+     * Search the same Cinemeta catalog used by Browse, with PT-BR TMDB metadata
+     * as an optional fallback for translated/localized movie and series titles.
+     * Public gateway is rate limited and exposes no playback streams or secrets.
+     */
+    suspend fun importCandidates(type: String, query: String): List<KeylessTitle> {
+        val existing = runCatching { titles(type, query) }.getOrDefault(emptyList())
+        if (type !in setOf("movie", "series") || query.length !in 3..100) return existing
+        val translated = withContext(Dispatchers.IO) {
+            runCatching { tmdbImportSearch(type, query) }.getOrDefault(emptyList())
+        }
+        // Cinemeta is preferred when both share a known TMDB identifier.
+        return (existing + translated).distinctBy {
+            it.tmdbId?.let { id -> "tmdb:$id" }
+                ?: it.imdbId?.let { id -> "imdb:$id" } ?: it.sourceId
+        }
+    }
+
+    private fun tmdbImportSearch(type: String, query: String): List<KeylessTitle> {
+        val media = if (type == "movie") "movie" else "tv"
+        val url = MetadataGatewayStore.PUBLIC_GATEWAY_URL +
+            "/api/public/tmdb/3/search/$media?query=${Uri.encode(query)}&language=pt-BR&page=1"
+        val obj = json.parseToJsonElement(request(url)) as? JsonObject ?: return emptyList()
+        val results = obj["results"] as? JsonArray ?: return emptyList()
+        return results.mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            val id = item.int("id") ?: return@mapNotNull null
+            val name = item.str(if (media == "movie") "title" else "name")
+                ?: return@mapNotNull null
+            val original = item.str(if (media == "movie") "original_title" else "original_name")
+            val date = item.str(if (media == "movie") "release_date" else "first_air_date")
+            val year = date?.take(4)?.toIntOrNull()
+            val poster = item.str("poster_path")?.takeIf { it.startsWith("/") }
+                ?.let { "https://image.tmdb.org/t/p/w500$it" }
+            val backdrop = item.str("backdrop_path")?.takeIf { it.startsWith("/") }
+                ?.let { "https://image.tmdb.org/t/p/w780$it" }
+            KeylessTitle(sourceId="tmdb:$id", title=name, type=type, year=year,
+                poster=poster, background=backdrop, tmdbId=id,
+                alternateTitle=original?.takeIf { !it.equals(name, ignoreCase = true) },
+                description=item.str("overview").orEmpty())
+        }
+    }
+
+
+
     /** Cinemeta is a Stremio metadata/catalog service; it does NOT host the movies. */
     suspend fun titles(type: String, query: String = "", page: Int = 1, force: Boolean = false, genre: String = "", year: Int? = null): List<KeylessTitle> = withContext(Dispatchers.IO) {
         val cacheKey = "${type}_${query.trim().lowercase()}_${genre}_${year ?: 0}_$page"
