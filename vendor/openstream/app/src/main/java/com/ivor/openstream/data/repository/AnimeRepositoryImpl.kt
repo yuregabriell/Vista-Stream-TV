@@ -223,7 +223,21 @@ class AnimeRepositoryImpl @Inject constructor(
         if (mediaType == "movie") {
             api.getMovieDetails(id = id, appendToResponse = "videos,credits,recommendations")
         } else {
-            api.getAnimeDetails(id = id, appendToResponse = "videos,aggregate_credits,recommendations")
+            // Some deployed metadata gateways still reject the TMDB aggregate_credits
+            // append as HTTP 400. Retry using regular TV credits: opening the title
+            // and starting playback must not depend on optional aggregate cast data.
+            try {
+                api.getAnimeDetails(
+                    id = id,
+                    appendToResponse = "videos,aggregate_credits,recommendations"
+                )
+            } catch (error: retrofit2.HttpException) {
+                if (error.code() != 400) throw error
+                api.getAnimeDetails(
+                    id = id,
+                    appendToResponse = "videos,credits,recommendations"
+                )
+            }
         }
     }
 
