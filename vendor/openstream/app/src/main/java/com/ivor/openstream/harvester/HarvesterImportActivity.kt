@@ -19,12 +19,25 @@ class HarvesterImportActivity : Activity() {
         val pageUrl = intent.getStringExtra(HarvesterContract.EXTRA_PAGE_URL).orEmpty()
         val confirmationToken = intent.getStringExtra("com.vistastream.tv.extra.CONFIRMATION_TOKEN").orEmpty()
         @Suppress("DEPRECATION")
-        val callback = intent.getParcelableExtra<android.os.ResultReceiver>("com.vistastream.tv.extra.CONFIRMATION_RECEIVER")
-        val webOnly = !NativeHarvesterStore.safeDirect(url)
-        if (webOnly && !NativeHarvesterStore.safeWebPage(pageUrl)) {
-            Toast.makeText(this, "Sem página de origem válida para guardar a referência.", Toast.LENGTH_LONG).show()
-            setResult(RESULT_CANCELED); finish(); return
-        }
+        val callback = runCatching {
+            intent.getParcelableExtra<android.os.ResultReceiver>(
+                "com.vistastream.tv.extra.CONFIRMATION_RECEIVER"
+            )
+        }.getOrNull()
+        // Signed media playlists are usable transiently but may expire.
+        val stable = NativeHarvesterStore.safeDirect(url)
+        val uri = runCatching { android.net.Uri.parse(url) }.getOrNull()
+        val hintMime = intent.getStringExtra(HarvesterContract.EXTRA_MIME_TYPE).orEmpty()
+        val path = uri?.path.orEmpty().lowercase()
+        val playableTemporary = !stable &&
+            uri?.scheme in listOf("http", "https") && !uri.host.isNullOrBlank() &&
+            url.length <= 8192 && (
+                listOf(".m3u8",".mpd",".mp4",".m4v",".webm",".mkv",".mov")
+                    .any { path.endsWith(it) } ||
+                hintMime.startsWith("video/") ||
+                hintMime in listOf("application/vnd.apple.mpegurl","application/dash+xml")
+            )
+        val referenceOnly = !stable && !playableTemporary
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(0xff151720.toInt())
@@ -43,15 +56,19 @@ class HarvesterImportActivity : Activity() {
             }
         }
         panel.addView(TextView(this).apply {
-            text = "Importar para o Video Stream"; textSize = 21f; setTextColor(Color.WHITE)
+            text = "Importar para o VistaStream"; textSize = 21f; setTextColor(Color.WHITE)
             setTypeface(null,Typeface.BOLD)
         })
         panel.addView(TextView(this).apply {
-            text = if (webOnly) "Esta fonte pode expirar. Guardaremos a página de origem em Downloads + Web; não o vídeo temporário." else
-                "Confirma o título, episódio e idioma. Nada é guardado sem esta confirmação."
+            text = when {
+                stable -> "Fonte compatível. Confirme os metadados antes de guardar."
+                playableTemporary -> "Este vídeo pode expirar. Será guardado em Vídeos do Harvester como fonte temporária; a página original ajuda a recuperá-lo."
+                else -> "Isto é uma referência de player, não um ficheiro. Indique a página original para guardar a referência Web."
+            }
             setTextColor(0xffbac0d0.toInt()); setPadding(0,dp(8),0,dp(9))
         })
         val title=field("Título",intent.getStringExtra(HarvesterContract.EXTRA_TITLE).orEmpty())
+        val origin=field("Página original (obrigatória para referência Web)",pageUrl)
         val types=RadioGroup(this).apply { orientation=RadioGroup.HORIZONTAL }
         types.addView(RadioButton(this).apply { id=401; text="Filme"; setTextColor(Color.WHITE) })
         types.addView(RadioButton(this).apply { id=402; text="Série / anime"; setTextColor(Color.WHITE) })
@@ -71,42 +88,83 @@ class HarvesterImportActivity : Activity() {
             text="Confirmar e guardar"
             setOnClickListener {
                 val movie=types.checkedRadioButtonId==401
-                val item=NativeSavedStream(
-                    url=if (webOnly) pageUrl else url,title=title.text.toString().trim().take(180),
-                    pageUrl=pageUrl,
-                    webOnly=webOnly,
-                    mime=intent.getStringExtra(HarvesterContract.EXTRA_MIME_TYPE).orEmpty(),
-                    kind=if(movie)"movie" else "tv",
-                    season=if(movie)1 else (season.text.toString().toIntOrNull()?:0),
-                    episode=if(movie)1 else (episode.text.toString().toIntOrNull()?:0),
-                    year=year.text.toString().toIntOrNull()?:0,
-                    audioMode=audio.text.toString().take(24),
-                    language=language.text.toString().take(16),
-                    quality=quality.text.toString().take(24)
-                )
-                if (!store.save(item)) {
-                    Toast.makeText(this@HarvesterImportActivity,"Título, episódio ou URL inválidos",Toast.LENGTH_LONG).show()
-                } else {
-                    val response=Intent()
-                        .putExtra(HarvesterContract.EXTRA_URL,url)
-                        .putExtra(HarvesterContract.EXTRA_TITLE,item.title)
-                        .putExtra("com.vistastream.tv.extra.SAVED_WEB_ONLY",webOnly)
-                        .putExtra("com.vistastream.tv.extra.CONFIRMATION_TOKEN",confirmationToken)
-                    setResult(RESULT_OK,response)
-                    // Optional explicit receipt for Android stacks which deliver a cancelled
-                    // activity result after the external editor finishes. This is sent
-                    // only after NativeHarvesterStore.save() returned success.
+                val originalPage=origin.text.toString().trim()
+                if (referenceOnly && !NativeHarvesterStore.safeWebPage(originalPage)) {
+                    origin.error="Insira a página Web original (http ou https)"
+                    origin.requestFocus()
+                    Toast.makeText(this@HarvesterImportActivity,
+                        "Não foi possível guardar uma referência sem a página de origem.",
+                        Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+                if (originalPage.isNotBlank() && !NativeHarvesterStore.safeWebPage(originalPage)) {
+                    origin.error="Endereço de origem inválido"
+                    origin.requestFocus()
+                    return@setOnClickListener
+                }
+                val approvedTitle=title.text.toString().trim().take(180)
+                if (approvedTitle.isBlank()) {
+                    title.error="Indique o nome do vídeo"
+                    title.requestFocus()
+                    return@setOnClickListener
+                }
+                var succeeded=false
+                if (stable || referenceOnly || (playableTemporary && originalPage.isNotEmpty())) {
+                    val original=NativeSavedStream(
+                        url=if (stable) url else originalPage,
+                        title=approvedTitle, pageUrl=originalPage, webOnly=!stable,
+                        mime=hintMime, kind=if(movie)"movie" else "tv",
+                        season=if(movie)1 else (season.text.toString().toIntOrNull()?:0),
+                        episode=if(movie)1 else (episode.text.toString().toIntOrNull()?:0),
+                        year=year.text.toString().toIntOrNull()?:0,
+                        audioMode=audio.text.toString().take(24),
+                        language=language.text.toString().take(16),
+                        quality=quality.text.toString().take(24)
+                    )
+                    succeeded=runCatching { store.save(original) }.getOrDefault(false)
+                }
+                if (playableTemporary) {
+                    val temp=HarvesterMedia(
+                        url=url,title=approvedTitle,
+                        mimeType=hintMime.takeIf { it.isNotBlank() },
+                        pageUrl=originalPage.takeIf { it.isNotBlank() },
+                        referer=originalPage.takeIf { it.isNotBlank() }
+                    )
+                    succeeded=runCatching {
+                        HarvesterLibraryStore(this@HarvesterImportActivity).save(temp)
+                        true
+                    }.getOrDefault(false) || succeeded
+                }
+                if (!succeeded) {
+                    Toast.makeText(this@HarvesterImportActivity,
+                        "Não foi possível guardar. Reveja o endereço, título ou episódio.",
+                        Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+                val response=Intent()
+                    .putExtra(HarvesterContract.EXTRA_URL,url)
+                    .putExtra(HarvesterContract.EXTRA_TITLE,approvedTitle)
+                    .putExtra("com.vistastream.tv.extra.SAVED_WEB_ONLY",referenceOnly)
+                    .putExtra("com.vistastream.tv.extra.SAVED_TEMPORARY",playableTemporary)
+                    .putExtra("com.vistastream.tv.extra.CONFIRMATION_TOKEN",confirmationToken)
+                setResult(RESULT_OK,response)
+                // Never let an unavailable cross-process callback crash the editor.
+                runCatching {
                     callback?.send(Activity.RESULT_OK,Bundle().apply {
                         putString(HarvesterContract.EXTRA_URL,url)
-                        putString(HarvesterContract.EXTRA_TITLE,item.title)
-                        putBoolean("com.vistastream.tv.extra.SAVED_WEB_ONLY",webOnly)
+                        putString(HarvesterContract.EXTRA_TITLE,approvedTitle)
+                        putBoolean("com.vistastream.tv.extra.SAVED_WEB_ONLY",referenceOnly)
+                        putBoolean("com.vistastream.tv.extra.SAVED_TEMPORARY",playableTemporary)
                         putString("com.vistastream.tv.extra.CONFIRMATION_TOKEN",confirmationToken)
                     })
-                    Toast.makeText(this@HarvesterImportActivity,
-                        if (webOnly) "Referência da página guardada no VistaStream. Reabra-a para encontrar a fonte válida." else
-                            "Fonte guardada em Vídeos do Harvester no VistaStream. Pode reproduzir e transmitir à TV.",Toast.LENGTH_LONG).show()
-                    finish()
                 }
+                Toast.makeText(this@HarvesterImportActivity,
+                    when {
+                        referenceOnly -> "Referência Web guardada no VistaStream."
+                        playableTemporary -> "Fonte guardada em Vídeos do Harvester. O link poderá expirar."
+                        else -> "Fonte guardada na biblioteca do VistaStream."
+                    },Toast.LENGTH_LONG).show()
+                finish()
             }
         },LinearLayout.LayoutParams(-1,dp(54)))
         panel.addView(Button(this).apply {
