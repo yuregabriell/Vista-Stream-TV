@@ -47,6 +47,7 @@ import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
@@ -128,7 +129,13 @@ fun VistaFullscreenPlayer(
             .setConnectTimeoutMs(15_000)
             .setReadTimeoutMs(20_000)
             .setDefaultRequestProperties(server.headers)
+        // A larger forward buffer avoids repeated rebuffering on uneven CDN connections.
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(30_000, 90_000, 2_500, 5_000)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
         ExoPlayer.Builder(context)
+            .setLoadControl(loadControl)
             .setMediaSourceFactory(
                 DefaultMediaSourceFactory(DefaultDataSource.Factory(context, transport))
             ).build().apply {
