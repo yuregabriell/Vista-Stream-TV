@@ -30,6 +30,11 @@ internal object VistaStreamMime {
         .followSslRedirects(true)
         .build()
 
+    private val segmentProbe = probe.newBuilder()
+        .callTimeout(3L, TimeUnit.SECONDS)
+        .readTimeout(3L, TimeUnit.SECONDS)
+        .build()
+
     suspend fun inspect(server: VideoServer): VistaMediaProbe = withContext(Dispatchers.IO) {
         if (!server.url.startsWith("https://", true) &&
             !server.url.startsWith("http://", true)
@@ -54,6 +59,11 @@ internal object VistaStreamMime {
                     server.url, server.mimeType, response.code,
                     response.header("Content-Type"), sample
                 )
+                val segmentFailure = if (report.playableCandidate &&
+                    report.format == VistaPlaybackEngine.Format.HLS) {
+                    checkFirstHlsSegment(response.request.url,
+                        sample.toString(Charsets.UTF_8), server.headers)
+                } else null
                 val detectedMime = when (report.format) {
                     VistaPlaybackEngine.Format.HLS -> MimeTypes.APPLICATION_M3U8
                     VistaPlaybackEngine.Format.DASH -> MimeTypes.APPLICATION_MPD
@@ -64,12 +74,43 @@ internal object VistaStreamMime {
                 }
                 VistaMediaProbe(
                     mime = detectedMime,
-                    unsupportedReason = if (!report.playableCandidate) report.explanation else null,
-                    diagnostic = report.explanation
+                    unsupportedReason = if (!report.playableCandidate) report.explanation else segmentFailure,
+                    diagnostic = segmentFailure ?: report.explanation
                 )
             }
         }.getOrElse {
             VistaMediaProbe(diagnostic = "Não foi possível verificar a origem; o player tentará reproduzir.")
         }
+    }
+
+    /**
+     * A playlist can answer 200 while its segments have expired. Check just one
+     * media segment when it stays on the playlist's host, without downloading video.
+     * Cross-host checks are skipped rather than leaking Authorization/Cookie tokens.
+     * Timeouts remain inconclusive and Media3 will attempt playback normally.
+     */
+    private fun checkFirstHlsSegment(
+        base: okhttp3.HttpUrl, playlist: String, headers: Map<String, String>
+    ): String? {
+        val entry = VistaPlaybackEngine.firstHlsSegment(playlist) ?: return null
+        val resolved = base.resolve(entry) ?: return null
+        if (resolved.host != base.host || resolved.scheme != base.scheme) return null
+        return runCatching {
+            val request = Request.Builder().url(resolved)
+                .get()
+                .header("Range", "bytes=0-1")
+                .header("User-Agent", BROWSER_USER_AGENT)
+                .apply {
+                    headers.forEach { (name, value) ->
+                        if (name.isNotBlank() && !name.equals("Range", true) &&
+                            !name.equals("Host", true)) header(name, value)
+                    }
+                }.build()
+            segmentProbe.newCall(request).execute().use { response ->
+                if (response.code in setOf(401, 403, 404, 410))
+                    "O primeiro segmento HLS está indisponível (HTTP ${response.code})."
+                else null
+            }
+        }.getOrNull()
     }
 }
