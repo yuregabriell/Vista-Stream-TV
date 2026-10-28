@@ -713,9 +713,9 @@ fun PlayerScreen(
                             mimeType = if (isLocalOrDownloaded) {
                                 downloadMimeType
                             } else {
-                                activeServer?.mimeType ?: if (activeServer?.isHls == true) {
+                                if (activeServer?.isHls == true) {
                                     com.ivor.openstream.domain.model.HLS_MIME_TYPE
-                                } else null
+                                } else activeServer?.mimeType
                             }
                         )
                     }
