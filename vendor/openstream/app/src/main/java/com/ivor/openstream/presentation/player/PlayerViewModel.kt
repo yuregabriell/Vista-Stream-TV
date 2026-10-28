@@ -517,6 +517,18 @@ class PlayerViewModel @Inject constructor(
 
     // Declared after every state flow it reads, so they are initialised when this runs.
     init {
+        // The shared Cast session reports receiver failures even when the phone player is idle.
+        // Reuse the existing bounded source failover rather than retrying one dead stream forever.
+        viewModelScope.launch {
+            playbackSession.castError.collect { error ->
+                if (error?.fromStream == true && playbackSession.castStatus.value.isCasting &&
+                    !playbackSession.castLoading.value
+                ) {
+                    _playerEvents.tryEmit("Chromecast: ${error.message}")
+                    onPlaybackError()
+                }
+            }
+        }
         viewModelScope.launch {
             combine(_mediaDetails, _currentEpisode, _nextEpisode, _activeServer, _mediaUri) { details, episode, next, server, media ->
                 if (details == null || media == null) return@combine null
@@ -748,7 +760,16 @@ class PlayerViewModel @Inject constructor(
         streamingRepository.rememberWorkingSource(identity, server)
     }
 
+    /** Safe user-facing failure detail; signed URLs and headers are never included. */
+    fun onSourcePreflightFailed(message: String) {
+        _playerEvents.tryEmit("Diagnóstico da fonte: $message")
+        onPlaybackError()
+    }
+
     fun onPlaybackError(error: PlaybackException? = null) {
+        if (error != null) _playerEvents.tryEmit(
+            "Diagnóstico de reprodução: ${error.errorCodeName}"
+        )
         val failed = _activeServer.value ?: return
         failedServerIds += failed.id
         // Its links may have expired: the next open of this episode searches the sources again.
@@ -770,7 +791,17 @@ class PlayerViewModel @Inject constructor(
         if (error != null && error.isUnsupportedVideoFormat()) {
             _playerEvents.tryEmit(context.getString(R.string.player_error_codec))
         }
-        val next = availableServers().firstOrNull { it.id !in failedServerIds }
+        // Keep the user's selected audio/dub first when possible, then quality.
+        // A failed 1080p dub should not silently switch to a subtitled version
+        // unless there is no compatible alternative in the resolved list.
+        val remaining = availableServers().filter { it.id !in failedServerIds }
+        val next = remaining.sortedWith(
+            compareByDescending<VideoServer> { it.audio == failed.audio }
+                .thenByDescending {
+                    it.audioLanguage != null && it.audioLanguage.equals(failed.audioLanguage, true)
+                }
+                .thenByDescending { it.quality == failed.quality }
+        ).firstOrNull()
         if (next != null && automaticFailovers < MAX_AUTOMATIC_FAILOVERS) {
             automaticFailovers++
             _activeServer.value = next
