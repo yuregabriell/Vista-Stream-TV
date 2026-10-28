@@ -103,8 +103,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.15.1-build.${GITHUB_RUN_NUMBER}"
+          TAG="v0.15.2-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "VistaStream — $TAG" \
-            --notes "VistaStream v0.15.1: corrigido o HTTP 400 ao abrir detalhes de séries e animes quando o gateway recusava o parâmetro aggregate_credits. O Android tenta automaticamente o campo de elenco credits como alternativa caso o servidor ainda não esteja atualizado; o backend agora aceita aggregate_credits. Preservadas as extensões PT-BR, o catálogo, a pesquisa e as atualizações internas. Esta versão usa a assinatura permanente compatível com a build 230." \
+            --notes "VistaStream v0.15.2: estabilidade do player e Chromecast. Mantém o proxy Cast ativo em segundo plano com MediaSession ligada ao player remoto e bloqueios de CPU/Wi-Fi durante a transmissão; evita parar o serviço ao fechar a tarefa enquanto transmite. Amplia o buffering local, tolera ligações lentas e tenta recuperar falhas transitórias do Cast e da ligação HTTP sem ciclos infinitos. Preservadas as fontes, legendas, catálogo, biblioteca e atualizações internas. A estabilidade continua dependente da rede e das fontes usadas." \
             --prerelease
