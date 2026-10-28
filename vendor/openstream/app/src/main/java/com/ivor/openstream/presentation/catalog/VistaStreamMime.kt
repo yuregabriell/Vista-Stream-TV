@@ -33,6 +33,9 @@ internal object VistaStreamMime {
     private val segmentProbe = probe.newBuilder()
         .callTimeout(3L, TimeUnit.SECONDS)
         .readTimeout(3L, TimeUnit.SECONDS)
+        // Do not forward an explicitly supplied Cookie/Authorization to a redirected host.
+        .followRedirects(false)
+        .followSslRedirects(false)
         .build()
 
     suspend fun inspect(server: VideoServer): VistaMediaProbe = withContext(Dispatchers.IO) {
@@ -118,10 +121,19 @@ internal object VistaStreamMime {
                             !name.equals("Host", true)) header(name, value)
                     }
                 }.build()
-            segmentProbe.newCall(request).execute().use { response ->
-                if (response.code in setOf(401, 403, 404, 410))
-                    "O primeiro segmento HLS está indisponível (HTTP ${response.code})."
-                else null
+            segmentProbe.newCall(request).execute().use { initial ->
+                // Some CDNs reject Range, not the segment itself: fall back to a
+                // bounded GET before declaring a valid stream broken.
+                if (initial.code in setOf(400, 403, 405, 416)) {
+                    segmentProbe.newCall(request.newBuilder().removeHeader("Range").build())
+                        .execute().use { second ->
+                            if (second.code in setOf(401, 403, 404, 410))
+                                "O primeiro segmento HLS está indisponível (HTTP ${second.code})."
+                            else null
+                        }
+                } else if (initial.code in setOf(401, 403, 404, 410)) {
+                    "O primeiro segmento HLS está indisponível (HTTP ${initial.code})."
+                } else null
             }
         }.getOrNull()
     }
