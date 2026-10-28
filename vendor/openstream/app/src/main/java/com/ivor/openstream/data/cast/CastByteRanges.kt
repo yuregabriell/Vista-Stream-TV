@@ -30,7 +30,7 @@ internal object CastByteRanges {
         val last = groups[2]
         if (first.isEmpty()) {
             val count = last.toLongOrNull() ?: return null
-            return count.takeIf { it > 0 }?.let(CastRangeRequest::Suffix)
+            return count.takeIf { it > 0 }?.let { CastRangeRequest.Suffix(it) }
         }
         val start = first.toLongOrNull() ?: return null
         val end = last.takeIf { it.isNotEmpty() }?.toLongOrNull()
