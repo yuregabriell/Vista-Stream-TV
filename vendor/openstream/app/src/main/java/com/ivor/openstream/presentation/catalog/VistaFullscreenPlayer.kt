@@ -142,8 +142,9 @@ fun VistaFullscreenPlayer(
             .setMediaSourceFactory(
                 DefaultMediaSourceFactory(DefaultDataSource.Factory(context, transport))
             ).build().apply {
-                val inferred = server.mimeType ?: when {
+                val inferred = when {
                     server.isHls -> MimeTypes.APPLICATION_M3U8
+                    server.mimeType != null -> server.mimeType
                     server.url.substringBefore('?').endsWith(".mpd", ignoreCase = true) -> MimeTypes.APPLICATION_MPD
                     server.url.contains(".ism/Manifest", ignoreCase = true) -> MimeTypes.APPLICATION_SS
                     server.url.substringBefore('?').endsWith(".mkv", ignoreCase = true) -> MimeTypes.VIDEO_MATROSKA
