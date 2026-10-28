@@ -256,6 +256,20 @@ fun SettingsScreen(
                     }
                 }
 
+                item(key = "vista-id") {
+                    SettingsGroup(title = "Vista ID · opcional") {
+                        NavigationRow(
+                            index = 0, count = 1,
+                            icon = Icons.Default.People,
+                            title = "Associar Vista ID",
+                            supporting = "Modo local ou sem conta. Preserva biblioteca e histórico; cloud futura.",
+                            onClick = {
+                                context.startActivity(Intent(context, VistaIdAccountActivity::class.java))
+                            }
+                        )
+                    }
+                }
+
                 item(key = "gateway") {
                     SettingsGroup(title = "Catálogo partilhado (opcional)") {
                         NavigationRow(
