@@ -121,6 +121,7 @@ fun VistaFullscreenPlayer(
     var duration by remember(server.url) { mutableLongStateOf(0L) }
     var visible by remember(server.url) { mutableStateOf(true) }
     var err by remember(server.url) { mutableStateOf<String?>(null) }
+    var diagnostic by remember(server.url) { mutableStateOf<String?>(null) }
     var tracks by remember(server.url) { mutableStateOf(Tracks.EMPTY) }
     var trackSheet by remember(server.url) { mutableStateOf(false) }
     var sourceSheet by remember(server.url) { mutableStateOf(false) }
@@ -189,6 +190,7 @@ fun VistaFullscreenPlayer(
             override fun onTracksChanged(currentTracks: Tracks) { tracks = currentTracks }
             override fun onPlayerError(error: PlaybackException) {
                 visible = true
+                diagnostic = "Media3: ${error.errorCodeName}"
                 err = when (error.errorCode) {
                     PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ->
                         "Esta fonte devolveu um contentor de vídeo incompatível. Tenta outra fonte ou formato."
@@ -220,6 +222,7 @@ fun VistaFullscreenPlayer(
         // Probe direct HTTP sources once before playback. The actual content
         // can be HLS, DASH, SmoothStreaming or a progressive container.
         val detected = VistaStreamMime.inspect(server)
+        diagnostic = detected.diagnostic
         if (detected.unsupportedReason != null) {
             err = detected.unsupportedReason
             return@LaunchedEffect
@@ -371,6 +374,9 @@ fun VistaFullscreenPlayer(
             ) {
                 Text("Não foi possível reproduzir", color = Color.White, fontWeight = FontWeight.Bold)
                 Text(err.orEmpty(), color = Color.White, style = MaterialTheme.typography.bodySmall)
+                diagnostic?.let { detail ->
+                    Text("Diagnóstico: $detail", color = Color.LightGray, style = MaterialTheme.typography.labelSmall)
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                     Button(onClick = {
                         err = null
