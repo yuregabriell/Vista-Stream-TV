@@ -55,9 +55,9 @@ class VistaPlaybackEngineTest {
     }
 
     @Test fun firstHlsSegmentRecognizedWithoutMasterVariant() {
-        val media = "#EXTM3U\\n#EXT-X-TARGETDURATION:5\\n#EXTINF:5,\\nchunk1.ts?token=abc"
+        val media = "#EXTM3U\n#EXT-X-TARGETDURATION:5\n#EXTINF:5,\nchunk1.ts?token=abc"
         assertEquals("chunk1.ts?token=abc", VistaPlaybackEngine.firstHlsSegment(media))
-        val master = "#EXTM3U\\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\\nvariant.m3u8"
+        val master = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1000000\nvariant.m3u8"
         assertEquals(null, VistaPlaybackEngine.firstHlsSegment(master))
     }
 
