@@ -56,6 +56,18 @@ class VistaIdAccountActivity : ComponentActivity() {
             content.addView(label("Perfil ligado: ${prefs.getString("name", "")} · $id", 17f))
         }
         content.addView(label("A biblioteca, favoritos, histórico, progresso e dados de reprodução continuam guardados neste dispositivo. Não existe ainda sincronização cloud.", 13f))
+        val sharePrefs = getSharedPreferences("vista_launcher_home_v1", Context.MODE_PRIVATE)
+        val homeShare = android.widget.CheckBox(this).apply {
+            text = "Mostrar sugestões e Continuar a assistir no VistaLauncher"
+            setTextColor(Color.WHITE)
+            textSize = 14f
+            isChecked = sharePrefs.getBoolean("share_enabled", true)
+            setOnCheckedChangeListener { _, checked ->
+                sharePrefs.edit().putBoolean("share_enabled", checked).apply()
+            }
+        }
+        content.addView(homeShare)
+        content.addView(label("Partilha apenas metadados e progresso da conta local selecionada com o VistaLauncher nesta mesma TV; nunca envia vídeos ou palavras-passe.", 12f))
         val action = Button(this).apply {
             text = if (id == null) "Ligar Vista ID local" else "Alterar Vista ID"
             setOnClickListener {
