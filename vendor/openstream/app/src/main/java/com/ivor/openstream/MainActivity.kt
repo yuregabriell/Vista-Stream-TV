@@ -122,7 +122,10 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     Box(Modifier.fillMaxSize()) {
                         if (tvMode) {
-                            TvNavigation()
+                            TvNavigation(
+                                deepLinkRequest = deepLinkRequest,
+                                onDeepLinkHandled = { deepLinkRequest = null }
+                            )
                         } else {
                             AppNavigation(
                                 windowSizeClass = windowSizeClass.widthSizeClass,
