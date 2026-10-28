@@ -39,11 +39,13 @@ data class VideoServer(
 const val HLS_MIME_TYPE = "application/x-mpegURL"
 
 /** Recognize the content types used by HLS CDNs, not only Media3's canonical MIME. */
-fun isHlsMimeType(value: String?): Boolean =
-    value?.substringBefore(';')?.trim()?.lowercase() in setOf(
+fun isHlsMimeType(value: String?): Boolean {
+    val mime = value?.substringBefore(';')?.trim()?.lowercase() ?: return false
+    return mime in setOf(
         "application/x-mpegurl",
         "application/vnd.apple.mpegurl",
         "application/mpegurl",
         "audio/mpegurl",
         "audio/x-mpegurl"
     )
+}
