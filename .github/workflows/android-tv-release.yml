@@ -78,9 +78,9 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
-      - name: Test Portuguese preset
+      - name: Test Portuguese preset and Cast large-file ranges
         working-directory: vendor/openstream
-        run: ./gradlew :app:testDebugUnitTest --tests '*OfficialCatalogTest' --no-daemon
+        run: ./gradlew :app:testDebugUnitTest --tests '*OfficialCatalogTest' --tests '*CastByteRangesTest' --no-daemon
       - name: Select universal APK
         shell: bash
         run: |
@@ -103,8 +103,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.15.7-build.${GITHUB_RUN_NUMBER}"
+          TAG="v0.15.8-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "VistaStream — $TAG" \
-            --notes "VistaStream v0.15.7: estabilidade do player e Chromecast. Mantém o proxy Cast ativo em segundo plano com MediaSession ligada ao player remoto e bloqueios de CPU/Wi-Fi durante a transmissão; evita parar o serviço ao fechar a tarefa enquanto transmite. Amplia o buffering local, tolera ligações lentas e tenta recuperar falhas transitórias do Cast e da ligação HTTP sem ciclos infinitos. Preservadas as fontes, legendas, catálogo, biblioteca e atualizações internas. A estabilidade continua dependente da rede e das fontes usadas." \
+            --notes "VistaStream v0.15.8: corrige pedidos HTTP Range de filmes grandes no proxy Chromecast, incluindo os intervalos de sufixo (bytes=-N) e ficheiros superiores a 4 GB; evita cabeçalhos Content-Range inválidos e tamanhos de ficheiro incorretos. Acrescenta deteção de arranque Cast bloqueado, tratamento de erros e testes automatizados. Mantém as melhorias da versão 0.15.7. A compatibilidade depende do formato de vídeo, do dispositivo Cast e da disponibilidade da fonte." \
             --prerelease
