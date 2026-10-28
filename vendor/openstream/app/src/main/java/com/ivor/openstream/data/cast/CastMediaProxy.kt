@@ -327,6 +327,32 @@ class CastMediaProxy @Inject constructor(
             val upstreamHeaders = source.responseHeaders
             val head = if (start == 0L) readUpTo(source, SNIFF_BYTES) else ByteArray(0)
             if (head.isPlaylist()) {
+                // A bounded Range on a playlist is a probe, not a complete playlist.
+                // Never rewrite its truncated #EXTM3U bytes into a new HTTP 200 manifest:
+                // the receiver would try to parse an incomplete variant list and hang.
+                if (range?.endInclusive != null) {
+                    val responseHeaders = mutableMapOf(
+                        "Content-Type" to "application/vnd.apple.mpegurl",
+                        "Accept-Ranges" to "bytes",
+                        "Cache-Control" to "no-cache"
+                    )
+                    val total = knownTotal ?: upstreamHeaders.first("Content-Range")
+                        ?.substringAfterLast('/')?.toLongOrNull()
+                    range.contentRange(total, start + opened - 1L)?.let {
+                        responseHeaders["Content-Range"] = it
+                    }
+                    writeHead(output, 206, "Partial Content", responseHeaders, opened.takeIf { it >= 0L })
+                    if (!headOnly) {
+                        output.write(head)
+                        val bytes = ByteArray(16 * 1024)
+                        while (true) {
+                            val read = source.read(bytes, 0, bytes.size)
+                            if (read == C.RESULT_END_OF_INPUT) break
+                            output.write(bytes, 0, read)
+                        }
+                    }
+                    return
+                }
                 val body = head + readRest(source, MAX_PLAYLIST_BYTES)
                 val base = source.uri?.toString() ?: target
                 val rewritten = rewritePlaylist(body.toString(Charsets.UTF_8), base, headers, host)
