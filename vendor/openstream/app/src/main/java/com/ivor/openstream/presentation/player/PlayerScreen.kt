@@ -118,6 +118,7 @@ import androidx.media3.common.util.UnstableApi
 import coil3.compose.AsyncImage
 import com.ivor.openstream.R
 import com.ivor.openstream.data.remote.model.SubtitleDto
+import com.ivor.openstream.presentation.catalog.VistaStreamMime
 import com.ivor.openstream.presentation.player.components.ExoPlayerView
 import com.ivor.openstream.presentation.player.components.MANUAL_SKIP_MS
 import com.ivor.openstream.domain.model.forDuration
@@ -231,8 +232,35 @@ fun PlayerScreen(
     LaunchedEffect(allSubtitles, preferredSubtitleLanguage) {
         viewModel.setCastSubtitleCandidates(allSubtitles, preferredSubtitleLanguage)
     }
-    // Hold playback until the saved position is known so a resume never starts from zero.
-    val videoUrl = (localVideoUrl ?: activeServer?.url)?.takeIf { startPositionMs != null }
+    // Source verification runs only for online URLs whose format is unknown. This
+    // prevents Media3 treating extensionless HLS as progressive MP4 and immediately
+    // failing over to another source before its actual format can be identified.
+    val sourceNeedsInspection = activeServer != null && !isLocalOrDownloaded &&
+        activeServer.mimeType == null && !activeServer.isHls
+    var inspectingSource by remember(activeServer?.url, isLocalOrDownloaded) {
+        mutableStateOf(sourceNeedsInspection)
+    }
+    var inspectedMime by remember(activeServer?.url, isLocalOrDownloaded) {
+        mutableStateOf<String?>(null)
+    }
+    LaunchedEffect(activeServer?.url, isLocalOrDownloaded) {
+        val selected = activeServer
+        if (!sourceNeedsInspection || selected == null) {
+            inspectingSource = false
+            return@LaunchedEffect
+        }
+        val report = VistaStreamMime.inspect(selected)
+        if (report.unsupportedReason != null) {
+            inspectingSource = false
+            viewModel.onPlaybackError()
+        } else {
+            inspectedMime = report.mime
+            inspectingSource = false
+        }
+    }
+    // Hold playback until the saved position and source format are known.
+    val videoUrl = (localVideoUrl ?: activeServer?.url)
+        ?.takeIf { startPositionMs != null && !inspectingSource }
     var showUpNext by remember(tmdbId, season, episode) { mutableStateOf(false) }
 
     LaunchedEffect(videoUrl) {
@@ -712,11 +740,9 @@ fun PlayerScreen(
                                 ?.let { "https://image.tmdb.org/t/p/w1280$it" },
                             mimeType = if (isLocalOrDownloaded) {
                                 downloadMimeType
-                            } else {
-                                if (activeServer?.isHls == true) {
-                                    com.ivor.openstream.domain.model.HLS_MIME_TYPE
-                                } else activeServer?.mimeType
-                            }
+                            } else if (activeServer?.isHls == true) {
+                                com.ivor.openstream.domain.model.HLS_MIME_TYPE
+                            } else inspectedMime ?: activeServer?.mimeType
                         )
                     }
                 } else if (tvControls) {
