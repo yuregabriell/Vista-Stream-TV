@@ -252,7 +252,7 @@ fun PlayerScreen(
         val report = VistaStreamMime.inspect(selected)
         if (report.unsupportedReason != null) {
             inspectingSource = false
-            viewModel.onPlaybackError()
+            viewModel.onSourcePreflightFailed(report.unsupportedReason)
         } else {
             inspectedMime = report.mime
             inspectingSource = false
