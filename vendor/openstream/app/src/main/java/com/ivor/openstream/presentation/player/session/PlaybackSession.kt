@@ -1015,6 +1015,8 @@ class PlaybackSession @Inject constructor(
         val http = DefaultHttpDataSource.Factory()
             .setUserAgent(BROWSER_USER_AGENT)
             .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(20_000)
+            .setReadTimeoutMs(30_000)
         val upstream = ResolvingDataSource.Factory(DefaultDataSource.Factory(context, http)) { spec ->
             spec.withAdditionalHeaders(requestHeaders)
         }
