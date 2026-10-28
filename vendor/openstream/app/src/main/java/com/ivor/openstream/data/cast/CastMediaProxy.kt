@@ -267,9 +267,30 @@ class CastMediaProxy @Inject constructor(
         host: String,
         output: OutputStream
     ) {
-        val range = parseRange(rangeHeader)
-        val start = range?.first ?: 0L
-        val length = range?.second?.let { end -> end - start + 1 } ?: C.LENGTH_UNSET.toLong()
+        val request = rangeHeader?.let(CastByteRanges::parse)
+        if (rangeHeader != null && request == null) {
+            // A receiver may ask for multiple ranges; don't accidentally send it an entire
+            // multi-gigabyte movie instead, which leaves the default receiver spinning.
+            writeError(output, 416, "Unsupported Range")
+            return
+        }
+        val cachedTotal = ContentMetadata.getContentLength(cache.getContentMetadata(target))
+            .takeIf { it > 0L }
+        val knownTotal = cachedTotal ?: if (request is CastRangeRequest.Suffix) {
+            discoverTotalLength(target, headers)
+        } else null
+        val range = request?.let { CastByteRanges.resolve(it, knownTotal) }
+        if (request != null && range == null) {
+            if (request is CastRangeRequest.Suffix && knownTotal == null) {
+                Log.w(TAG, "Cast suffix range requires a known upstream length: ${Uri.parse(target).host}")
+                writeError(output, 502, "Upstream Length Unknown")
+            } else {
+                writeInvalidRange(output, knownTotal)
+            }
+            return
+        }
+        val start = range?.start ?: 0L
+        val length = range?.length ?: C.LENGTH_UNSET.toLong()
         val source = dataSourceFactory.createDataSource()
         try {
             val spec = DataSpec.Builder()
@@ -308,22 +329,42 @@ class CastMediaProxy @Inject constructor(
                 return
             }
 
-            val contentType = upstreamHeaders.first("Content-Type")
-                ?.takeUnless { it.startsWith("image/", ignoreCase = true) || it.startsWith("text/plain", ignoreCase = true) }
+            val reportedContentType = upstreamHeaders.first("Content-Type")
+            val contentType = reportedContentType
+                ?.takeUnless {
+                    it.startsWith("image/", ignoreCase = true) ||
+                        it.startsWith("text/plain", ignoreCase = true) ||
+                        it.startsWith("application/octet-stream", ignoreCase = true)
+                }
                 ?: guessContentType(target)
             val responseHeaders = mutableMapOf("Content-Type" to contentType, "Accept-Ranges" to "bytes")
             if (range != null) {
-                val total = totalLength(upstreamHeaders, target, start, opened, range.second)
+                // Upstream might omit Content-Range (or DataSource may serve cached bytes).
+                // Never invent a total from a bounded range: e.g. 0-1 does NOT mean a 2-byte film.
+                val total = knownTotal ?: totalLength(upstreamHeaders, target, start, opened, range.endInclusive)
                 val end = when {
-                    opened != C.LENGTH_UNSET.toLong() -> start + opened - 1
-                    range.second != null -> range.second!!
-                    total != null -> total - 1
+                    opened > 0L && opened != C.LENGTH_UNSET.toLong() -> start + opened - 1L
+                    range.endInclusive != null -> range.endInclusive
+                    total != null -> total - 1L
                     else -> null
                 }
-                responseHeaders["Content-Range"] = "bytes $start-${end ?: ""}/${total ?: "*"}"
-                writeHead(output, 206, "Partial Content", responseHeaders, opened.takeIf { it != C.LENGTH_UNSET.toLong() })
+                val contentRange = range.contentRange(total, end)
+                if (contentRange == null) {
+                    // A 206 without a valid byte span confuses the Cast receiver. A 0-
+                    // request can safely fall back to normal 200 streaming.
+                    if (start == 0L) {
+                        writeHead(output, 200, "OK", responseHeaders, opened.takeIf { it >= 0L })
+                    } else {
+                        Log.w(TAG, "Cast cannot resolve range end for ${Uri.parse(target).host}")
+                        writeError(output, 502, "Upstream Range Unknown")
+                        return
+                    }
+                } else {
+                    responseHeaders["Content-Range"] = contentRange
+                    writeHead(output, 206, "Partial Content", responseHeaders, opened.takeIf { it >= 0L })
+                }
             } else {
-                writeHead(output, 200, "OK", responseHeaders, opened.takeIf { it != C.LENGTH_UNSET.toLong() })
+                writeHead(output, 200, "OK", responseHeaders, opened.takeIf { it >= 0L })
             }
             if (headOnly) return
             output.write(head)
@@ -359,6 +400,53 @@ class CastMediaProxy @Inject constructor(
             }
         }
         throw IOException("Cast proxy could not open source")
+    }
+
+    /**
+     * HTTP suffix ranges require the file's full length. Try cache, then HEAD, then a
+     * one-byte GET for hosts rejecting HEAD. Never download a large movie just to find
+     * its length; all HTTP sources are closed immediately after the headers arrive.
+     */
+    private fun discoverTotalLength(target: String, headers: Map<String, String>): Long? {
+        val uri = Uri.parse(target)
+        if (uri.scheme == "file") return java.io.File(uri.path.orEmpty()).length().takeIf { it > 0L }
+        if (uri.scheme == "content") {
+            return runCatching {
+                context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length }
+            }.getOrNull()?.takeIf { it > 0L }
+        }
+        if (uri.scheme !in setOf("http", "https")) return null
+
+        for (method in listOf(DataSpec.HTTP_METHOD_HEAD, DataSpec.HTTP_METHOD_GET)) {
+            val source = DefaultHttpDataSource.Factory()
+                .setUserAgent(BROWSER_USER_AGENT)
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(10_000)
+                .setReadTimeoutMs(10_000)
+                .createDataSource()
+            try {
+                val builder = DataSpec.Builder().setUri(uri)
+                    .setHttpMethod(method)
+                    .setHttpRequestHeaders(headers)
+                if (method == DataSpec.HTTP_METHOD_GET) builder.setPosition(0).setLength(1)
+                source.open(builder.build())
+                val response = source.responseHeaders
+                val total = response.first("Content-Range")
+                    ?.substringAfterLast('/')?.toLongOrNull()
+                    ?: response.first("Content-Length")?.toLongOrNull()
+                if (total != null && total > 0L) return total
+            } catch (error: IOException) {
+                Log.d(TAG, "Cast length probe failed ($method): ${error.message}")
+            } finally {
+                runCatching { source.close() }
+            }
+        }
+        return null
+    }
+
+    private fun writeInvalidRange(output: OutputStream, total: Long?) {
+        val extra = total?.let { mapOf("Content-Range" to "bytes */$it") } ?: emptyMap()
+        writeHead(output, 416, "Range Not Satisfiable", extra, 0L)
     }
 
     private fun serveSubtitle(target: String, headers: Map<String, String>, headOnly: Boolean, output: OutputStream) {
@@ -473,14 +561,7 @@ class CastMediaProxy @Inject constructor(
             ?.takeIf { it.isNotBlank() }
             ?: fallback
 
-    private fun parseRange(header: String?): Pair<Long, Long?>? {
-        val match = header?.let { RANGE.matchEntire(it.trim()) } ?: return null
-        val start = match.groupValues[1].toLongOrNull() ?: return null
-        val end = match.groupValues[2].toLongOrNull()
-        return start to end
-    }
-
-    private fun totalLength(
+     private fun totalLength(
         upstreamHeaders: Map<String, List<String>>,
         target: String,
         start: Long,
@@ -489,7 +570,7 @@ class CastMediaProxy @Inject constructor(
     ): Long? {
         upstreamHeaders.first("Content-Range")?.substringAfterLast('/')?.toLongOrNull()?.let { return it }
         ContentMetadata.getContentLength(cache.getContentMetadata(target)).takeIf { it > 0 }?.let { return it }
-        return if (requestedEnd == null && opened != C.LENGTH_UNSET.toLong()) start + opened else null
+        return if (requestedEnd == null && opened > 0L && opened != C.LENGTH_UNSET.toLong()) start + opened else null
     }
 
     private fun Map<String, List<String>>.first(name: String): String? =
@@ -562,7 +643,6 @@ class CastMediaProxy @Inject constructor(
         private const val BASE64_FLAGS = Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
         private val PROXIED_SCHEMES = setOf("http", "https", "content", "file")
         private val URI_ATTRIBUTE = Regex("URI=\"([^\"]+)\"")
-        private val RANGE = Regex("bytes=(\\d+)-(\\d*)")
 
         /**
          * This phone's IPv4 address on the network the receiver is on: the interface that shares
