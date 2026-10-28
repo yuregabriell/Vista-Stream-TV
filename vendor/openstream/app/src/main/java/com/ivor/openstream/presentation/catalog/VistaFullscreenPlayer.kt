@@ -126,8 +126,8 @@ fun VistaFullscreenPlayer(
     val player = remember(server.id, server.url) {
         val transport = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(20_000)
+            .setConnectTimeoutMs(20_000)
+            .setReadTimeoutMs(30_000)
             .setDefaultRequestProperties(server.headers)
         // A larger forward buffer avoids repeated rebuffering on uneven CDN connections.
         val loadControl = DefaultLoadControl.Builder()
