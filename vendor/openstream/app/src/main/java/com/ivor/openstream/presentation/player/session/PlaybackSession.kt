@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import com.ivor.openstream.R
 import android.net.Uri
+import android.net.wifi.WifiManager
+import android.os.PowerManager
 import android.os.Bundle
 import android.util.Log
 import androidx.annotation.OptIn
@@ -24,6 +26,7 @@ import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -302,7 +305,7 @@ class PlaybackSession @Inject constructor(
      */
     val mediaSession: MediaSession
         get() = mediaSessionInstance ?: synchronized(sessionLock) {
-            mediaSessionInstance ?: MediaSession.Builder(context, player)
+            mediaSessionInstance ?: MediaSession.Builder(context, castPlayer?.takeIf { castConnected } ?: player)
                 .setId(SESSION_ID)
                 .setSessionActivity(sessionActivity())
                 .build()
@@ -432,6 +435,12 @@ class PlaybackSession @Inject constructor(
         private set
 
     private var castConnected = false
+    // The TV downloads media through the phone's HTTP proxy, even when its screen is off.
+    // The local ExoPlayer's wake mode no longer protects that connection after it is stopped.
+    private var castWifiLock: WifiManager.WifiLock? = null
+    private var castCpuLock: PowerManager.WakeLock? = null
+    private var castRecoveryJob: Job? = null
+    private var castRecoveryAttempts = 0
     private val _castStatus = MutableStateFlow(CastStatus())
     val castStatus: StateFlow<CastStatus> = _castStatus.asStateFlow()
 
@@ -621,10 +630,48 @@ class PlaybackSession @Inject constructor(
     }
 
     /** Tries the current stream on the TV again, from where it was. */
-    fun retryCast() = reloadOnCast(forcedSubtitleId = _castSubtitles.value.activeId)
+    fun retryCast() {
+        castRecoveryAttempts = 0
+        castRecoveryJob?.cancel()
+        reloadOnCast(forcedSubtitleId = _castSubtitles.value.activeId)
+    }
 
     private fun currentCastSession(): CastSession? =
         runCatching { castContext?.sessionManager?.currentCastSession }.getOrNull()
+
+    private fun keepCastProxyAwake() {
+        // Cast streams on this app are proxied by a local HTTP server. A foreground media
+        // notification and explicit CPU/Wi-Fi locks keep that server reachable on screen lock.
+        if (castCpuLock == null) {
+            runCatching {
+                val manager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+                manager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "VistaStream:CastProxy").apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+            }.onSuccess { castCpuLock = it }
+                .onFailure { Log.w(TAG, "Cast CPU wake lock unavailable", it) }
+        }
+        if (castWifiLock == null) {
+            runCatching {
+                val manager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+                @Suppress("DEPRECATION")
+                val lock = manager.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "VistaStream:CastProxy")
+                lock.apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+            }.onSuccess { castWifiLock = it }
+                .onFailure { Log.w(TAG, "Cast Wi-Fi lock unavailable", it) }
+        }
+    }
+
+    private fun releaseCastProxyLocks() {
+        castCpuLock?.let { runCatching { if (it.isHeld) it.release() } }
+        castCpuLock = null
+        castWifiLock?.let { runCatching { if (it.isHeld) it.release() } }
+        castWifiLock = null
+    }
 
     private fun refreshCastStatus() {
         val cast = castContext ?: return
@@ -642,7 +689,23 @@ class PlaybackSession @Inject constructor(
     }
 
     private fun onCastConnected() {
+        if (castConnected) {
+            refreshCastStatus()
+            return
+        }
         castConnected = true
+        castRecoveryAttempts = 0
+        keepCastProxyAwake()
+        // The session must publish the *remote* player while casting. Otherwise Media3 sees
+        // the local player as stopped, drops the foreground notification and Android may kill
+        // our local HTTP proxy while the receiver still depends on it.
+        castPlayer?.let { remote ->
+            mediaSessionInstance?.let { session ->
+                runCatching { session.setPlayer(remote) }
+                    .onFailure { Log.w(TAG, "Could not attach Cast to media session", it) }
+            }
+        }
+        startPlaybackService()
         castTextStyleApplied = false
         _castError.value = null
         refreshCastStatus()
@@ -674,6 +737,13 @@ class PlaybackSession @Inject constructor(
     private fun onCastDisconnected() {
         recordProgressAt(lastCastPositionMs, lastCastDurationMs)
         castConnected = false
+        castRecoveryJob?.cancel()
+        castRecoveryAttempts = 0
+        releaseCastProxyLocks()
+        mediaSessionInstance?.let { session ->
+            runCatching { session.setPlayer(player) }
+                .onFailure { Log.w(TAG, "Could not restore local media session", it) }
+        }
         castLoadJob?.cancel()
         castRequestedKey = null
         castRequestedUri = null
@@ -703,6 +773,8 @@ class PlaybackSession @Inject constructor(
     private fun syncCast() {
         val item = _nowPlaying.value ?: return
         if (item.key == castRequestedKey && item.mediaUri == castRequestedUri) return
+        castRecoveryAttempts = 0
+        castRecoveryJob?.cancel()
         val start = if (item.key == castRequestedKey) currentPositionMs() else item.startPositionMs
         loadOnCast(item, start, forcedSubtitleId = null)
     }
@@ -715,6 +787,7 @@ class PlaybackSession @Inject constructor(
 
     private fun loadOnCast(item: NowPlaying, startPositionMs: Long, forcedSubtitleId: String?) {
         val remote = castPlayer ?: return
+        castRecoveryJob?.cancel()
         castRequestedKey = item.key
         castRequestedUri = item.mediaUri
         castTextStyleApplied = false
@@ -915,7 +988,19 @@ class PlaybackSession @Inject constructor(
 
         override fun onPlayerError(error: PlaybackException) {
             if (!castConnected) return
-            Log.w(TAG, "Receiver error: ${error.errorCodeName} ${error.message}")
+            Log.w(TAG, "Receiver error: ${error.errorCodeName} ${error.message}", error)
+            // A receiver can fail on a temporary CDN/network interruption. Reload at the last
+            // known position, but never loop indefinitely on an unsupported or expired source.
+            if (castRecoveryAttempts < MAX_CAST_RECOVERY_ATTEMPTS && _nowPlaying.value != null) {
+                val attempt = ++castRecoveryAttempts
+                _castLoading.value = true
+                castRecoveryJob?.cancel()
+                castRecoveryJob = scope.launch {
+                    delay(attempt * 2_000L)
+                    if (castConnected) reloadOnCast(_castSubtitles.value.activeId)
+                }
+                return
+            }
             _castLoading.value = false
             _castError.value = CastError(
                 message = context.getString(R.string.player_tv_could_not_play),
@@ -930,6 +1015,8 @@ class PlaybackSession @Inject constructor(
         val http = DefaultHttpDataSource.Factory()
             .setUserAgent(BROWSER_USER_AGENT)
             .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(20_000)
+            .setReadTimeoutMs(30_000)
         val upstream = ResolvingDataSource.Factory(DefaultDataSource.Factory(context, http)) { spec ->
             spec.withAdditionalHeaders(requestHeaders)
         }
@@ -942,7 +1029,12 @@ class PlaybackSession @Inject constructor(
         val trackSelector = DefaultTrackSelector(context).apply {
             parameters = codecPreferences()
         }
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(30_000, 90_000, 2_500, 5_000)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
         val basePlayer = ExoPlayer.Builder(context)
+            .setLoadControl(loadControl)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -1123,6 +1215,7 @@ class PlaybackSession @Inject constructor(
         const val VOLUME_STEP = 0.05
         /** Receivers load every track with the media; keep the list short. */
         const val MAX_CAST_SUBTITLES = 12
+        const val MAX_CAST_RECOVERY_ATTEMPTS = 2
 
         /** MediaSession id: stable, so the system and Android Auto remember the session. */
         const val SESSION_ID = "OpenStream"

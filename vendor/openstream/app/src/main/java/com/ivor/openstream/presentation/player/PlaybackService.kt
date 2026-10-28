@@ -36,7 +36,9 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // Swiped away from recents with nothing queued: don't leave a dead notification behind.
+        // While casting, the Chromecast still depends on this process's HTTP proxy.
+        // The local player is intentionally stopped, so it cannot decide service lifetime.
+        if (playbackSession.castStatus.value.isCasting) return
         val player = playbackSession.player
         if (!player.playWhenReady || player.mediaItemCount == 0) stopSelf()
         super.onTaskRemoved(rootIntent)

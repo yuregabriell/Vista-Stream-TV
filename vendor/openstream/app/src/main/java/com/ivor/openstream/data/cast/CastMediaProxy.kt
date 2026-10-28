@@ -86,8 +86,8 @@ class CastMediaProxy @Inject constructor(
         val http = DefaultHttpDataSource.Factory()
             .setUserAgent(BROWSER_USER_AGENT)
             .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(20_000)
+            .setConnectTimeoutMs(20_000)
+            .setReadTimeoutMs(30_000)
         val cached = CacheDataSource.Factory()
             .setCache(cache)
             .setUpstreamDataSourceFactory(DefaultDataSource.Factory(context, http))
@@ -279,7 +279,7 @@ class CastMediaProxy @Inject constructor(
                 .setLength(length)
                 .build()
             val opened = try {
-                source.open(spec)
+                openWithRetry(source, spec)
             } catch (error: HttpDataSource.InvalidResponseCodeException) {
                 writeError(output, error.responseCode, error.responseMessage ?: "Upstream error")
                 return
@@ -336,6 +336,29 @@ class CastMediaProxy @Inject constructor(
         } finally {
             runCatching { source.close() }
         }
+    }
+
+    /** Retry short-lived upstream connection failures before sending any bytes to the receiver. */
+    private fun openWithRetry(source: DataSource, spec: DataSpec): Long {
+        repeat(MAX_OPEN_ATTEMPTS) { attempt ->
+            try {
+                return source.open(spec)
+            } catch (error: IOException) {
+                val status = (error as? HttpDataSource.InvalidResponseCodeException)?.responseCode
+                val canRetry = error !is FileNotFoundException &&
+                    (status == null || status in TRANSIENT_HTTP_CODES)
+                if (!canRetry || attempt == MAX_OPEN_ATTEMPTS - 1) throw error
+                runCatching { source.close() }
+                Log.w(TAG, "Transient Cast upstream failure; retry ${attempt + 1}/${MAX_OPEN_ATTEMPTS - 1}")
+                try {
+                    Thread.sleep(350L * (attempt + 1))
+                } catch (interrupted: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    throw IOException("Cast proxy retry interrupted", interrupted)
+                }
+            }
+        }
+        throw IOException("Cast proxy could not open source")
     }
 
     private fun serveSubtitle(target: String, headers: Map<String, String>, headOnly: Boolean, output: OutputStream) {
@@ -529,6 +552,8 @@ class CastMediaProxy @Inject constructor(
         private const val KEY_TOKEN = "cast_proxy_token"
         private const val KEY_PORT = "cast_proxy_port"
         private const val DEFAULT_PORT = 8765
+        private const val MAX_OPEN_ATTEMPTS = 3
+        private val TRANSIENT_HTTP_CODES = setOf(408, 429, 500, 502, 503, 504)
         private const val HLS_MIME = "application/x-mpegURL"
         private const val HLS_FMP4 = "fmp4"
         private const val HLS_TS = "mpeg2_ts"
