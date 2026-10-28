@@ -75,6 +75,18 @@ internal object VistaPlaybackEngine {
             else "Formato ${format.name} identificado.")
     }
 
+    /** First media segment in a media playlist; master playlists are intentionally not guessed. */
+    fun firstHlsSegment(playlist: String): String? {
+        if (!playlist.trimStart('\uFEFF', ' ', '\n', '\r').startsWith("#EXTM3U")) return null
+        val lines = playlist.lineSequence().map { it.trim() }.toList()
+        if (lines.any { it.startsWith("#EXT-X-STREAM-INF", true) }) return null
+        val index = lines.indexOfFirst { it.startsWith("#EXTINF:", true) }
+        if (index < 0) return null
+        return lines.drop(index + 1).firstOrNull {
+            it.isNotBlank() && !it.startsWith("#")
+        }
+    }
+
     private val HLS_TYPES = setOf(
         "application/x-mpegurl", "application/vnd.apple.mpegurl",
         "application/mpegurl", "audio/mpegurl", "audio/x-mpegurl"
