@@ -43,7 +43,7 @@ internal object CastHlsSupport {
         if (playlist.isNullOrBlank()) return null
         if (playlist.contains("#EXT-X-MAP", ignoreCase = true)) return SEGMENT_FMP4
         val segments = playlist.lineSequence()
-            .map(String::trim)
+            .map { it.trim() }
             .filter { it.isNotBlank() && !it.startsWith("#") }
             .map { it.substringBefore('?').substringBefore('#').lowercase() }
             .toList()
