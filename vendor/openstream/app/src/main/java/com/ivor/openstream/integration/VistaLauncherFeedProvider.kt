@@ -66,7 +66,7 @@ class VistaLauncherFeedProvider : ContentProvider() {
                             if (title.isNotBlank()) {
                                 val artwork = c.getString(3) ?: c.getString(4) ?: ""
                                 val meta = if (pct > 0) "Continuar a assistir · ${pct}%" else "Continuar a assistir"
-                                result.addRow(arrayOf("continue", kind, title, meta, art(artwork),
+                                result.addRow(arrayOf<Any?>("continue", kind, title, meta, art(artwork),
                                     "https://www.themoviedb.org/${kind}/${id}", id))
                             }
                         }
@@ -99,7 +99,7 @@ class VistaLauncherFeedProvider : ContentProvider() {
                     val year = item.optInt("year", 0)
                     val meta = "VistaStream · ${when (type) { "anime" -> "Anime"; "series" -> "Série"; else -> "Filme" }}" +
                         (if (year in 1900..2100) " · $year" else "")
-                    result.addRow(arrayOf(type, kind, title, meta, image, href, tmdbId))
+                    result.addRow(arrayOf<Any?>(type, kind, title, meta, image, href, tmdbId))
                     added++
                 }
             }
