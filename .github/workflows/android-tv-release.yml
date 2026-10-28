@@ -78,9 +78,9 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew :app:assembleDebug --no-daemon
-      - name: Test Portuguese preset and Cast large-file ranges
+      - name: Test Portuguese preset, Cast ranges and HLS source hints
         working-directory: vendor/openstream
-        run: ./gradlew :app:testDebugUnitTest --tests '*OfficialCatalogTest' --tests '*CastByteRangesTest' --no-daemon
+        run: ./gradlew :app:testDebugUnitTest --tests '*OfficialCatalogTest' --tests '*CastByteRangesTest' --tests '*CastHlsSupportTest' --no-daemon
       - name: Select universal APK
         shell: bash
         run: |
@@ -103,8 +103,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.15.8-build.${GITHUB_RUN_NUMBER}"
+          TAG="v0.15.9-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "VistaStream — $TAG" \
-            --notes "VistaStream v0.15.8: corrige pedidos HTTP Range de filmes grandes no proxy Chromecast, incluindo os intervalos de sufixo (bytes=-N) e ficheiros superiores a 4 GB; evita cabeçalhos Content-Range inválidos e tamanhos de ficheiro incorretos. Acrescenta deteção de arranque Cast bloqueado, tratamento de erros e testes automatizados. Mantém as melhorias da versão 0.15.7. A compatibilidade depende do formato de vídeo, do dispositivo Cast e da disponibilidade da fonte." \
+            --notes "VistaStream v0.15.9: melhora o suporte a playlists HLS no player Android e no Chromecast. Identifica HLS mesmo com URLs assinadas sem extensão .m3u8, aceita MIME application/vnd.apple.mpegurl, evita classificar fontes HLS como MP4 quando a sondagem falha, reconhece segmentos MPEG-TS e fMP4 e não reescreve playlists truncadas em respostas Range parciais. Inclui novos testes HLS e mantém as correções de reprodução e ficheiros grandes das versões anteriores. Algumas fontes podem continuar indisponíveis por problemas de origem ou formatos incompatíveis." \
             --prerelease

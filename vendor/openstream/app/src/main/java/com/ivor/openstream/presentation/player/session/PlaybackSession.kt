@@ -43,6 +43,7 @@ import com.ivor.openstream.BuildConfig
 import com.ivor.openstream.MainActivity
 import com.ivor.openstream.data.cast.CastMediaItemConverter
 import com.ivor.openstream.data.cast.CastMediaProxy
+import com.ivor.openstream.data.cast.CastHlsSupport
 import com.ivor.openstream.data.playback.DeviceDecoders
 import com.ivor.openstream.data.playback.StreamDataGuard
 import com.ivor.openstream.data.playback.VideoShaderControl
@@ -880,7 +881,11 @@ class PlaybackSession @Inject constructor(
     ): Pair<MediaItem, Map<String, Long>> {
         val url = castProxy.mediaUrl(item.mediaUri, headers, receiver)
             ?: throw IOException(context.getString(R.string.player_cast_same_wifi))
-        val probe = castProxy.probe(item.mediaUri, headers)
+        val probe = castProxy.probe(
+            item.mediaUri,
+            headers,
+            item.server?.mimeType ?: if (item.server?.isHls == true) CastHlsSupport.MIME_TYPE else null
+        )
         val tracks = linkedMapOf<String, Long>()
         val configurations = subtitles.mapNotNull { subtitle ->
             val subtitleUrl = castProxy.subtitleUrl(subtitle.url, headers, receiver) ?: return@mapNotNull null

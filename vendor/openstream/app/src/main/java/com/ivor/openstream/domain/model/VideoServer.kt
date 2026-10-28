@@ -23,8 +23,8 @@ data class VideoServer(
         get() = audio == StreamAudio.DUB
 
     val isHls: Boolean
-        get() = mimeType.equals(HLS_MIME_TYPE, ignoreCase = true) ||
-            url.substringBefore('?').endsWith(".m3u8", ignoreCase = true)
+        get() = isHlsMimeType(mimeType) ||
+            url.substringBefore('?').substringBefore('#').endsWith(".m3u8", ignoreCase = true)
 
     val streamType: String
         get() = when {
@@ -37,3 +37,15 @@ data class VideoServer(
 
 /** Media3's HLS MIME type (MimeTypes.APPLICATION_M3U8), without depending on Media3 here. */
 const val HLS_MIME_TYPE = "application/x-mpegURL"
+
+/** Recognize the content types used by HLS CDNs, not only Media3's canonical MIME. */
+fun isHlsMimeType(value: String?): Boolean {
+    val mime = value?.substringBefore(';')?.trim()?.lowercase() ?: return false
+    return mime in setOf(
+        "application/x-mpegurl",
+        "application/vnd.apple.mpegurl",
+        "application/mpegurl",
+        "audio/mpegurl",
+        "audio/x-mpegurl"
+    )
+}
