@@ -11,6 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import com.ivor.openstream.presentation.navigation.DeepLinkRequest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -52,7 +54,10 @@ private fun parentDestination(route: String?): TvDestination =
     TvDestination.topLevel.firstOrNull { it.route == route } ?: TvDestination.HOME
 
 @Composable
-fun TvNavigation() {
+fun TvNavigation(
+    deepLinkRequest: DeepLinkRequest? = null,
+    onDeepLinkHandled: () -> Unit = {}
+) {
     TvTheme {
         val navController = rememberNavController()
         val configuration = LocalConfiguration.current
@@ -62,7 +67,7 @@ fun TvNavigation() {
             TvDimens.of(contentWidth, configuration.screenHeightDp)
         }
         CompositionLocalProvider(LocalTvDimens provides metrics) {
-            TvAppScaffold(navController)
+            TvAppScaffold(navController, deepLinkRequest, onDeepLinkHandled)
         }
     }
 }
@@ -74,7 +79,21 @@ fun TvNavigation() {
  * puts focus on its own first control; the shell never pulls focus into the drawer.
  */
 @Composable
-private fun TvAppScaffold(navController: NavHostController) {
+private fun TvAppScaffold(
+    navController: NavHostController,
+    deepLinkRequest: DeepLinkRequest?,
+    onDeepLinkHandled: () -> Unit
+) {
+    LaunchedEffect(deepLinkRequest?.nonce) {
+        val request = deepLinkRequest ?: return@LaunchedEffect
+        if (request.tmdbId > 0 && (request.mediaType == "movie" || request.mediaType == "tv")) {
+            navController.navigate(TvRoutes.details(request.mediaType, request.tmdbId)) {
+                launchSingleTop = true
+            }
+        }
+        onDeepLinkHandled()
+    }
+
     val backStackEntry by navController.currentBackStackEntryAsState()
     val route = backStackEntry?.destination?.route
     val selected = parentDestination(route)
