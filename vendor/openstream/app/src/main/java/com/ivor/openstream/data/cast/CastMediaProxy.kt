@@ -146,27 +146,38 @@ class CastMediaProxy @Inject constructor(
      * Looks at the start of [target] (and, for an HLS master playlist, its first variant) to tell
      * HLS from progressive files and TS from fMP4 segments. Blocking; call off the main thread.
      */
-    fun probe(target: String, headers: Map<String, String>): StreamProbe {
+    fun probe(target: String, headers: Map<String, String>, mimeHint: String? = null): StreamProbe {
         val path = Uri.parse(target).path.orEmpty().lowercase()
-        if (path.endsWith(".mpd")) return StreamProbe("application/dash+xml", null)
-        val playlist = runCatching { readPlaylist(target, headers) }.getOrNull()
-            ?: return StreamProbe(if (path.endsWith(".m3u8")) HLS_MIME else guessContentType(target).takeUnless { it == "video/mp2t" } ?: "video/mp4", null)
+        if (path.endsWith(".mpd") || mimeHint.equals(CastHlsSupport.DASH_MIME_TYPE, true)) {
+            return StreamProbe(CastHlsSupport.DASH_MIME_TYPE, null)
+        }
+        val hlsHint = CastHlsSupport.hasHlsHint(target, mimeHint)
+        val playlist = runCatching { readPlaylist(target, headers) }
+            .onFailure { Log.w(TAG, "Cast playlist probe failed for ${Uri.parse(target).host}: ${it.message}") }
+            .getOrNull()
+        if (playlist == null) {
+            // Signed HLS endpoints frequently lack a .m3u8 suffix. A failed preflight
+            // must not label a known HLS stream as MP4 on the Cast receiver.
+            return StreamProbe(
+                if (hlsHint) CastHlsSupport.MIME_TYPE
+                else mimeHint?.takeIf { it.startsWith("video/", true) }
+                    ?: guessContentType(target).takeUnless { it == "video/mp2t" } ?: "video/mp4",
+                null
+            )
+        }
         val (text, base) = playlist
-        val mediaPlaylist = if (text.contains("#EXT-X-STREAM-INF")) {
-            val variant = text.lineSequence().map { it.trim() }
-                .dropWhile { !it.startsWith("#EXT-X-STREAM-INF") }
-                .drop(1)
-                .firstOrNull { it.isNotEmpty() && !it.startsWith("#") }
-            variant?.let { resolve(base, it) }?.let { runCatching { readPlaylist(it, headers) }.getOrNull()?.first }
-        } else {
-            text
-        }
-        val format = when {
-            mediaPlaylist == null -> null
-            mediaPlaylist.contains("#EXT-X-MAP") -> HLS_FMP4
-            else -> HLS_TS
-        }
-        return StreamProbe(HLS_MIME, format)
+        val variant = CastHlsSupport.masterVariant(text)
+        val mediaPlaylist = if (variant != null) {
+            val variantUrl = resolve(base, variant)
+            variantUrl?.let {
+                runCatching { readPlaylist(it, headers) }
+                    .onFailure { error ->
+                        Log.w(TAG, "Cast HLS variant probe failed for ${Uri.parse(it).host}: ${error.message}")
+                    }
+                    .getOrNull()?.first
+            }
+        } else text
+        return StreamProbe(CastHlsSupport.MIME_TYPE, CastHlsSupport.segmentFormat(mediaPlaylist))
     }
 
     /** The playlist text and its address after redirects, or null when [target] isn't a playlist. */
@@ -637,9 +648,6 @@ class CastMediaProxy @Inject constructor(
         private const val DEFAULT_PORT = 8765
         private const val MAX_OPEN_ATTEMPTS = 3
         private val TRANSIENT_HTTP_CODES = setOf(408, 429, 500, 502, 503, 504)
-        private const val HLS_MIME = "application/x-mpegURL"
-        private const val HLS_FMP4 = "fmp4"
-        private const val HLS_TS = "mpeg2_ts"
         private const val SNIFF_BYTES = 16
         private const val MAX_PLAYLIST_BYTES = 16 * 1024 * 1024
         private const val BASE64_FLAGS = Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING
