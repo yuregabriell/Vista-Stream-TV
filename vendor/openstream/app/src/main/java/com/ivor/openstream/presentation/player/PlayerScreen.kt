@@ -236,7 +236,7 @@ fun PlayerScreen(
     // prevents Media3 treating extensionless HLS as progressive MP4 and immediately
     // failing over to another source before its actual format can be identified.
     val sourceNeedsInspection = activeServer != null && !isLocalOrDownloaded &&
-        activeServer.mimeType == null && !activeServer.isHls
+        (activeServer.mimeType == null || activeServer.isHls)
     var inspectingSource by remember(activeServer?.url, isLocalOrDownloaded) {
         mutableStateOf(sourceNeedsInspection)
     }
