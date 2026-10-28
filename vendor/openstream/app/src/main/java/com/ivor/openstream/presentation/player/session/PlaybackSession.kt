@@ -440,6 +440,8 @@ class PlaybackSession @Inject constructor(
     private var castWifiLock: WifiManager.WifiLock? = null
     private var castCpuLock: PowerManager.WakeLock? = null
     private var castRecoveryJob: Job? = null
+    private var castStartupWatchdog: Job? = null
+    private var castLoadGeneration = 0L
     private var castRecoveryAttempts = 0
     private val _castStatus = MutableStateFlow(CastStatus())
     val castStatus: StateFlow<CastStatus> = _castStatus.asStateFlow()
@@ -534,6 +536,8 @@ class PlaybackSession @Inject constructor(
         setSleepTimer(null)
         recordProgress(force = true)
         if (castConnected) {
+            castStartupWatchdog?.cancel()
+            castLoadGeneration++
             castLoadJob?.cancel()
             castPlayer?.stop()
             castPlayer?.clearMediaItems()
@@ -737,6 +741,8 @@ class PlaybackSession @Inject constructor(
     private fun onCastDisconnected() {
         recordProgressAt(lastCastPositionMs, lastCastDurationMs)
         castConnected = false
+        castStartupWatchdog?.cancel()
+        castLoadGeneration++
         castRecoveryJob?.cancel()
         castRecoveryAttempts = 0
         releaseCastProxyLocks()
@@ -788,6 +794,8 @@ class PlaybackSession @Inject constructor(
     private fun loadOnCast(item: NowPlaying, startPositionMs: Long, forcedSubtitleId: String?) {
         val remote = castPlayer ?: return
         castRecoveryJob?.cancel()
+        castStartupWatchdog?.cancel()
+        val generation = ++castLoadGeneration
         castRequestedKey = item.key
         castRequestedUri = item.mediaUri
         castTextStyleApplied = false
@@ -801,7 +809,9 @@ class PlaybackSession @Inject constructor(
             val built = withContext(Dispatchers.IO) {
                 runCatching { buildCastItem(item, headers, subtitles.first, subtitles.second, receiver) }
             }
-            if (!castConnected || castRequestedKey != item.key) return@launch
+            if (!castConnected || castLoadGeneration != generation ||
+                castRequestedKey != item.key || castRequestedUri != item.mediaUri
+            ) return@launch
             built.onSuccess { (mediaItem, tracks) ->
                 castLoadedTracks = tracks
                 _castSubtitles.value = _castSubtitles.value.copy(activeId = subtitles.second?.takeIf { it in tracks })
@@ -809,6 +819,22 @@ class PlaybackSession @Inject constructor(
                 remote.setMediaItem(mediaItem, startPositionMs.coerceAtLeast(0L))
                 remote.playWhenReady = true
                 remote.prepare()
+                // Some receivers stay on the Cast logo without reporting an error. The
+                // user needs feedback and a Retry button, not endless silent buffering.
+                castStartupWatchdog = scope.launch {
+                    delay(CAST_STARTUP_TIMEOUT_MS)
+                    if (castConnected && generation == castLoadGeneration &&
+                        remote.playbackState != Player.STATE_READY &&
+                        remote.playbackState != Player.STATE_ENDED
+                    ) {
+                        Log.w(TAG, "Cast startup timed out: state=${remote.playbackState}, media=${item.key}")
+                        _castLoading.value = false
+                        _castError.value = CastError(
+                            message = context.getString(R.string.player_tv_could_not_play),
+                            fromStream = true
+                        )
+                    }
+                }
             }.onFailure { error ->
                 Log.w(TAG, "Could not prepare the cast stream", error)
                 _castLoading.value = false
@@ -964,6 +990,7 @@ class PlaybackSession @Inject constructor(
             if (!castConnected) return
             when (playbackState) {
                 Player.STATE_READY -> {
+                    castStartupWatchdog?.cancel()
                     _castLoading.value = false
                     _castError.value = null
                     if (!castTextStyleApplied) {
@@ -975,6 +1002,7 @@ class PlaybackSession @Inject constructor(
                     }
                 }
                 Player.STATE_ENDED -> {
+                    castStartupWatchdog?.cancel()
                     _castLoading.value = false
                     recordProgress(force = true, ended = true)
                     if (_sleepTimer.value == SleepTimer.EndOfEpisode) {
@@ -988,6 +1016,7 @@ class PlaybackSession @Inject constructor(
 
         override fun onPlayerError(error: PlaybackException) {
             if (!castConnected) return
+            castStartupWatchdog?.cancel()
             Log.w(TAG, "Receiver error: ${error.errorCodeName} ${error.message}", error)
             // A receiver can fail on a temporary CDN/network interruption. Reload at the last
             // known position, but never loop indefinitely on an unsupported or expired source.
@@ -1216,6 +1245,7 @@ class PlaybackSession @Inject constructor(
         /** Receivers load every track with the media; keep the list short. */
         const val MAX_CAST_SUBTITLES = 12
         const val MAX_CAST_RECOVERY_ATTEMPTS = 2
+        const val CAST_STARTUP_TIMEOUT_MS = 60_000L
 
         /** MediaSession id: stable, so the system and Android Auto remember the session. */
         const val SESSION_ID = "OpenStream"
