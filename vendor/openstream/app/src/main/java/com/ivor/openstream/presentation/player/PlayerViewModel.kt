@@ -760,7 +760,16 @@ class PlayerViewModel @Inject constructor(
         streamingRepository.rememberWorkingSource(identity, server)
     }
 
+    /** Safe user-facing failure detail; signed URLs and headers are never included. */
+    fun onSourcePreflightFailed(message: String) {
+        _playerEvents.tryEmit("Diagnóstico da fonte: $message")
+        onPlaybackError()
+    }
+
     fun onPlaybackError(error: PlaybackException? = null) {
+        if (error != null) _playerEvents.tryEmit(
+            "Diagnóstico de reprodução: ${error.errorCodeName}"
+        )
         val failed = _activeServer.value ?: return
         failedServerIds += failed.id
         // Its links may have expired: the next open of this episode searches the sources again.
