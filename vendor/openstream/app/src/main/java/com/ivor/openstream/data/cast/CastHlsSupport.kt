@@ -29,7 +29,7 @@ internal object CastHlsSupport {
         isHlsMime(mimeHint) || isHlsUrl(url)
 
     fun masterVariant(playlist: String): String? {
-        val lines = playlist.lineSequence().map(String::trim).toList()
+        val lines = playlist.lineSequence().map { it.trim() }.toList()
         val index = lines.indexOfFirst { it.startsWith("#EXT-X-STREAM-INF", ignoreCase = true) }
         if (index == -1) return null
         return lines.drop(index + 1).firstOrNull { it.isNotBlank() && !it.startsWith("#") }
