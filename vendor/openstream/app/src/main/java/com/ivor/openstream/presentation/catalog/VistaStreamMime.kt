@@ -52,7 +52,16 @@ internal object VistaStreamMime {
                         ) header(name, value)
                     }
                 }.build()
-            probe.newCall(request).execute().use { response ->
+            probe.newCall(request).execute().use { initial ->
+                // Some providers deny HTTP Range probes but still serve a normal GET.
+                // Try once without Range before treating the source as expired.
+                val fallback = if (initial.code in setOf(400, 403, 405, 416)) {
+                    runCatching {
+                        probe.newCall(request.newBuilder().removeHeader("Range").build()).execute()
+                    }.getOrNull()
+                } else null
+                val response = fallback ?: initial
+                try {
                 val sample = if (response.isSuccessful) response.peekBody(4096L).bytes()
                     else ByteArray(0)
                 val report = VistaPlaybackEngine.diagnose(
@@ -77,6 +86,9 @@ internal object VistaStreamMime {
                     unsupportedReason = if (!report.playableCandidate) report.explanation else segmentFailure,
                     diagnostic = segmentFailure ?: report.explanation
                 )
+                } finally {
+                    fallback?.close()
+                }
             }
         }.getOrElse {
             VistaMediaProbe(diagnostic = "Não foi possível verificar a origem; o player tentará reproduzir.")
