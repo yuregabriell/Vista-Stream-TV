@@ -1,5 +1,7 @@
 package com.ivor.openstream.presentation.tv
 
+import android.content.Intent
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
@@ -73,7 +75,8 @@ private enum class SettingsCategory(@StringRes val label: Int, val icon: ImageVe
     STORAGE(R.string.tv_st_storage, Icons.Default.Storage),
     NOTIFICATIONS(R.string.st_group_notifications, Icons.Default.Notifications),
     PROFILES(R.string.st_profiles, Icons.Default.People),
-    SOURCES(R.string.st_group_sources, Icons.Default.Extension)
+    SOURCES(R.string.st_group_sources, Icons.Default.Extension),
+    VISTA_ID(R.string.vista_id_title, Icons.Default.People)
 }
 
 private class ChoiceOption(val label: String, val selected: Boolean, val onSelect: () -> Unit)
@@ -514,6 +517,15 @@ private fun settingRows(
             }
         }
 
+        SettingsCategory.VISTA_ID -> {
+            val context = LocalContext.current
+            listOf(SettingRow.Action(
+                key = "vista-id-local",
+                title = "Vista ID (opcional)",
+                subtitle = "Associar perfil local. Sem apagar dados ou alterar o cache de streaming.",
+                onClick = { context.startActivity(Intent(context, com.ivor.openstream.presentation.settings.VistaIdAccountActivity::class.java)) }
+            ))
+        }
         SettingsCategory.SOURCES -> {
             val counts by viewModel.state.collectAsState()
             listOf(
