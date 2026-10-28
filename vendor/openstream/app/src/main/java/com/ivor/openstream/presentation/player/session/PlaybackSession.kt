@@ -1025,7 +1025,14 @@ class PlaybackSession @Inject constructor(
             Log.w(TAG, "Receiver error: ${error.errorCodeName} ${error.message}", error)
             // A receiver can fail on a temporary CDN/network interruption. Reload at the last
             // known position, but never loop indefinitely on an unsupported or expired source.
-            if (castRecoveryAttempts < MAX_CAST_RECOVERY_ATTEMPTS && _nowPlaying.value != null) {
+            val transientFailure = error.errorCode in setOf(
+                PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+                PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+                PlaybackException.ERROR_CODE_IO_UNSPECIFIED
+            )
+            if (transientFailure && castRecoveryAttempts < MAX_CAST_RECOVERY_ATTEMPTS &&
+                _nowPlaying.value != null
+            ) {
                 val attempt = ++castRecoveryAttempts
                 _castLoading.value = true
                 castRecoveryJob?.cancel()
@@ -1036,8 +1043,21 @@ class PlaybackSession @Inject constructor(
                 return
             }
             _castLoading.value = false
+            val diagnostic = when (error.errorCode) {
+                PlaybackException.ERROR_CODE_DECODING_FAILED,
+                PlaybackException.ERROR_CODE_DECODER_INIT_FAILED ->
+                    "O Chromecast não suporta o codec desta fonte."
+                PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ->
+                    "O Chromecast não suporta o formato enviado."
+                PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
+                    "O servidor recusou o vídeo ou a ligação expirou."
+                PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+                PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ->
+                    "Falha de rede entre o Chromecast e o servidor de vídeo."
+                else -> context.getString(R.string.player_tv_could_not_play)
+            }
             _castError.value = CastError(
-                message = context.getString(R.string.player_tv_could_not_play),
+                message = "$diagnostic (${error.errorCodeName})",
                 fromStream = true
             )
         }
