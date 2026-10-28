@@ -710,7 +710,13 @@ fun PlayerScreen(
                             dpadControls = tvControls,
                             artworkUri = (currentEpisode?.stillPath ?: mediaDetails?.backdropPath)
                                 ?.let { "https://image.tmdb.org/t/p/w1280$it" },
-                            mimeType = if (isLocalOrDownloaded) downloadMimeType else activeServer?.mimeType
+                            mimeType = if (isLocalOrDownloaded) {
+                                downloadMimeType
+                            } else {
+                                activeServer?.mimeType ?: if (activeServer?.isHls == true) {
+                                    com.ivor.openstream.domain.model.HLS_MIME_TYPE
+                                } else null
+                            }
                         )
                     }
                 } else if (tvControls) {
