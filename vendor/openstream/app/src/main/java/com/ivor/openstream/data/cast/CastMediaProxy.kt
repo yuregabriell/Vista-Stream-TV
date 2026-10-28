@@ -433,7 +433,9 @@ class CastMediaProxy @Inject constructor(
                 val response = source.responseHeaders
                 val total = response.first("Content-Range")
                     ?.substringAfterLast('/')?.toLongOrNull()
-                    ?: response.first("Content-Length")?.toLongOrNull()
+                    ?: if (method == DataSpec.HTTP_METHOD_HEAD) {
+                        response.first("Content-Length")?.toLongOrNull()
+                    } else null
                 if (total != null && total > 0L) return total
             } catch (error: IOException) {
                 Log.d(TAG, "Cast length probe failed ($method): ${error.message}")
@@ -561,7 +563,7 @@ class CastMediaProxy @Inject constructor(
             ?.takeIf { it.isNotBlank() }
             ?: fallback
 
-     private fun totalLength(
+    private fun totalLength(
         upstreamHeaders: Map<String, List<String>>,
         target: String,
         start: Long,
