@@ -326,6 +326,18 @@ class CastMediaProxy @Inject constructor(
 
             val upstreamHeaders = source.responseHeaders
             val head = if (start == 0L) readUpTo(source, SNIFF_BYTES) else ByteArray(0)
+            val mime = upstreamHeaders.first("Content-Type").orEmpty().substringBefore(';').lowercase()
+            val headText = head.toString(Charsets.UTF_8).trimStart('\uFEFF', ' ', '\r', '\n', '\t')
+            if (start == 0L && !head.isPlaylist() &&
+                (mime in setOf("text/html", "application/json") ||
+                    headText.startsWith("<html", true) ||
+                    headText.startsWith("<!doctype", true) ||
+                    headText.startsWith("{\"error", true))
+            ) {
+                Log.w(TAG, "Cast source returned non-video payload from ${Uri.parse(target).host}")
+                writeError(output, 502, "Upstream Is Not Video")
+                return
+            }
             if (head.isPlaylist()) {
                 // A bounded Range on a playlist is a probe, not a complete playlist.
                 // Never rewrite its truncated #EXTM3U bytes into a new HTTP 200 manifest:
@@ -354,6 +366,11 @@ class CastMediaProxy @Inject constructor(
                     return
                 }
                 val body = head + readRest(source, MAX_PLAYLIST_BYTES)
+                if (body.size >= MAX_PLAYLIST_BYTES) {
+                    Log.w(TAG, "Cast HLS manifest exceeded safety limit at ${Uri.parse(target).host}")
+                    writeError(output, 502, "Playlist Too Large")
+                    return
+                }
                 val base = source.uri?.toString() ?: target
                 val rewritten = rewritePlaylist(body.toString(Charsets.UTF_8), base, headers, host)
                     .toByteArray(Charsets.UTF_8)
