@@ -235,8 +235,9 @@ fun PlayerScreen(
     // Source verification runs only for online URLs whose format is unknown. This
     // prevents Media3 treating extensionless HLS as progressive MP4 and immediately
     // failing over to another source before its actual format can be identified.
-    val sourceNeedsInspection = activeServer != null && !isLocalOrDownloaded &&
-        (activeServer.mimeType == null || activeServer.isHls)
+    val sourceToInspect = activeServer
+    val sourceNeedsInspection = sourceToInspect != null && !isLocalOrDownloaded &&
+        (sourceToInspect.mimeType == null || sourceToInspect.isHls)
     var inspectingSource by remember(activeServer?.url, isLocalOrDownloaded) {
         mutableStateOf(sourceNeedsInspection)
     }
