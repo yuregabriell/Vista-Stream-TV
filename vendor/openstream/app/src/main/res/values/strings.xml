@@ -1087,4 +1087,5 @@
     <string name="tv_st_storage">Storage</string>
     <string name="tv_hold_to_remove">Hold OK to remove</string>
     <string name="tv_key_space">Space</string>
+    <string name="vista_id_title">Vista ID</string>
 </resources>
