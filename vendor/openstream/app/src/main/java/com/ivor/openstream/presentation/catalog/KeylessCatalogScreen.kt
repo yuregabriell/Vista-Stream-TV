@@ -74,6 +74,8 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import com.ivor.openstream.data.catalog.KeylessTitle
+import com.ivor.openstream.presentation.tv.TvAnimeDetails
+import com.ivor.openstream.presentation.tv.rememberTvMode
 import com.ivor.openstream.domain.model.VideoServer
 
 
@@ -303,23 +305,44 @@ fun KeylessCatalogScreen(
         return
     }
     if (chosen != null) {
-        KeylessTitleDetails(
-            title = chosen,
-            episodes = state.episodes,
-            season = state.season,
-            episode = state.episode,
-            servers = state.servers,
-            resolving = state.resolving,
-            resolved = state.resolveFinished,
-            providersChecked = state.resolvedProviders,
-            providersTotal = state.totalProviders,
-            failedProviders = state.failedProviders,
-            onBack = viewModel::closeDetails,
-            onEpisode = viewModel::chooseEpisode,
-            resumePositionMs = state.savedProgressMs,
-            onWatch = viewModel::playFirst,
-            onPlay = viewModel::play
-        )
+        // Anime has a real TV-native 10-foot detail screen, with D-pad episodes,
+        // sources and a play action wired to the same keyless player as mobile.
+        if (rememberTvMode() && chosen.type == "anime") {
+            TvAnimeDetails(
+                title = chosen,
+                episodes = state.episodes,
+                season = state.season,
+                episode = state.episode,
+                servers = state.servers,
+                resolving = state.resolving,
+                resolved = state.resolveFinished,
+                providersChecked = state.resolvedProviders,
+                providersTotal = state.totalProviders,
+                resumePositionMs = state.savedProgressMs,
+                onBack = viewModel::closeDetails,
+                onEpisode = viewModel::chooseEpisode,
+                onWatch = viewModel::playFirst,
+                onPlay = viewModel::play
+            )
+        } else {
+            KeylessTitleDetails(
+                title = chosen,
+                episodes = state.episodes,
+                season = state.season,
+                episode = state.episode,
+                servers = state.servers,
+                resolving = state.resolving,
+                resolved = state.resolveFinished,
+                providersChecked = state.resolvedProviders,
+                providersTotal = state.totalProviders,
+                failedProviders = state.failedProviders,
+                onBack = viewModel::closeDetails,
+                onEpisode = viewModel::chooseEpisode,
+                resumePositionMs = state.savedProgressMs,
+                onWatch = viewModel::playFirst,
+                onPlay = viewModel::play
+            )
+        }
         return
     }
 
