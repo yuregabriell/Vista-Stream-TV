@@ -79,6 +79,7 @@ private val KEY_GAP: Dp = 6.dp
 @Composable
 fun TvSearchScreen(
     onTitleClick: (animeId: Int, mediaType: String) -> Unit,
+    onAnimeBrowse: (genre: String, query: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     onOpenSources: () -> Unit = {},
     keylessViewModel: KeylessCatalogViewModel = hiltViewModel(),
@@ -125,7 +126,12 @@ fun TvSearchScreen(
                 .fillMaxHeight()
         ) {
             QueryLine(query = query, genreLabel = state.genre?.let { stringResource(it.labelRes) })
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
+            TvPill(
+                label = if (query.isBlank()) "Explorar animes" else "Pesquisar animes: ${query.take(18)}",
+                onClick = { onAnimeBrowse("", query.trim()) }
+            )
+            Spacer(Modifier.height(14.dp))
             Column(
                 verticalArrangement = Arrangement.spacedBy(KEY_GAP),
                 modifier = Modifier.focusRestorer(firstKey)
@@ -175,7 +181,8 @@ fun TvSearchScreen(
                 state.isBrowsing -> BrowsePane(
                     recent = state.recent,
                     onSearchRecent = viewModel::submit,
-                    onGenre = viewModel::selectGenre
+                    onGenre = viewModel::selectGenre,
+                    onAnimeBrowse = onAnimeBrowse
                 )
                 state.error != null && results.isEmpty() -> TvErrorState(onRetry = viewModel::retry)
                 state.isLoading && results.isEmpty() -> TvLoading()
@@ -281,7 +288,8 @@ private fun Key(
 private fun BrowsePane(
     recent: List<String>,
     onSearchRecent: (String) -> Unit,
-    onGenre: (BrowseGenre) -> Unit
+    onGenre: (BrowseGenre) -> Unit,
+    onAnimeBrowse: (genre: String, query: String) -> Unit
 ) {
     androidx.compose.foundation.lazy.LazyColumn(
         contentPadding = PaddingValues(top = 36.dp, bottom = 48.dp),
@@ -296,9 +304,32 @@ private fun BrowsePane(
                 }
             }
         }
+        // Anime is a dedicated AniList catalog, not merely TMDB's animation
+        // genre: each choice must open the actual anime search with a filter.
+        item(key = "anime-genre-header") {
+            PillRow(title = "Animes por género") {
+                val animeGenres = listOf(
+                    "" to "Todos os animes",
+                    "Action" to "Ação",
+                    "Adventure" to "Aventura",
+                    "Fantasy" to "Fantasia",
+                    "Romance" to "Romance",
+                    "Comedy" to "Comédia",
+                    "Drama" to "Drama",
+                    "Sci-Fi" to "Ficção científica",
+                    "Mystery" to "Mistério",
+                    "Horror" to "Terror",
+                    "Sports" to "Desporto",
+                    "Supernatural" to "Sobrenatural"
+                )
+                items(animeGenres, key = { it.first }) { (genre, label) ->
+                    TvPill(label = label, onClick = { onAnimeBrowse(genre, "") })
+                }
+            }
+        }
         item(key = "genres") {
             PillRow(title = stringResource(R.string.search_browse_genre)) {
-                items(BrowseGenre.entries.toList(), key = { it.name }) { genre ->
+                items(BrowseGenre.entries.filterNot { it.isAnime }, key = { it.name }) { genre ->
                     TvPill(label = stringResource(genre.labelRes), onClick = { onGenre(genre) })
                 }
             }
