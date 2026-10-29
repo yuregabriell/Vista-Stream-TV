@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items as lazyItems
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -214,7 +215,7 @@ fun TvAnimeScreen(
                 top = 2.dp, bottom = 18.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(TV_ANIME_GENRES, key = { it.first }) { (code, label) ->
+            lazyItems(TV_ANIME_GENRES, key = { it.first }) { (code, label) ->
                 TvPill(label = label, selected = genre == code, onClick = { browseGenre(code) })
             }
         }
@@ -328,7 +329,7 @@ fun TvAnimeScreen(
                     if (titles.isNotEmpty()) {
                         item(key = title) {
                             TvRail(title = title) {
-                                items(titles, key = { it.sourceId }) { anime ->
+                                lazyItems(titles, key = { it.sourceId }) { anime ->
                                     TvCaptionedPoster(
                                         title = anime.title,
                                         posterPath = anime.poster ?: anime.background,
