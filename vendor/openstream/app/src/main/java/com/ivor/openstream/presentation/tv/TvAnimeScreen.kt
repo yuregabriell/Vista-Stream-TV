@@ -87,11 +87,15 @@ fun TvAnimeScreen(
     onOpenSources: () -> Unit = {},
     initialGenre: String = "",
     initialQuery: String = "",
+    initialBrowse: Boolean = false,
     modifier: Modifier = Modifier,
     viewModel: KeylessCatalogViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
     var genre by rememberSaveable(initialGenre, initialQuery) { mutableStateOf(initialGenre) }
+    var showingAll by rememberSaveable(initialBrowse, initialGenre, initialQuery) {
+        mutableStateOf(initialBrowse && initialGenre.isBlank() && initialQuery.isBlank())
+    }
     var searchText by rememberSaveable(initialGenre, initialQuery) { mutableStateOf(initialQuery) }
     var submittedQuery by rememberSaveable(initialGenre, initialQuery) { mutableStateOf(initialQuery) }
     var selectedTitle by remember { mutableStateOf<KeylessTitle?>(null) }
@@ -99,19 +103,21 @@ fun TvAnimeScreen(
     val firstAction = remember { FocusRequester() }
 
     fun browseGenre(value: String) {
+        showingAll = false
         genre = value
         searchText = ""
         submittedQuery = ""
     }
 
     fun searchAnime() {
+        showingAll = false
         genre = ""
         submittedQuery = searchText.trim()
         keyboard?.hide()
     }
 
-    val browsing = genre.isNotBlank() || submittedQuery.isNotBlank()
-    LaunchedEffect(genre, submittedQuery) {
+    val browsing = showingAll || genre.isNotBlank() || submittedQuery.isNotBlank()
+    LaunchedEffect(genre, submittedQuery, showingAll) {
         if (browsing) {
             viewModel.browse("anime", query = submittedQuery, genre = genre)
         }
@@ -341,7 +347,10 @@ fun TvAnimeScreen(
                     ) {
                         TvPill("Explorar todo o catálogo de animes", onClick = {
                             // Display the paged AniList catalog rather than only Home previews.
-                            browseGenre("Action")
+                            showingAll = true
+                            genre = ""
+                            searchText = ""
+                            submittedQuery = ""
                         })
                     }
                 }
