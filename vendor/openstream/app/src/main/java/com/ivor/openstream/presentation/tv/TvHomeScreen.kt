@@ -82,6 +82,7 @@ private fun AnimeDto.tvMediaType(): String = mediaType ?: if (isMovie) "movie" e
 fun TvHomeScreen(
     onOpenTitle: (mediaType: String, id: Int) -> Unit,
     onPlay: (mediaType: String, id: Int, season: Int, episode: Int) -> Unit,
+    onOpenAnime: () -> Unit = {},
     onOpenExtensions: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel(),
@@ -131,6 +132,20 @@ fun TvHomeScreen(
                         contentAlignment = Alignment.BottomStart
                     ) {
                         Column {
+                            // The premium phone application's two experiences are
+                            // explicitly reachable on TV with the remote as well.
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                Text(
+                                    "FILMES & SÉRIES",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                TvPill("ANIMES", onClick = onOpenAnime)
+                            }
+                            Spacer(Modifier.height(14.dp))
                             InfoPanel(shown)
                             if (featured != null) {
                                 // Hidden while a card has focus but still focusable, so Up from the
