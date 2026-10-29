@@ -71,6 +71,27 @@ jobs:
             echo "OPENSTREAM_KEY_ALIAS=$VISTA_KEY_ALIAS"
             echo "OPENSTREAM_KEY_PASSWORD=$VISTA_KEY_PASSWORD"
           } >> "$GITHUB_ENV"
+      - name: Verify Anime TV integration is fully wired
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          src = Path('vendor/openstream/app/src/main/java/com/ivor/openstream')
+          checks = [
+            ('presentation/tv/TvChrome.kt', 'ANIME("tv_anime"'),
+            ('presentation/tv/TvNavigation.kt', 'TvDestination.ANIME.route'),
+            ('presentation/tv/TvNavigation.kt', 'TvAnimeScreen('),
+            ('presentation/tv/TvHomeScreen.kt', 'onOpenAnime'),
+            ('presentation/tv/TvSearchScreen.kt', 'Animes por género'),
+            ('presentation/tv/TvSearchScreen.kt', 'onAnimeBrowse'),
+            ('presentation/tv/TvAnimeScreen.kt', 'viewModel.browse("anime"'),
+            ('presentation/tv/TvAnimeDetails.kt', 'onEpisode(ep.season, ep.number)'),
+            ('presentation/catalog/KeylessCatalogScreen.kt', 'TvAnimeDetails('),
+            ('data/catalog/KeylessCatalogClient.kt', 'https://graphql.anilist.co')
+          ]
+          for path,needle in checks:
+            assert needle in (src/path).read_text(encoding='utf-8'), f'{path}: {needle}'
+          print("Anime TV home, browse, genre search, native details and AniList connection verified.")
+          PY
       - name: Build APK
         working-directory: vendor/openstream
         env:
@@ -103,8 +124,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.16.1-build.${GITHUB_RUN_NUMBER}"
+          TAG="v0.16.2-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "VistaStream — $TAG" \
-            --notes "VistaStream 0.16.1: primeira fase do Vista Playback Engine. Diagnóstico de fontes HTTP e formatos HLS, DASH, MP4, MKV e WebM; identificação prévia de streams sem extensão no player Android; verificação opcional do primeiro segmento HLS em mesma origem; identificação de páginas HTML/JSON e playlists inválidas no proxy Chromecast; erros Media3/Cast mais claros e troca automática limitada de fontes com prioridade a idioma e áudio. Inclui testes de regressão do motor de reprodução. Preserva a integração VistaLauncher 0.16.0, biblioteca, catálogo e atualizações. Algumas fontes e codecs poderão continuar incompatíveis." \
+            --notes "VistaStream 0.16.2: interface premium de Animes dedicada para Android TV, separador Animes no menu e na Home, pesquisa de animes por nome e por género (Ação, Fantasia, Romance, Comédia, Drama, Ficção científica e outros), catálogo AniList paginado com recomendações, ecrã de detalhes TV adaptado para comando, temporadas, episódios e fontes de reprodução. Inclui também a primeira fase do Vista Playback Engine. Diagnóstico de fontes HTTP e formatos HLS, DASH, MP4, MKV e WebM; identificação prévia de streams sem extensão no player Android; verificação opcional do primeiro segmento HLS em mesma origem; identificação de páginas HTML/JSON e playlists inválidas no proxy Chromecast; erros Media3/Cast mais claros e troca automática limitada de fontes com prioridade a idioma e áudio. Inclui testes de regressão do motor de reprodução. Preserva a integração VistaLauncher 0.16.0, biblioteca, catálogo e atualizações. Algumas fontes e codecs poderão continuar incompatíveis." \
             --prerelease
