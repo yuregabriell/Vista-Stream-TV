@@ -212,7 +212,13 @@ fun TvPosterCard(
         Box(Modifier.fillMaxSize()) {
             if (posterPath != null) {
                 AsyncImage(
-                    model = "$TV_POSTER_BASE$posterPath",
+                    // TMDB posters are paths; AniList posters are absolute HTTPS URLs.
+                    // Do not prepend the TMDB base to an AniList image.
+                    model = when {
+                        posterPath.startsWith("https://") -> posterPath
+                        posterPath.startsWith("/") -> "$TV_POSTER_BASE$posterPath"
+                        else -> posterPath
+                    },
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
