@@ -40,6 +40,10 @@ import androidx.tv.material3.rememberDrawerState
 import com.ivor.openstream.presentation.player.PlayerScreen
 
 private object TvRoutes {
+    const val ANIME_BROWSE = "tv_anime/browse?genre={genre}&query={query}"
+    fun animeBrowse(genre: String = "", query: String = "") =
+        "tv_anime/browse?genre=${android.net.Uri.encode(genre)}&query=${android.net.Uri.encode(query)}"
+
     const val DETAILS = "tv_details/{mediaType}/{animeId}"
     const val PLAYER = "tv_player/{mediaType}/{animeId}/{season}/{episode}?downloadId={downloadId}"
 
@@ -51,7 +55,8 @@ private object TvRoutes {
 }
 
 private fun parentDestination(route: String?): TvDestination =
-    TvDestination.topLevel.firstOrNull { it.route == route } ?: TvDestination.HOME
+    if (route?.startsWith("tv_anime/browse") == true) TvDestination.ANIME
+    else TvDestination.topLevel.firstOrNull { it.route == route } ?: TvDestination.HOME
 
 @Composable
 fun TvNavigation(
@@ -98,13 +103,14 @@ private fun TvAppScaffold(
     val route = backStackEntry?.destination?.route
     val selected = parentDestination(route)
     // Player and Details are full screen: the drawer is for moving between tabs.
-    val showDrawer = TvDestination.topLevel.any { it.route == route }
+    val showDrawer = TvDestination.topLevel.any { it.route == route } ||
+        route?.startsWith("tv_anime/browse") == true
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val requesters = remember { TvDestination.topLevel.associateWith { FocusRequester() } }
 
     fun go(destination: TvDestination) {
         drawerState.setValue(DrawerValue.Closed)
-        if (destination == selected) return
+        if (destination == selected && route == destination.route) return
         navController.navigate(destination.route) {
             popUpTo(TvDestination.HOME.route) { saveState = true }
             launchSingleTop = true
@@ -151,6 +157,7 @@ private fun TvAppScaffold(
         ) {
             composable(TvDestination.HOME.route) {
                 TvHomeScreen(
+                    onOpenAnime = { go(TvDestination.ANIME) },
                     onOpenExtensions = { go(TvDestination.EXTENSIONS) },
                     onOpenTitle = { mediaType, id -> navController.navigate(TvRoutes.details(mediaType, id)) },
                     onPlay = { mediaType, id, season, episode ->
@@ -159,8 +166,30 @@ private fun TvAppScaffold(
                 )
             }
 
+            composable(TvDestination.ANIME.route) {
+                TvAnimeScreen(onOpenSources = { go(TvDestination.EXTENSIONS) })
+            }
+
+            composable(
+                TvRoutes.ANIME_BROWSE,
+                arguments = listOf(
+                    navArgument("genre") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("query") { type = NavType.StringType; defaultValue = "" }
+                )
+            ) { entry ->
+                TvAnimeScreen(
+                    initialGenre = entry.arguments?.getString("genre").orEmpty(),
+                    initialQuery = entry.arguments?.getString("query").orEmpty(),
+                    initialBrowse = true,
+                    onOpenSources = { go(TvDestination.EXTENSIONS) }
+                )
+            }
+
             composable(TvDestination.SEARCH.route) {
                 TvSearchScreen(
+                    onAnimeBrowse = { genre, query ->
+                        navController.navigate(TvRoutes.animeBrowse(genre = genre, query = query))
+                    },
                     onOpenSources = { go(TvDestination.EXTENSIONS) },
                     onTitleClick = { animeId, mediaType -> navController.navigate(TvRoutes.details(mediaType, animeId)) }
                 )
