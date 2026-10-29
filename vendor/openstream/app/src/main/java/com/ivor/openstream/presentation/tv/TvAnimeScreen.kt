@@ -205,8 +205,7 @@ fun TvAnimeScreen(
                 colors = ButtonDefaults.colors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
-                ),
-                shape = ButtonDefaults.shape(RoundedCornerShape(14.dp))
+                )
             ) { androidx.tv.material3.Text("Pesquisar") }
         }
 
