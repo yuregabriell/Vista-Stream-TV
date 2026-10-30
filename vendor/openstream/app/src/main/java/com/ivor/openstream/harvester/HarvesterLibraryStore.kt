@@ -46,6 +46,31 @@ class HarvesterLibraryStore(context: Context) {
         prefs.edit().putString("library", json.encodeToString(next)).apply()
     }
 
+    /**
+     * Import direct browser playback history from an explicitly paired VistaStream.
+     * Only HTTP media URLs without auth tokens are transferable; never copy headers.
+     * Keep local playback position unless peer progress was saved more recently.
+     */
+    fun mergeFromPeer(peer: List<HarvesterMedia>) = synchronized(this) {
+        val local = entries().associateBy { key(it.url) }.toMutableMap()
+        for (remote in peer.take(80)) {
+            if (!NativeHarvesterStore.safeDirect(remote.url)) continue
+            val identity = key(remote.url)
+            val existing = local[identity]
+            val cleaned = remote.copy(referer = null, userAgent = null, subtitleUrl = null)
+            if (existing == null || cleaned.savedAt > existing.savedAt) {
+                local[identity] = cleaned
+            } else if (existing.positionMs == 0L && cleaned.positionMs > 0L) {
+                local[identity] = existing.copy(
+                    positionMs = cleaned.positionMs,
+                    durationMs = cleaned.durationMs
+                )
+            }
+        }
+        val merged = local.values.sortedByDescending { it.savedAt }.take(80)
+        prefs.edit().putString("library", json.encodeToString(merged)).apply()
+    }
+
     fun progress(url: String, positionMs: Long, durationMs: Long) = synchronized(this) {
         if (durationMs <= 0 || positionMs < 5_000) return@synchronized
         val data = entries().toMutableList()
