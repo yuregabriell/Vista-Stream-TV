@@ -93,6 +93,15 @@ fun HarvesterShelf() {
                         Text(if(video.webOnly) "Página web · redescobrir fonte" else "Vídeo online",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.labelSmall)
+                        // Link a captured source to the title's canonical metadata and episode.
+                        TextButton(onClick = {
+                            context.startActivity(
+                                Intent(context, HarvesterCatalogMatchActivity::class.java)
+                                    .putExtra("url", video.url)
+                            )
+                        }) {
+                            Text("Adicionar ao catálogo")
+                        }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             TextButton(onClick = {
                                 val action = if(video.webOnly)
