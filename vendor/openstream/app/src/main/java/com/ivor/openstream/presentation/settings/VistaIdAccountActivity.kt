@@ -72,6 +72,12 @@ class VistaIdAccountActivity : ComponentActivity() {
                 startActivity(Intent(this@VistaIdAccountActivity, VistaLanSyncActivity::class.java))
             }
         })
+        content.addView(Button(this).apply {
+            text = "Vista Source · Importar / exportar manifest.json"
+            setOnClickListener {
+                startActivity(Intent(this@VistaIdAccountActivity, VistaSourceActivity::class.java))
+            }
+        })
         content.addView(homeShare)
         content.addView(label("Partilha apenas metadados e progresso da conta local selecionada com o VistaLauncher nesta mesma TV; nunca envia vídeos ou palavras-passe.", 12f))
         val action = Button(this).apply {
