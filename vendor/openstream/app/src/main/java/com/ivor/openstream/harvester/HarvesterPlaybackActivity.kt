@@ -4,6 +4,20 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import com.ivor.openstream.data.catalog.KeylessTitle
+import com.ivor.openstream.presentation.catalog.KeylessCastViewModel
+import com.ivor.openstream.presentation.player.components.CastDeviceSheet
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -25,6 +39,7 @@ import com.ivor.openstream.ui.theme.OpenStreamTheme
  * This Activity stays separate from the Vista home scaffold and bottom toolbar.
  * It opens as a result of explicit user intent and never scrapes web pages.
  */
+@AndroidEntryPoint
 class HarvesterPlaybackActivity : ComponentActivity() {
     private var current by mutableStateOf<HarvesterMedia?>(null)
     private lateinit var library: HarvesterLibraryStore
@@ -42,6 +57,9 @@ class HarvesterPlaybackActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val item = current
+            val castViewModel: KeylessCastViewModel = hiltViewModel()
+            val castStatus by castViewModel.status.collectAsState()
+            var showCastDevices by remember { mutableStateOf(false) }
             OpenStreamTheme(darkTheme = true, dynamicColor = false) {
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                     if (item != null) {
@@ -63,18 +81,64 @@ class HarvesterPlaybackActivity : ComponentActivity() {
                                 StreamSubtitle(url = it, label = "Legendas", language = item.subtitleLanguage)
                             })
                         )
-                        VistaFullscreenPlayer(
-                            server = server,
-                            title = item.title,
-                            episodeLabel = "Harvester Browser",
-                            resumePositionMs = savedPosition,
-                            onProgress = { position, duration -> library.progress(item.url, position, duration) },
-                            availableServers = listOf(server),
-                            onSelectSource = {},
-                            hasAlternative = false,
-                            onTryAlternative = {},
-                            onClose = { finish() }
-                        )
+                        // Share the same Cast session, device selector and Media3 player as
+                        // the catalog. A website reference still requires a genuine video URL.
+                        LaunchedEffect(castStatus.isCasting, server.url) {
+                            if (castStatus.isCasting) {
+                                castViewModel.cast(
+                                    KeylessTitle(
+                                        sourceId = "browser:" + item.url.hashCode(),
+                                        title = item.title, type = "movie"
+                                    ),
+                                    server, 1, 1, savedPosition
+                                )
+                            }
+                        }
+                        if (showCastDevices) {
+                            CastDeviceSheet(
+                                selector = castViewModel.routeSelector,
+                                status = castStatus,
+                                onStopCasting = castViewModel::stopCasting,
+                                onDismiss = { showCastDevices = false }
+                            )
+                        }
+                        if (castStatus.isCasting) {
+                            Column(
+                                modifier = Modifier.fillMaxSize().padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text("A reproduzir na TV · " + item.title)
+                                Button(onClick = castViewModel::pauseOrResume) {
+                                    Text("Pausar / Retomar")
+                                }
+                                TextButton(onClick = { showCastDevices = true }) {
+                                    Text("Dispositivo e transmissão")
+                                }
+                                TextButton(onClick = castViewModel::stopCasting) {
+                                    Text("Desligar Chromecast")
+                                }
+                                TextButton(onClick = { finish() }) {
+                                    Text("Voltar à biblioteca")
+                                }
+                            }
+                        } else {
+                            VistaFullscreenPlayer(
+                                server = server,
+                                title = item.title,
+                                episodeLabel = "Harvester Browser",
+                                resumePositionMs = savedPosition,
+                                onProgress = { position, duration ->
+                                    library.progress(item.url, position, duration)
+                                },
+                                availableServers = listOf(server),
+                                onSelectSource = {},
+                                hasAlternative = false,
+                                onTryAlternative = {},
+                                onClose = { finish() },
+                                onCastClick = { showCastDevices = true }
+                            )
+                        }
                     }
                 }
             }
