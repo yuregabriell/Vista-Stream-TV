@@ -12,6 +12,7 @@
     <!-- Background playback holds a wake lock and a Wi-Fi lock while playing with the screen off. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <!-- In-app updates hand the downloaded APK to the system installer. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Daily new-episode check wakes the app to compare followed shows against TMDB. -->
