@@ -241,7 +241,7 @@ class VistaLanSyncActivity : ComponentActivity() {
         val prefs = getSharedPreferences(HISTORY_PREFS, MODE_PRIVATE)
         val current = prefs.all
         val edit = prefs.edit()
-        packet.onlineHistory.take(5000).forEach { (key, encoded) ->
+        packet.onlineHistory.entries.take(5000).forEach { (key, encoded) ->
             if (key.length > 512 || encoded.length > 20_002) return@forEach
             val id = when {
                 key.startsWith("title:") -> key.removePrefix("title:")
