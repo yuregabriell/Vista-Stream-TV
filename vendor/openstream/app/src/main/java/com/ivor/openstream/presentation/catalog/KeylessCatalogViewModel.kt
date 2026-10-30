@@ -1,5 +1,9 @@
 package com.ivor.openstream.presentation.catalog
 
+import android.content.Context
+import com.ivor.openstream.harvester.NativeHarvesterStore
+import com.ivor.openstream.harvester.NativeHarvesterProvider
+import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ivor.openstream.data.catalog.KeylessCatalogClient
@@ -55,8 +59,10 @@ data class KeylessCatalogState(
 class KeylessCatalogViewModel @Inject constructor(
     private val client: KeylessCatalogClient,
     private val streams: StreamingRepository,
-    private val history: VistaWatchHistory
+    private val history: VistaWatchHistory,
+    @ApplicationContext context: Context
 ) : ViewModel() {
+    private val browserSources = NativeHarvesterProvider(NativeHarvesterStore(context))
     val hasTmdbKey: Boolean get() = client.tmdbConfigured
 
     fun continueWatching(titles: List<KeylessTitle>): List<KeylessTitle> =
@@ -262,15 +268,21 @@ class KeylessCatalogViewModel @Inject constructor(
                     season = _state.value.season,
                     episode = _state.value.episode
                 )
+                // Always include imported videos linked to this title/episode, even if the
+                // optional marketplace Harvester extension was never enabled by the user.
+                val savedBrowser = browserSources.resolve(identity).getOrDefault(emptyList())
+                if (_state.value.selected?.sourceId == item.sourceId) {
+                    _state.value = _state.value.copy(servers = savedBrowser)
+                }
                 // On explicit "Encontrar fontes online", search *all* enabled compatible
                 // providers instead of stopping early when the first link appears.
                 streams.resolveServers(identity, includeFallbacks = true).collect { resolution ->
                     if (_state.value.selected?.sourceId == item.sourceId) {
                         _state.value = _state.value.copy(
-                            servers = resolution.servers.filter {
+                            servers = (savedBrowser + resolution.servers).filter {
                                 it.url.startsWith("https://") || it.url.startsWith("http://") ||
                                     it.url.startsWith("rtsp://")
-                            },
+                            }.distinctBy { it.url },
                             resolving = !resolution.isComplete, resolveFinished = resolution.isComplete,
                             resolvedProviders = resolution.completedProviders,
                             totalProviders = resolution.totalProviders,
