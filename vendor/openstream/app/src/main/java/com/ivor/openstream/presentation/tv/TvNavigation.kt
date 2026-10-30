@@ -1,6 +1,10 @@
 package com.ivor.openstream.presentation.tv
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +35,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.DrawerValue
 import androidx.tv.material3.Icon
 import androidx.tv.material3.ModalNavigationDrawer
@@ -67,7 +73,7 @@ fun TvNavigation(
         val navController = rememberNavController()
         val configuration = LocalConfiguration.current
         // Screens still sized by TvDimens get the width right of the collapsed drawer.
-        val contentWidth = configuration.screenWidthDp - TvLayout.ContentStart.value.toInt()
+        val contentWidth = configuration.screenWidthDp - 84 - TvLayout.ContentStart.value.toInt()
         val metrics = remember(contentWidth, configuration.screenHeightDp) {
             TvDimens.of(contentWidth, configuration.screenHeightDp)
         }
@@ -105,11 +111,9 @@ private fun TvAppScaffold(
     // Player and Details are full screen: the drawer is for moving between tabs.
     val showDrawer = TvDestination.topLevel.any { it.route == route } ||
         route?.startsWith("tv_anime/browse") == true
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
     val requesters = remember { TvDestination.topLevel.associateWith { FocusRequester() } }
 
     fun go(destination: TvDestination) {
-        drawerState.setValue(DrawerValue.Closed)
         if (destination == selected && route == destination.route) return
         navController.navigate(destination.route) {
             popUpTo(TvDestination.HOME.route) { saveState = true }
@@ -118,42 +122,49 @@ private fun TvAppScaffold(
         }
     }
 
-    val background = MaterialTheme.colorScheme.background
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        scrimBrush = Brush.horizontalGradient(listOf(background, background.copy(alpha = 0.6f), Color.Transparent)),
-        drawerContent = {
-            if (showDrawer) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .padding(horizontal = 12.dp, vertical = 24.dp)
-                        .selectableGroup()
-                        .focusRestorer(requesters.getValue(selected)),
-                    verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically)
-                ) {
-                    TvDestination.topLevel.forEach { destination ->
-                        NavigationDrawerItem(
-                            selected = destination == selected,
-                            onClick = { go(destination) },
-                            leadingContent = { Icon(destination.icon, contentDescription = null) },
-                            modifier = Modifier.focusRequester(requesters.getValue(destination))
-                        ) {
-                            Text(
-                                text = stringResource(destination.labelRes),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+    // A modal TV drawer intercepts DPAD focus while content is open. Keep the rail
+    // in the normal layout instead: pressing Right from a menu item moves into
+    // the screen, and the menu can never float over or steal its cards/episodes.
+    Row(modifier = Modifier.fillMaxSize()) {
+        if (showDrawer) {
+            Column(
+                modifier = Modifier
+                    .width(84.dp)
+                    .fillMaxHeight()
+                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                    .padding(horizontal = 10.dp, vertical = 16.dp)
+                    .selectableGroup(),
+                verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                TvDestination.topLevel.forEach { destination ->
+                    Button(
+                        onClick = { go(destination) },
+                        modifier = Modifier
+                            .width(62.dp)
+                            .height(55.dp)
+                            .focusRequester(requesters.getValue(destination)),
+                        colors = ButtonDefaults.colors(
+                            containerColor = if (destination == selected)
+                                MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceContainer,
+                            contentColor = if (destination == selected)
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            else MaterialTheme.colorScheme.onSurface
+                        )
+                    ) {
+                        Icon(
+                            destination.icon,
+                            contentDescription = stringResource(destination.labelRes)
+                        )
                     }
                 }
             }
         }
-    ) {
         NavHost(
             navController = navController,
             startDestination = TvDestination.HOME.route,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.weight(1f).fillMaxHeight()
         ) {
             composable(TvDestination.HOME.route) {
                 TvHomeScreen(

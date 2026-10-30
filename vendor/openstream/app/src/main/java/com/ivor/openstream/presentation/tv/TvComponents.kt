@@ -55,8 +55,8 @@ import com.ivor.openstream.R
 
 /** Sizes for the 960x540 dp canvas a 1080p TV gives the app. */
 object TvLayout {
-    /** Where content starts: clear of the collapsed navigation drawer. */
-    val ContentStart: Dp = 96.dp
+    /** Safe gutter after the fixed 84dp rail; never overlay content. */
+    val ContentStart: Dp = 28.dp
     /** Where content starts on full-screen pages without the drawer (Details): the TV safe margin. */
     val PageStart: Dp = 56.dp
     val ContentEnd: Dp = 48.dp

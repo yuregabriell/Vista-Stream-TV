@@ -21,6 +21,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +62,10 @@ fun TvAnimeDetails(
     onPlay: (VideoServer) -> Unit
 ) {
     BackHandler(onBack = onBack)
+    val detailFocus = remember(title.sourceId) { FocusRequester() }
+    LaunchedEffect(title.sourceId) {
+        runCatching { detailFocus.requestFocus() }
+    }
     val seasons = episodes.map { it.season }.distinct().sorted()
     val episodeChoices = episodes.filter { it.season == season }.ifEmpty {
         listOf(KeylessEpisode(season, episode, "Episódio $episode"))
@@ -118,7 +126,7 @@ fun TvAnimeDetails(
                                 }
                             )
                         }
-                        TvPill("Voltar aos animes", onClick = onBack)
+                        TvPill("Voltar aos animes", onClick = onBack, modifier = Modifier.focusRequester(detailFocus))
                     }
                 }
             }

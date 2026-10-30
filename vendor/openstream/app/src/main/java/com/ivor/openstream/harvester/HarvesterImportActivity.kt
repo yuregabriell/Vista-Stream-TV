@@ -88,8 +88,12 @@ class HarvesterImportActivity : Activity() {
                         .putExtra(HarvesterContract.EXTRA_URL,url)
                         .putExtra(HarvesterContract.EXTRA_TITLE,item.title))
                     Toast.makeText(this@HarvesterImportActivity,
-                        if (webOnly) "Página guardada em Downloads + Web. A fonte deverá ser redescoberta." else
-                            "Vídeo guardado em Downloads + Web. Ativa a extensão Harvester em Extensões.",Toast.LENGTH_LONG).show()
+                        if (webOnly) "Referência guardada. É necessário redescobrir uma fonte direta para reproduzir." else
+                            "Fonte guardada. Vamos associá-la ao catálogo.",Toast.LENGTH_LONG).show()
+                    // The browser already sends an ACTION_IMPORT Intent to VistaStream.
+                    // Offer the catalog match immediately without changing its APK.
+                    startActivity(Intent(this@HarvesterImportActivity,
+                        HarvesterCatalogMatchActivity::class.java).putExtra("url", item.url))
                     finish()
                 }
             }
