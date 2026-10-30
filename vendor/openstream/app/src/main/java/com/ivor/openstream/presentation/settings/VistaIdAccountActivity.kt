@@ -66,7 +66,7 @@ class VistaIdAccountActivity : ComponentActivity() {
                 sharePrefs.edit().putBoolean("share_enabled", checked).apply()
             }
         }
-        content.addView(homeShare)
+        content.addView(Button(this).apply {\n            text = "Sincronizar TV e telemóvel por Wi-Fi"\n            setOnClickListener {\n                startActivity(Intent(this@VistaIdAccountActivity, VistaLanSyncActivity::class.java))\n            }\n        })\n        content.addView(homeShare)
         content.addView(label("Partilha apenas metadados e progresso da conta local selecionada com o VistaLauncher nesta mesma TV; nunca envia vídeos ou palavras-passe.", 12f))
         val action = Button(this).apply {
             text = if (id == null) "Ligar Vista ID local" else "Alterar Vista ID"
