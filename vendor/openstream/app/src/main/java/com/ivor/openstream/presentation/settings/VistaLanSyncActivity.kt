@@ -67,11 +67,13 @@ class VistaLanSyncActivity : ComponentActivity() {
     private var server: ServerSocket? = null
     private var receiverJob: Job? = null
     private lateinit var status: TextView
+    private lateinit var discovery: VistaLanDiscovery
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density + 0.5f).toInt()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        discovery = VistaLanDiscovery(this)
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(30), dp(24), dp(36))
@@ -110,6 +112,15 @@ class VistaLanSyncActivity : ComponentActivity() {
             setHintTextColor(0xffadb3c3.toInt())
         }
         layout.addView(address)
+        layout.addView(label("A procurar TVs VistaStream na mesma rede Wi-Fi…", 13f))
+        discovery.discover { name, endpoint ->
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) {
+                    address.setText(endpoint)
+                    status.text = "Dispositivo encontrado: $name. Introduz o código apresentado na TV."
+                }
+            }
+        }
         layout.addView(label("Código temporário de emparelhamento", 14f))
         val code = EditText(this).apply {
             hint = "12 caracteres"
@@ -171,6 +182,7 @@ class VistaLanSyncActivity : ComponentActivity() {
             val result = runCatching {
                 val localServer = ServerSocket(0)
                 server = localServer
+                withContext(Dispatchers.Main) { discovery.advertise(localServer.localPort) }
                 val pairingCode = ByteArray(9).also(random::nextBytes)
                     .let { Base64.encodeToString(it, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING) }
                 val salt = ByteArray(16).also(random::nextBytes)
@@ -189,6 +201,7 @@ class VistaLanSyncActivity : ComponentActivity() {
                 } finally {
                     localServer.close()
                     server = null
+                    withContext(Dispatchers.Main) { discovery.stopAdvertising() }
                 }
             }
             withContext(Dispatchers.Main) {
@@ -452,6 +465,7 @@ class VistaLanSyncActivity : ComponentActivity() {
     }.getOrDefault(emptyList())
 
     override fun onDestroy() {
+        discovery.close()
         server?.close()
         receiverJob?.cancel()
         super.onDestroy()
