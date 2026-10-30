@@ -14,6 +14,8 @@ import androidx.lifecycle.lifecycleScope
 import com.ivor.openstream.data.backup.LibraryBackup
 import com.ivor.openstream.harvester.NativeHarvesterStore
 import com.ivor.openstream.harvester.NativeSavedStream
+import com.ivor.openstream.harvester.HarvesterLibraryStore
+import com.ivor.openstream.harvester.HarvesterMedia
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -221,8 +223,12 @@ class VistaLanSyncActivity : ComponentActivity() {
                 (if (item.webOnly) NativeHarvesterStore.safeWebPage(item.pageUrl)
                  else NativeHarvesterStore.safeDirect(item.url))
         }
+        val browserHistory = HarvesterLibraryStore(this).all()
+            .filter { NativeHarvesterStore.safeDirect(it.url) }
+            .map { it.copy(userAgent = null, referer = null, subtitleUrl = null) }
         return SyncPacket(library = output.toString(Charsets.UTF_8.name()),
-            onlineHistory = values, onlineHistorySets = sets, sources = sources)
+            onlineHistory = values, onlineHistorySets = sets, sources = sources,
+            browserHistory = browserHistory)
     }
 
     private suspend fun merge(packet: SyncPacket) {
@@ -235,6 +241,8 @@ class VistaLanSyncActivity : ComponentActivity() {
             // NativeHarvesterStore validates URLs again before accepting them.
             store.save(source)
         }
+        HarvesterLibraryStore(this).mergeFromPeer(packet.browserHistory.take(80)
+            .filter { NativeHarvesterStore.safeDirect(it.url) })
     }
 
     private fun mergeOnlineHistory(packet: SyncPacket) {
@@ -461,5 +469,6 @@ private data class SyncPacket(
     val library: String,
     val onlineHistory: Map<String, String> = emptyMap(),
     val onlineHistorySets: Map<String, List<String>> = emptyMap(),
-    val sources: List<NativeSavedStream> = emptyList()
+    val sources: List<NativeSavedStream> = emptyList(),
+    val browserHistory: List<HarvesterMedia> = emptyList()
 )
