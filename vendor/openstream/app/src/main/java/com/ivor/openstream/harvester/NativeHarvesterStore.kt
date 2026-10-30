@@ -20,7 +20,8 @@ data class NativeSavedStream(
     val season: Int = 1, val episode: Int = 1,
     val year: Int = 0, val audioMode: String = "", val language: String = "",
     val quality: String = "", val webOnly: Boolean = false,
-    val savedAt: Long = System.currentTimeMillis()
+    val savedAt: Long = System.currentTimeMillis(),
+    val tmdbId: Int? = null, val anilistId: Int? = null, val catalogSourceId: String? = null
 )
 
 class NativeHarvesterStore(context: Context) {
@@ -37,7 +38,9 @@ class NativeHarvesterStore(context: Context) {
         return all().filter { item ->
             val isMovie = identity.tmdbType == "movie"
             (if (isMovie) item.kind == "movie" else item.kind != "movie") &&
-                titles.any { it == fold(item.title) } &&
+                (item.tmdbId != null && identity.tmdbId > 0 && item.tmdbId == identity.tmdbId ||
+                    item.anilistId != null && item.anilistId == identity.anilistId ||
+                    titles.any { it == fold(item.title) }) &&
                 (item.year == 0 || identity.year == null || item.year == identity.year) &&
                 (isMovie || (item.season == identity.season && item.episode == identity.episode)) &&
                 !item.webOnly && safeDirect(item.url)
