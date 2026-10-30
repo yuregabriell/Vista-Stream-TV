@@ -1,0 +1,31 @@
+name: VistaStream LAN Sync validation
+on:
+  push:
+    branches: [feature/vista-lan-sync-20261030]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK
+        shell: bash
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" "build-tools;36.0.0" || "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
+      - name: Kotlin compilation
+        working-directory: vendor/openstream
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:compileDebugKotlin --no-daemon
+      - name: Unit tests
+        working-directory: vendor/openstream
+        run: ./gradlew :app:testDebugUnitTest --no-daemon

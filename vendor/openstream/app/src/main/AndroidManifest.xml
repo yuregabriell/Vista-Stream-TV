@@ -87,6 +87,7 @@
             android:exported="true"
             android:grantUriPermissions="false" />
         <activity android:name=".presentation.settings.VistaIdAccountActivity" android:exported="false" android:theme="@style/Theme.OpenStream" />
+        <activity android:name=".presentation.settings.VistaLanSyncActivity" android:exported="false" android:theme="@style/Theme.OpenStream" />
         <activity android:name=".presentation.settings.MetadataGatewayActivity" android:exported="false" android:theme="@style/Theme.OpenStream" />
         <activity android:name=".presentation.settings.TmdbKeyActivity" android:exported="false" android:theme="@style/Theme.OpenStream" />
         <activity android:name=".presentation.settings.TorrentSettingsActivity" android:exported="false" android:theme="@style/Theme.OpenStream" />

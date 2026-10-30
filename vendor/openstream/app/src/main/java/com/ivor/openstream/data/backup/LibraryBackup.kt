@@ -61,7 +61,7 @@ class LibraryBackup @Inject constructor(
         encodeDefaults = true
     }
 
-    suspend fun export(output: OutputStream) {
+    suspend fun export(output: OutputStream, includeSettings: Boolean = true) {
         val backup = BackupFile(
             exportedAt = System.currentTimeMillis(),
             profiles = profiles.all().map { profile ->
@@ -72,7 +72,7 @@ class LibraryBackup @Inject constructor(
                     library = libraryOf(profile.id)
                 )
             },
-            settings = settingsStore.current.toBackup()
+            settings = if (includeSettings) settingsStore.current.toBackup() else null
         )
         output.bufferedWriter().use { it.write(json.encodeToString(BackupFile.serializer(), backup)) }
     }
