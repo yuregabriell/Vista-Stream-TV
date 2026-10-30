@@ -89,7 +89,13 @@
             android:grantUriPermissions="false" />
         <activity android:name=".presentation.settings.VistaIdAccountActivity" android:exported="false" android:theme="@style/Theme.OpenStream" />
         <activity android:name=".presentation.settings.VistaLanSyncActivity" android:exported="false" android:theme="@style/Theme.OpenStream" />
-        <activity android:name=".presentation.settings.VistaSourceActivity" android:exported="false" android:theme="@style/Theme.OpenStream" />
+        <activity android:name=".presentation.settings.VistaSourceActivity"
+            android:exported="true" android:theme="@style/Theme.OpenStream">
+            <intent-filter>
+                <action android:name="com.vistastream.tv.action.IMPORT_SOURCE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
         <activity android:name=".presentation.settings.MetadataGatewayActivity" android:exported="false" android:theme="@style/Theme.OpenStream" />
         <activity android:name=".presentation.settings.TmdbKeyActivity" android:exported="false" android:theme="@style/Theme.OpenStream" />
         <activity android:name=".presentation.settings.TorrentSettingsActivity" android:exported="false" android:theme="@style/Theme.OpenStream" />
