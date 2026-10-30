@@ -74,6 +74,8 @@ class VistaLanSyncActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         discovery = VistaLanDiscovery(this)
+        val isTelevision = (getSystemService(UI_MODE_SERVICE) as android.app.UiModeManager)
+            .currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(30), dp(24), dp(36))
@@ -99,8 +101,9 @@ class VistaLanSyncActivity : ComponentActivity() {
                 "Os dois dispositivos ficam com os dados combinados."
         , 13f))
 
-        val receive = Button(this).apply { text = "Receber sincronização neste dispositivo" }
+        val receive = Button(this).apply { text = "Gerar código para ligar telemóvel" }
         layout.addView(receive)
+        if (!isTelevision) receive.visibility = android.view.View.GONE
         status = label("Aguarda uma ação.", 15f)
         layout.addView(status)
 
@@ -112,6 +115,7 @@ class VistaLanSyncActivity : ComponentActivity() {
             setHintTextColor(0xffadb3c3.toInt())
         }
         layout.addView(address)
+        if (isTelevision) address.visibility = android.view.View.GONE
         layout.addView(label("A procurar TVs VistaStream na mesma rede Wi-Fi…", 13f))
         discovery.discover { name, endpoint ->
             runOnUiThread {
@@ -129,8 +133,10 @@ class VistaLanSyncActivity : ComponentActivity() {
             setHintTextColor(0xffadb3c3.toInt())
         }
         layout.addView(code)
-        val send = Button(this).apply { text = "Sincronizar com a TV / telemóvel" }
+        if (isTelevision) code.visibility = android.view.View.GONE
+        val send = Button(this).apply { text = "Ligar e sincronizar com a TV" }
         layout.addView(send)
+        if (isTelevision) send.visibility = android.view.View.GONE
 
         layout.addView(label(
             "Privacidade: o código dura no máximo 5 minutos; o envio é cifrado. " +
@@ -173,6 +179,7 @@ class VistaLanSyncActivity : ComponentActivity() {
                 }
             }
         }
+        if (isTelevision) receive.performClick()
     }
 
     private fun startReceiver(onStop: () -> Unit) {
