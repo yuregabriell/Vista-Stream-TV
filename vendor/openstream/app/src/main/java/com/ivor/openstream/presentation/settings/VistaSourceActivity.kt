@@ -55,13 +55,17 @@ class VistaSourceActivity : ComponentActivity() {
                     }
                     output.toByteArray()
                 }
-                val entries = VistaSourceCodec.parse(bytes.toString(Charsets.UTF_8))
-                entries.count { store.save(it) }
+                importRaw(bytes.toString(Charsets.UTF_8))
             }
             showResult(if (result.isSuccess)
                 "Fontes importadas: " + result.getOrThrow() + ". Atualiza o catálogo."
                 else "Falha ao importar: " + (result.exceptionOrNull()?.message ?: "erro"))
         }
+    }
+
+    private fun importRaw(raw: String): Int {
+        val entries = VistaSourceCodec.parse(raw)
+        return entries.count { store.save(it) }
     }
 
     private fun showResult(message: String) {
@@ -104,5 +108,31 @@ class VistaSourceActivity : ComponentActivity() {
             setOnClickListener { finish() }
         })
         setContentView(ScrollView(this).apply { addView(container) })
+        // Explicit cross-app import request. Untrusted input is never saved
+        // without a visible confirmation from the user.
+        intent?.getStringExtra("com.vistastream.tv.extra.SOURCE_JSON")?.let { raw ->
+            val count = runCatching {
+                if (raw.toByteArray(Charsets.UTF_8).size > 500_000)
+                    error("Fonte demasiado grande para partilha direta")
+                VistaSourceCodec.parse(raw).size
+            }
+            if (count.isFailure) {
+                showResult("Fonte recebida inválida: " + (count.exceptionOrNull()?.message ?: "erro"))
+            } else {
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("Importar Vista Source")
+                    .setMessage("VistaBrowser quer adicionar " + count.getOrThrow() +
+                        " fontes à biblioteca local. Confirmas a importação?")
+                    .setNegativeButton("Cancelar", null)
+                    .setPositiveButton("Importar") { _, _ ->
+                        val result = runCatching { importRaw(raw) }
+                        showResult(if (result.isSuccess)
+                            "Fontes importadas: " + result.getOrThrow()
+                            else "Não foi possível importar: " +
+                                (result.exceptionOrNull()?.message ?: "erro"))
+                    }.show()
+            }
+        }
+
     }
 }
