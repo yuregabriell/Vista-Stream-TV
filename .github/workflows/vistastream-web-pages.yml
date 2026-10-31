@@ -7,7 +7,7 @@ on:
       - '.github/workflows/vistastream-web-pages.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 concurrency:
@@ -50,3 +50,22 @@ jobs:
       - name: Publish public web app
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Package published web app
+        run: |
+          cd web
+          zip -qr ../VistaStream-Web-iPhone.zip . -x '__pycache__/*'
+      - name: Publish versioned Web release (does not replace Android APK latest)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vistastream-web-v0.1.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: "VistaStream Web para iPhone — v0.1.${{ github.run_number }}"
+          body: |
+            VistaStream Web — aplicação web progressiva para Safari e iPhone.
+            Abrir e instalar sem App Store: https://yuregabriell.github.io/Vista-Stream-TV/
+            Interface responsiva, catálogo Cinemeta/AniList/TVmaze, biblioteca local, favoritos, progresso e importação de Vista Source manifest.json.
+            É uma PWA: o ficheiro ZIP é apenas código web, não um IPA/APK. Os vídeos exigem fontes pessoais autorizadas e compatíveis com Safari. Vista ID cloud ainda não está integrado.
+            Publicação web independente das releases APK do VistaStream Android.
+          files: VistaStream-Web-iPhone.zip
+          prerelease: true
+          make_latest: false
