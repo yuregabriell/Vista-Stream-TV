@@ -67,11 +67,15 @@ class VistaLanSyncActivity : ComponentActivity() {
     private var server: ServerSocket? = null
     private var receiverJob: Job? = null
     private lateinit var status: TextView
+    private lateinit var discovery: VistaLanDiscovery
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density + 0.5f).toInt()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        discovery = VistaLanDiscovery(this)
+        val isTelevision = (getSystemService(UI_MODE_SERVICE) as android.app.UiModeManager)
+            .currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(30), dp(24), dp(36))
@@ -97,8 +101,9 @@ class VistaLanSyncActivity : ComponentActivity() {
                 "Os dois dispositivos ficam com os dados combinados."
         , 13f))
 
-        val receive = Button(this).apply { text = "Receber sincronização neste dispositivo" }
+        val receive = Button(this).apply { text = "Gerar código para ligar telemóvel" }
         layout.addView(receive)
+        if (!isTelevision) receive.visibility = android.view.View.GONE
         status = label("Aguarda uma ação.", 15f)
         layout.addView(status)
 
@@ -110,6 +115,16 @@ class VistaLanSyncActivity : ComponentActivity() {
             setHintTextColor(0xffadb3c3.toInt())
         }
         layout.addView(address)
+        if (isTelevision) address.visibility = android.view.View.GONE
+        layout.addView(label("A procurar TVs VistaStream na mesma rede Wi-Fi…", 13f))
+        discovery.discover { name, endpoint ->
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) {
+                    address.setText(endpoint)
+                    status.text = "Dispositivo encontrado: $name. Introduz o código apresentado na TV."
+                }
+            }
+        }
         layout.addView(label("Código temporário de emparelhamento", 14f))
         val code = EditText(this).apply {
             hint = "12 caracteres"
@@ -118,8 +133,10 @@ class VistaLanSyncActivity : ComponentActivity() {
             setHintTextColor(0xffadb3c3.toInt())
         }
         layout.addView(code)
-        val send = Button(this).apply { text = "Sincronizar com a TV / telemóvel" }
+        if (isTelevision) code.visibility = android.view.View.GONE
+        val send = Button(this).apply { text = "Ligar e sincronizar com a TV" }
         layout.addView(send)
+        if (isTelevision) send.visibility = android.view.View.GONE
 
         layout.addView(label(
             "Privacidade: o código dura no máximo 5 minutos; o envio é cifrado. " +
@@ -162,6 +179,7 @@ class VistaLanSyncActivity : ComponentActivity() {
                 }
             }
         }
+        if (isTelevision) receive.performClick()
     }
 
     private fun startReceiver(onStop: () -> Unit) {
@@ -171,6 +189,7 @@ class VistaLanSyncActivity : ComponentActivity() {
             val result = runCatching {
                 val localServer = ServerSocket(0)
                 server = localServer
+                withContext(Dispatchers.Main) { discovery.advertise(localServer.localPort) }
                 val pairingCode = ByteArray(9).also(random::nextBytes)
                     .let { Base64.encodeToString(it, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING) }
                 val salt = ByteArray(16).also(random::nextBytes)
@@ -189,6 +208,7 @@ class VistaLanSyncActivity : ComponentActivity() {
                 } finally {
                     localServer.close()
                     server = null
+                    withContext(Dispatchers.Main) { discovery.stopAdvertising() }
                 }
             }
             withContext(Dispatchers.Main) {
@@ -452,6 +472,7 @@ class VistaLanSyncActivity : ComponentActivity() {
     }.getOrDefault(emptyList())
 
     override fun onDestroy() {
+        discovery.close()
         server?.close()
         receiverJob?.cancel()
         super.onDestroy()
