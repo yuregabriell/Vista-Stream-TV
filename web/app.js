@@ -1,10 +1,12 @@
-/* VistaStream Web 0.1 — free metadata, local library, authorized media only */
+/* VistaStream Web 0.2 — visual parity + user-installed Stremio add-ons */
+import {StremioHub,normalizeManifest} from "./stremio.js";
 const CINE="https://v3-cinemeta.strem.io", ANI="https://graphql.anilist.co", TV="https://api.tvmaze.com";
 const KEY="vista-web-local-v1",$=id=>document.getElementById(id);
-const emptyStore=()=>({favorites:[],history:[],progress:{},sources:[],localTitles:[]});
+const emptyStore=()=>({favorites:[],history:[],progress:{},sources:[],localTitles:[],addons:[]});
 function readStore(){try{const v=JSON.parse(localStorage.getItem(KEY)||"{}");return {...emptyStore(),...v};}catch{return emptyStore();}}
-const S={page:"home",segment:"all",filter:"all",movies:[],shows:[],anime:[],catalog:[],results:[],search:"",searchToken:0,selected:null,season:1,episode:1,playback:null,store:readStore(),loading:true};
+const S={page:"home",segment:"all",filter:"all",sourcesTab:"browse",addonRows:[],addonsLoading:false,addonRequest:0,movies:[],shows:[],anime:[],catalog:[],results:[],search:"",searchToken:0,selected:null,season:1,episode:1,playback:null,store:readStore(),loading:true};
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S.store));}catch{notify("Sem espaço para guardar. Exporta um backup.");}}
+const hub=new StremioHub(()=>S.store,save);
 function el(tag,cls,txt){const n=document.createElement(tag);if(cls)n.className=cls;if(txt!=null)n.textContent=String(txt);return n;}
 function append(p,...nodes){nodes.filter(Boolean).forEach(n=>p.append(n));return p;}
 function btn(label,cls,action){const b=el("button",cls,label);b.type="button";b.addEventListener("click",action);return b;}
@@ -21,7 +23,7 @@ async function cineList(type,search){const s=search?"/search="+encodeURIComponen
 const query="query List($q:String){Page(page:1,perPage:25){media(type:ANIME,search:$q,sort:TRENDING_DESC,isAdult:false){id title{english romaji} coverImage{extraLarge} bannerImage seasonYear description(asHtml:false) averageScore genres episodes}}}";
 async function animeList(search){const d=await json(ANI,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query,variables:{q:search||null}})});return(d.data?.Page?.media||[]).map(anime).filter(Boolean);}
 function syncLocalTitles(){for(const src of S.store.sources){const type=src.kind==="tv"||src.kind==="series"?"series":src.kind==="anime"?"anime":"movie";if(S.catalog.some(x=>x.type===type&&slug(x.name)===slug(src.title)))continue;const id="local:"+type+":"+slug(src.title);if(S.catalog.some(x=>x.id===id))continue;S.catalog.push({id,type,name:src.title,year:src.year||0,poster:"",background:"",description:"Fonte da tua biblioteca pessoal.",genres:[],rating:0,provider:"Biblioteca pessoal"});}}
-async function loadCatalog(){S.loading=true;render();const all=await Promise.allSettled([cineList("movie"),cineList("series"),animeList()]);S.movies=all[0].status==="fulfilled"?all[0].value:[];S.shows=all[1].status==="fulfilled"?all[1].value:[];S.anime=all[2].status==="fulfilled"?all[2].value:[];if(!S.shows.length){try{const d=await json(TV+"/shows?page=0");S.shows=d.filter(x=>x.image).slice(0,40).map(maze);}catch{}}S.catalog=[...S.movies,...S.shows,...S.anime];syncLocalTitles();S.loading=false;render();}
+async function loadCatalog(){S.loading=true;render();const all=await Promise.allSettled([cineList("movie"),cineList("series"),animeList()]);S.movies=all[0].status==="fulfilled"?all[0].value:[];S.shows=all[1].status==="fulfilled"?all[1].value:[];S.anime=all[2].status==="fulfilled"?all[2].value:[];if(!S.shows.length){try{const d=await json(TV+"/shows?page=0");S.shows=d.filter(x=>x.image).slice(0,40).map(maze);}catch{}}S.catalog=[...S.movies,...S.shows,...S.anime];syncLocalTitles();S.loading=false;render();refreshAddonCatalog();}
 function title(id){return S.catalog.find(x=>x.id===id);}
 function sources(item,s=1,e=1){if(!item)return[];return S.store.sources.filter(x=>{const type=x.kind==="tv"||x.kind==="series"?"series":x.kind==="anime"?"anime":"movie";return type===item.type&&slug(x.title)===slug(item.name)&&(type==="movie"||(x.season===s&&x.episode===e));});}
 function fav(item){return S.store.favorites.includes(item.id);}
@@ -32,7 +34,68 @@ function rail(name,items,sub){if(!items.length)return null;const section=el("sec
 function heading(eyebrow,name,text){const h=el("div","page-header");append(h,el("span","eyebrow",eyebrow),el("h1","",name),el("p","",text));return h;}
 function blank(text,action){const d=el("div","empty");append(d,el("div","empty-symbol","✦"),el("h3","","O VistaStream está pronto"),el("p","",text));if(action)append(d,btn("Abrir biblioteca","primary-btn accent",()=>navigate("library")));return d;}
 function hero(item){const h=el("section","hero"),bg=el("div","hero-image"),copy=el("div","hero-copy");if(item.background)bg.style.backgroundImage="url("+JSON.stringify(item.background)+")";append(copy,el("span","eyebrow","✦ EM DESTAQUE NO VISTASTREAM"),el("h1","",item.name),el("div","hero-tags",(item.year||"")+" · "+item.type.toUpperCase()+" · "+(item.rating?"★ "+Number(item.rating).toFixed(1):"")),el("p","sub",item.description||"Descobre mais sobre este título e associa as tuas fontes pessoais."));const actions=el("div","hero-actions");append(actions,btn("▶ Ver detalhes","primary-btn",()=>details(item)),btn(fav(item)?"✓ Na biblioteca":"＋ Minha lista","outline-btn",()=>favorite(item)));append(copy,actions);return append(h,bg,copy);}
-function home(){const list=S.segment==="anime"?S.anime:S.movies;const main=list[0]||S.catalog[0];if(!main){append($("content"),blank("Não foi possível carregar o catálogo público. Podes usar a biblioteca local.",true));return;}append($("content"),hero(main));if(S.segment==="anime"){append($("content"),rail("Em destaque",S.anime),rail("Animes para descobrir",[...S.anime].reverse()));return;}const cont=S.store.history.map(x=>title(x.id)).filter(x=>x&&latest(x));append($("content"),rail("Continuar a assistir",cont),rail("Filmes em destaque",S.movies),rail("Séries populares",S.shows),rail("Mundo Anime",S.anime));}
+function heroCarousel(items){
+  const section=el("section","premium-hero-section"),head=el("div","premium-hero-head","✦ EM DESTAQUE NO VISTASTREAM");
+  const rail=el("div","hero-carousel"),dots=el("div","hero-dots");
+  items.slice(0,8).forEach((item,index)=>{
+    const card=btn("","hero-poster",()=>details(item));
+    if(item.poster){const img=el("img");img.src=item.poster;img.alt="";img.loading=index<3?"eager":"lazy";card.append(img);}
+    const rank=el("span","hero-rank","#"+(index+1)+" EM DESTAQUE");
+    const bottom=el("div","hero-bottom");
+    append(bottom,el("h2","",item.name),el("div","hero-info",(item.year||"")+"  ·  "+(item.type==="movie"?"Filme":item.type==="anime"?"Anime":"Série")+"  ·  "+(item.rating?"★ "+Number(item.rating).toFixed(1):"Em destaque")),el("span","hero-play","▶   Ver detalhes"));
+    append(card,rank,bottom);rail.append(card);
+    dots.append(el("span","hero-dot"+(index===0?" current":"")));
+  });
+  let pending=0;
+  rail.addEventListener("scroll",()=>{
+    cancelAnimationFrame(pending);
+    pending=requestAnimationFrame(()=>{
+      const first=rail.firstElementChild;
+      if(!first)return;
+      const center=rail.scrollLeft+rail.clientWidth/2;
+      const index=Math.round((center-(first.offsetLeft-rail.offsetLeft+first.clientWidth/2))/(first.clientWidth+13));
+      const current=Math.max(0,Math.min(dots.children.length-1,index));
+      [...dots.children].forEach((x,i)=>x.classList.toggle("current",i===current));
+    });
+  },{passive:true});
+  return append(section,head,rail,dots);
+}
+function quickExplore(){
+  const card=el("section","quick-explore-card"),body=el("div");
+  append(body,el("strong","","Explorar catálogo completo"),el("small","","Filmes, séries, animes e extensões instaladas"));
+  return append(card,body,btn("Explorar  ↗","primary-btn",()=>navigate("discover")));
+}
+function home(){
+  const animeMode=S.segment==="anime";
+  const list=animeMode?S.anime:[...S.movies.slice(0,4),...S.shows.slice(0,4)];
+  const main=list[0]||S.catalog[0];
+  if(!main){append($("content"),blank("O catálogo está temporariamente indisponível. Podes continuar na biblioteca.",true));return;}
+  append($("content"),heroCarousel(list.length?list:[main]),quickExplore());
+  if(animeMode){
+    append($("content"),rail("Em exibição e populares",S.anime,"Animes em alta no AniList"),
+      rail("Descobre novos animes",[...S.anime].reverse()));
+  }else{
+    const cont=S.store.history.map(x=>title(x.id)).filter(x=>x&&latest(x));
+    append($("content"),rail("Continuar a assistir",cont),
+      rail("Filmes populares",S.movies),
+      rail("Séries em destaque",S.shows),
+      rail("Animes para descobrir",S.anime));
+  }
+  S.addonRows.filter(x=>x.items?.length).slice(0,4).forEach(x=>append($("content"),rail(x.label,x.items,"Catálogo · "+x.addon.name)));
+}
+async function refreshAddonCatalog(){
+  const token=++S.addonRequest;
+  if(!hub.list().some(x=>x.enabled)){S.addonRows=[];return;}
+  S.addonsLoading=true;
+  try{
+    const result=await hub.catalogRows();if(S.addonRequest!==token)return;
+    S.addonRows=result;
+    const extra=result.flatMap(x=>x.items||[]);
+    S.catalog=[...new Map([...S.catalog,...extra].map(x=>[x.id,x])).values()];
+    if(["home","discover","anime","sources"].includes(S.page))render();
+  }catch(e){console.warn("Vista addons:",e.message);}
+  finally{if(S.addonRequest===token)S.addonsLoading=false;}
+}
 function discover(animesOnly=false){const wrap=$("content");append(wrap,heading(animesOnly?"✦ VISTASTREAM ANIME":"VISTASTREAM · EXPLORAR",animesOnly?"O mundo dos animes":"Descobre algo novo",animesOnly?"Explora títulos do AniList.": "Filmes, séries e animes num único catálogo."));const opts=animesOnly?[["anime","Todos os animes"]]:[["all","Todos"],["movie","Filmes"],["series","Séries"],["anime","Animes"]];const chips=el("div","chips");opts.forEach(([key,label])=>chips.append(btn(label,"chip"+(S.filter===key?" selected":""),()=>{S.filter=key;render();})));append(wrap,chips);const filtered=S.catalog.filter(x=>animesOnly?x.type==="anime":S.filter==="all"||x.type===S.filter);if(!filtered.length){append(wrap,blank("Sem resultados. Liga-te à internet e tenta novamente.",true));return;}const grid=el("div","grid-cards");filtered.forEach(x=>grid.append(card(x)));append(wrap,grid);}
 async function search(q){S.search=q;const current=++S.searchToken;if(!q.trim()){S.results=[];displayResults();return;}const results=await Promise.allSettled([cineList("movie",q),cineList("series",q),animeList(q)]);if(current!==S.searchToken)return;let all=results.flatMap(x=>x.status==="fulfilled"?x.value:[]);if(!all.length){try{const d=await json(TV+"/search/shows?q="+encodeURIComponent(q));all=d.slice(0,20).map(x=>maze(x.show));}catch{}}if(current!==S.searchToken)return;S.results=all;S.catalog=[...new Map([...S.catalog,...all].map(x=>[x.id,x])).values()];displayResults();}
 function displayResults(){const host=$("search-results");if(!host)return;host.replaceChildren();if(!S.search){append(host,blank("Procura pelo nome de um filme, série ou anime.",false));return;}if(!S.results.length){append(host,el("p","section-sub","A pesquisar… Se não aparecerem resultados, tenta outro título."));return;}const grid=el("div","grid-cards");S.results.forEach(x=>grid.append(card(x)));host.append(grid);}
