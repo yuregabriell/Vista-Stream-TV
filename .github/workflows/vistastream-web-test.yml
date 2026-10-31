@@ -1,0 +1,32 @@
+name: VistaStream Web validation
+on:
+  push:
+    branches: [feature/vistastream-web-pwa-iphone]
+    paths:
+      - 'web/**'
+      - '.github/workflows/vistastream-web-test.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax and PWA verification
+        run: |
+          set -euo pipefail
+          node --check web/app.js
+          node --check web/sw.js
+          python3 web/make_icons.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          data=json.loads(Path("web/manifest.webmanifest").read_text())
+          assert data["display"]=="standalone"
+          assert Path("web/icons/icon-180.png").stat().st_size > 2000
+          assert Path("web/icons/icon-192.png").stat().st_size > 2000
+          assert Path("web/icons/icon-512.png").stat().st_size > 2000
+          assert "VistaStream" in Path("web/index.html").read_text()
+          print("Web PWA syntax, manifest and icons OK")
+          PY
