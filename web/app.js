@@ -9,7 +9,7 @@ function el(tag,cls,txt){const n=document.createElement(tag);if(cls)n.className=
 function append(p,...nodes){nodes.filter(Boolean).forEach(n=>p.append(n));return p;}
 function btn(label,cls,action){const b=el("button",cls,label);b.type="button";b.addEventListener("click",action);return b;}
 function notify(msg){const t=$("toast");t.textContent=msg;t.hidden=false;clearTimeout(notify.timer);notify.timer=setTimeout(()=>t.hidden=true,3800);}
-function strip(s){const d=document.createElement("div");d.innerHTML=String(s||"").slice(0,5000);return(d.textContent||"").slice(0,1300);}
+function strip(s){return String(s||"").slice(0,5000).replace(/<[^>]*>/g," ").replace(/&(?:nbsp|amp|quot|lt|gt);/gi," ").replace(/\s+/g," ").trim().slice(0,1300);}
 function slug(s){return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();}
 function imageUrl(s){try{const u=new URL(s);return u.protocol==="https:"?u.href:"";}catch{return"";}}
 function sourceOk(s){try{const u=new URL(String(s));return u.protocol==="https:"&&!u.username&&!u.password&&s.length<=4096&&!Array.from(u.searchParams.keys()).some(x=>/^(token|auth|sig|signature|session|key|expires|expiry|policy|ip_bind)$/i.test(x))&&/\.(mp4|m4v|mov|webm|m3u8|mpd|mkv)$/i.test(u.pathname);}catch{return false;}}
