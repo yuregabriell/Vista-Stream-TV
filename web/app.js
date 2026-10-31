@@ -101,6 +101,93 @@ async function search(q){S.search=q;const current=++S.searchToken;if(!q.trim()){
 function displayResults(){const host=$("search-results");if(!host)return;host.replaceChildren();if(!S.search){append(host,blank("Procura pelo nome de um filme, série ou anime.",false));return;}if(!S.results.length){append(host,el("p","section-sub","A pesquisar… Se não aparecerem resultados, tenta outro título."));return;}const grid=el("div","grid-cards");S.results.forEach(x=>grid.append(card(x)));host.append(grid);}
 function searchPage(){const wrap=$("content");append(wrap,heading("ENCONTRA O QUE QUERES VER","Pesquisa","Procura títulos em vários catálogos."));const container=el("label","search-input-wrap"),icon=el("span","","⌕"),inp=el("input","search-input");inp.id="search-input";inp.type="search";inp.placeholder="Filme, série ou anime…";inp.value=S.search;inp.autocomplete="off";let timeout;inp.addEventListener("input",()=>{S.search=inp.value;clearTimeout(timeout);timeout=setTimeout(()=>search(inp.value.trim().slice(0,100)),350);});append(container,icon,inp);append(wrap,container,el("div",""));wrap.lastChild.id="search-results";displayResults();}
 function library(){const wrap=$("content");append(wrap,heading("A TUA COLEÇÃO","Biblioteca","Favoritos, continuar a assistir e fontes pessoais deste dispositivo."));const cont=S.store.history.map(x=>title(x.id)).filter(x=>x&&latest(x));append(wrap,rail("Continuar a assistir",cont));const fs=S.store.favorites.map(id=>title(id)).filter(Boolean);if(fs.length){const grid=el("div","grid-cards");fs.forEach(x=>grid.append(card(x)));append(wrap,el("h2","section-title","A minha lista"),grid);}else append(wrap,blank("Adiciona um título à tua lista de favoritos.",false));const b=el("section","setting-block");append(b,el("h3","","Fontes pessoais · "+S.store.sources.length),el("p","","Apenas endereços diretos e autorizados. Algumas fontes Android não são compatíveis com Safari."));for(const s of S.store.sources.slice(0,40)){const row=el("div","source-entry"),body=el("div");append(body,el("b","",s.title),el("small","",s.kind+" · "+s.season+"x"+s.episode+" · "+(s.quality||"Auto")));append(row,body,btn("Remover","",()=>{if(confirm("Remover esta fonte da biblioteca local?")){S.store.sources=S.store.sources.filter(x=>x.id!==s.id);save();render();}}));append(b,row);}const actions=el("div","action-row");append(actions,btn("Importar Vista Source","primary-btn accent",()=>$("source-file").click()),btn("Adicionar URL","outline-btn",manual));append(b,actions);wrap.append(b);}
+function addonsPage(){
+  const main=$("content");
+  append(main,heading("VISTASTREAM · FONTES","Extensões e fontes","Instala extensões Stremio compatíveis, consulta catálogos e escolhe fontes no próprio título."));
+  const nav=el("div","source-tabs");
+  [["browse","Explorar"],["installed","Instaladas"],["repositories","Repositórios"]].forEach(([mode,text])=>
+    nav.append(btn(text,S.sourcesTab===mode?"active":"",()=>{S.sourcesTab=mode;render();})));
+  main.append(nav);
+  if(S.sourcesTab==="installed"){
+    const active=hub.list();
+    if(!active.length){append(main,blank("Ainda não tens extensões. Podes instalar fontes Stremio pelo endereço HTTPS do manifest.json.",false),
+      btn("＋ Instalar extensão","primary-btn accent",()=>{S.sourcesTab="repositories";render();}));return;}
+    append(main,el("p","section-sub",active.length+" extensões guardadas neste iPhone. A extensão nunca é instalada no sistema: o site usa as suas APIs públicas."));
+    for(const addon of active){
+      const card=el("section","addon-card"),heading=el("div");
+      append(heading,el("strong","",addon.name),el("p","",addon.description||"Extensão Stremio"));
+      const badges=el("div","addon-status");
+      append(badges,el("span","addon-tag",addon.enabled?"● Ativa":"Pausada"),
+        el("span","addon-stat",(addon.catalogs?.length||0)+" catálogos"),el("span","addon-stat","Versão "+(addon.version||"—")));
+      const actions=el("div","action-row");
+      append(actions,
+        btn(addon.enabled?"Desativar":"Ativar","small-btn",()=>{hub.toggle(addon.id);render();refreshAddonCatalog();}),
+        btn("Remover","small-btn",()=>{if(confirm("Remover a extensão "+addon.name+" deste dispositivo?")){hub.remove(addon.id);render();refreshAddonCatalog();}}));
+      append(card,heading,badges,actions);main.append(card);
+    }
+    append(main,btn("＋ Adicionar outra extensão","primary-btn accent",()=>{S.sourcesTab="repositories";render();}));return;
+  }
+  if(S.sourcesTab==="repositories"){
+    const intro=el("section","setting-block");
+    append(intro,el("h3","","Instalar extensão Stremio"),el("p","","Cola o endereço HTTPS de manifest.json de uma extensão em que confias. O navegador precisa de acesso CORS à API. Algumas extensões exigem configuração externa ou não reproduzem no Safari."));
+    const form=el("form","source-form"),label=el("label","","Endereço da extensão (manifest.json)");
+    const input=el("input");input.type="url";input.required=true;input.autocomplete="off";input.placeholder="https://addon.exemplo.com/manifest.json";
+    const submit=el("button","primary-btn accent","Instalar extensão");submit.type="submit";
+    append(form,label,input,submit);
+    form.addEventListener("submit",async ev=>{
+      ev.preventDefault();submit.disabled=true;submit.textContent="A verificar extensão…";
+      try{
+        const addon=await hub.install(input.value);
+        notify("Extensão "+addon.name+" instalada");
+        S.sourcesTab="installed";render();refreshAddonCatalog();
+      }catch(err){notify("Não foi possível instalar: "+(err.message||"erro de rede/CORS"));}
+      finally{submit.disabled=false;submit.textContent="Instalar extensão";}
+    });
+    append(intro,form);main.append(intro);
+    const reference=el("section","setting-block");
+    append(reference,el("h3","","Fontes integradas e recomendadas"),
+      el("p","","O catálogo Cinemeta e o AniList já estão disponíveis no VistaStream Web. Se quiseres, também podes adicionar o Cinemeta como extensão Stremio para experimentar o gestor de catálogos."));
+    const buttons=el("div","action-row");
+    append(buttons,btn("＋ Instalar Cinemeta (metadados)","outline-btn",async()=>{
+      try{const a=await hub.install("https://v3-cinemeta.strem.io/manifest.json");notify(a.name+" instalado");S.sourcesTab="installed";render();refreshAddonCatalog();}
+      catch(e){notify(e.message||"Cinemeta indisponível");}
+    }));
+    append(reference,buttons);main.append(reference);
+    const note=el("section","setting-block");
+    append(note,el("h3","","Repositórios e formatos"),
+      el("p","","Extensões Stremio usam o seu próprio manifesto e endpoints de catálogo, metadados e streams. Extensões Android CloudStream ou APKs não funcionam diretamente num site; exigiriam adaptadores Web próprios. Não usaremos extensões desconhecidas sem consentimento."));
+    const official=el("a","small-btn","Documentação oficial do protocolo Stremio ↗");
+    official.href="https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/protocol.md";
+    official.target="_blank";official.rel="noopener noreferrer";note.append(official);
+    main.append(note);
+    return;
+  }
+  const actions=el("section","quick-explore-card"),desc=el("div");
+  append(desc,el("strong","","As tuas extensões"),el("small","",hub.list().length+" instaladas · "+hub.list().filter(x=>x.enabled).length+" ativas"));
+  append(actions,desc,btn("Gerir fontes  ↗","primary-btn",()=>{S.sourcesTab="installed";render();}));
+  main.append(actions);
+  const catalog=el("section","section");
+  append(catalog,el("h2","section-title","Catálogos das extensões"));
+  if(!hub.list().length){
+    append(catalog,blank("Adiciona uma extensão Stremio para encontrar catálogos e consultar fontes disponíveis nos títulos.",false),
+      btn("＋ Adicionar extensão","primary-btn accent",()=>{S.sourcesTab="repositories";render();}));
+  }else if(S.addonsLoading){
+    append(catalog,el("div","loading-splash","A consultar os catálogos das extensões…"));
+  }else{
+    const active=S.addonRows.filter(x=>x.items?.length);
+    if(!active.length){
+      append(catalog,el("div","status-line","Nenhum catálogo acessível neste momento. Algumas extensões só oferecem streams, exigem pesquisa, ou não permitem chamadas CORS a partir do Safari."));
+    }else active.forEach(x=>append(catalog,rail(x.label,x.items,"Origem: "+x.addon.name)));
+    append(catalog,btn("↻ Atualizar catálogos","outline-btn",()=>refreshAddonCatalog()));
+  }
+  main.append(catalog);
+  const personal=el("section","setting-block");
+  append(personal,el("h3","","Biblioteca do VistaBrowser"),el("p","","Importa as fontes do manifest.json do Vista Source e utiliza-as no mesmo player. A importação mantém-se local no teu iPhone."));
+  const pActions=el("div","action-row");
+  append(pActions,btn("Importar Vista Source","primary-btn accent",()=>$("source-file").click()),
+    btn("Adicionar vídeo próprio","outline-btn",manual));
+  append(personal,pActions);main.append(personal);
+}
 function settings(){const wrap=$("content");append(wrap,heading("PREFERÊNCIAS","Definições","O VistaStream está disponível no iPhone, sem IPA ou Mac."));const blocks=[
  ["📱 Adicionar ao iPhone","No Safari, toca em Partilhar → Adicionar ao ecrã principal → Abrir como aplicação.","Web App gratuita"],
  ["▤ Vista Source","Importa um manifest.json exportado pelo VistaBrowser ou VistaStream Android. O conteúdo permanece guardado apenas neste navegador.","Importar manifest.json"],
@@ -108,8 +195,8 @@ function settings(){const wrap=$("content");append(wrap,heading("PREFERÊNCIAS",
  ["◎ Vista ID e sincronização","Esta primeira versão funciona em modo local. A sincronização automática Android/TV/iPhone precisa de um serviço Vista ID autenticado; não está ainda ativa.","Modo local"],
  ["Sobre","Metadados: Cinemeta, AniList e TVmaze. O VistaStream não fornece streams não autorizados. Algumas fontes não funcionam no Safari.","Versão Web 0.1.0"]];
  blocks.forEach(([name,text,caption],i)=>{const block=el("section","setting-block");append(block,el("h3","",name),el("p","",text));const actions=el("div","action-row");if(i===1)append(actions,btn("Importar manifest.json","primary-btn accent",()=>$("source-file").click()),btn("Adicionar URL","outline-btn",manual));else if(i===2)append(actions,btn("Exportar backup","outline-btn",exportBackup),btn("Importar backup","outline-btn",()=>$("backup-file").click()));else append(actions,el("span","status-pill",caption));append(block,actions);wrap.append(block);});}
-function render(){document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("selected",b.dataset.tab===S.page));document.querySelectorAll("[data-segment]").forEach(b=>b.classList.toggle("current",b.dataset.segment===S.segment));$("content").replaceChildren();if(S.loading){append($("content"),el("div","loading-splash","A carregar o VistaStream…"));return;}if(S.page==="home")home();else if(S.page==="discover")discover();else if(S.page==="anime")discover(true);else if(S.page==="search")searchPage();else if(S.page==="library")library();else settings();}
-function navigate(page){S.page=["home","discover","anime","search","library","settings"].includes(page)?page:"home";history.replaceState(null,"","#"+S.page);render();scrollTo({top:0,behavior:"instant"});if(S.page==="search")$("search-input")?.focus();}
+function render(){document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("selected",b.dataset.tab===S.page));document.querySelectorAll("[data-segment]").forEach(b=>b.classList.toggle("current",b.dataset.segment===S.segment));$("content").replaceChildren();if(S.loading){append($("content"),el("div","loading-splash","A carregar o VistaStream…"));return;}if(S.page==="home")home();else if(S.page==="discover")discover();else if(S.page==="anime")discover(true);else if(S.page==="search")searchPage();else if(S.page==="library")library();else if(S.page==="sources")addonsPage();else settings();}
+function navigate(page){S.page=["home","discover","anime","search","library","sources","settings"].includes(page)?page:"home";history.replaceState(null,"","#"+S.page);render();scrollTo({top:0,behavior:"instant"});if(S.page==="search")$("search-input")?.focus();}
 async function episodeList(item){if(item.type==="movie")return[];if(item._eps)return item._eps;let out=[];if(item.provider==="Cinemeta"){try{const d=await json(CINE+"/meta/series/"+encodeURIComponent(item.ref)+".json");out=(d.meta?.videos||[]).filter(x=>x.season>0&&x.episode>0).map(x=>({s:Number(x.season),e:Number(x.episode),name:x.title||"Episódio "+x.episode}));}catch{}}if(item.provider==="TVmaze"){try{const d=await json(TV+"/shows/"+item.ref+"/episodes");out=d.filter(x=>x.season>0&&x.number>0).map(x=>({s:x.season,e:x.number,name:x.name||"Episódio "+x.number}));}catch{}}if(!out.length){const matching=S.store.sources.filter(x=>slug(x.title)===slug(item.name));if(matching.length)out=matching.map(x=>({s:x.season,e:x.episode,name:"Episódio "+x.episode}));else out=Array.from({length:Math.min(item.episodes||12,60)},(_,i)=>({s:1,e:i+1,name:"Episódio "+(i+1)}));}item._eps=out;return out;}
 function details(item){S.selected=item;S.season=1;S.episode=1;$("details-overlay").hidden=false;renderDetails();}
 function renderDetails(){const item=S.selected;if(!item)return;const host=$("details-panel");host.replaceChildren();const cover=el("div","detail-cover");if(item.background)cover.style.backgroundImage="url("+JSON.stringify(item.background)+")";append(cover,btn("×","detail-close",closeDetails));const body=el("div","detail-body"),header=el("span","detail-info",item.type.toUpperCase()+" · "+(item.year||"")+" "+(item.rating?" · ★ "+Number(item.rating).toFixed(1):""));append(body,header,el("h2","",item.name),el("p","detail-desc",item.description||"Sem sinopse disponível."));const actions=el("div","action-row");append(actions,btn("▶ "+(sources(item,S.season,S.episode).length?"Reproduzir":"Adicionar fonte para ver"),"primary-btn accent",playSelected),btn(fav(item)?"♥ Na minha lista":"♡ Minha lista","outline-btn",()=>favorite(item)));append(body,actions);
