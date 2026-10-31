@@ -1,0 +1,27 @@
+{
+  "name": "VistaStream",
+  "short_name": "VistaStream",
+  "description": "Filmes, séries e animes com biblioteca pessoal e fontes autorizadas.",
+  "start_url": "./#home",
+  "scope": "./",
+  "id": "./",
+  "display": "standalone",
+  "background_color": "#090c14",
+  "theme_color": "#090c14",
+  "lang": "pt",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
