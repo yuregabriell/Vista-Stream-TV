@@ -1,7 +1,7 @@
 name: VistaStream Web validation
 on:
   push:
-    branches: [feature/vistastream-web-pwa-iphone]
+    branches: [feature/vistastream-web-pwa-iphone, feature/vistastream-web-native-parity-v02]
     paths:
       - 'web/**'
       - '.github/workflows/vistastream-web-test.yml'
@@ -17,6 +17,9 @@ jobs:
         run: |
           set -euo pipefail
           node --check web/app.js
+          node --check web/stremio.js
+          node --test web/test-addons.mjs
+          test -s web/native.css
           node --check web/sw.js
           python3 web/make_icons.py
           python3 - <<'PY'

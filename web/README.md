@@ -10,9 +10,10 @@ Progressive Web App (PWA) do VistaStream, sem instalação IPA, App Store, Mac o
 
 A PWA é pública e gratuita, mas os **dados da biblioteca e as fontes ficam no armazenamento local do próprio iPhone**.
 
-## Funcionalidades v0.1.0
+## Funcionalidades v0.2.0
 
-- Interface premium, responsiva e instalável em iOS (Add to Home Screen).
+- Interface reconstruída segundo o app Android: cor violeta Material 3, modo AMOLED, carrossel de posters no topo, seletor Filmes & Séries | Animes e navegação Fontes.
+- Gestão de extensões Stremio HTTPS por `manifest.json`: Explorar, Instaladas e Repositórios, catálogos e descoberta de fontes por filme/episódio com seleção no ecrã do título.
 - Filmes e séries: metadados públicos **Cinemeta** (o mesmo fallback de catálogo usado no VS Android) e **TVmaze** se necessário.
 - Animes: metadados públicos **AniList**.
 - Pesquisa, detalhes, episódios e temporadas (quando o serviço fornece).
