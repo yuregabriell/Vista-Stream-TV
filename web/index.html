@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#090c14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="VistaStream">
+  <meta name="description" content="VistaStream Web — filmes, séries e animes, biblioteca pessoal e fontes autorizadas no iPhone.">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <link rel="apple-touch-icon" href="./icons/icon-180.png">
+  <link rel="stylesheet" href="./styles.css">
+  <title>VistaStream — Filmes, Séries & Animes</title>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Navegação principal">
+      <a class="wordmark" href="#home" data-route="home" aria-label="VistaStream início"><span class="logo-mark">V<span>•</span></span><span>Vista<span class="mark-light">Stream</span><small>WEB</small></span></a>
+      <div class="side-section-label">EXPLORAR</div>
+      <nav class="side-nav" id="side-nav">
+        <button data-tab="home" class="nav-item selected"><span class="nav-glyph">⌂</span> Início</button>
+        <button data-tab="discover" class="nav-item"><span class="nav-glyph">◫</span> Descobrir</button>
+        <button data-tab="anime" class="nav-item"><span class="nav-glyph">✦</span> Animes</button>
+        <button data-tab="search" class="nav-item"><span class="nav-glyph">⌕</span> Pesquisa</button>
+        <button data-tab="library" class="nav-item"><span class="nav-glyph">▤</span> Biblioteca</button>
+      </nav>
+      <div class="side-section-label">CONTA & DISPOSITIVOS</div>
+      <nav class="side-nav">
+        <button data-tab="settings" class="nav-item"><span class="nav-glyph">⚙</span> Definições</button>
+      </nav>
+      <div class="side-bottom"><div class="connected-dot"></div><div><b>Modo local</b><small>Os teus dados ficam neste dispositivo</small></div></div>
+    </aside>
+
+    <main class="main" id="main">
+      <header class="topbar">
+        <a class="mobile-brand" href="#home" aria-label="VistaStream"><span class="logo-mark">V<span>•</span></span><span>Vista<span class="mark-light">Stream</span></span></a>
+        <div class="top-links"><button class="toplink current" data-segment="all">Filmes & Séries</button><button class="toplink" data-segment="anime">Animes</button></div>
+        <div class="top-actions"><button class="icon-btn" id="quick-search" title="Pesquisar" aria-label="Pesquisar">⌕</button><button class="avatar-btn" id="quick-settings" aria-label="Definições">V</button></div>
+      </header>
+      <div id="toast" role="status" aria-live="polite" class="toast" hidden></div>
+      <div id="content" class="content">
+        <section class="loading-splash"><div class="loading-ring"></div><p>A preparar o VistaStream…</p></section>
+      </div>
+      <footer class="site-footer"><span>VistaStream Web</span><span>Metadados: <a href="https://cinemeta.strem.io" target="_blank" rel="noopener noreferrer">Cinemeta</a> · <a href="https://anilist.co" target="_blank" rel="noopener noreferrer">AniList</a> · <a href="https://www.tvmaze.com" target="_blank" rel="noopener noreferrer">TVmaze</a></span></footer>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Navegação móvel">
+      <button data-tab="home" class="selected"><span>⌂</span><small>Início</small></button>
+      <button data-tab="discover"><span>◫</span><small>Descobrir</small></button>
+      <button data-tab="anime"><span>✦</span><small>Animes</small></button>
+      <button data-tab="search"><span>⌕</span><small>Buscar</small></button>
+      <button data-tab="library"><span>▤</span><small>Biblioteca</small></button>
+    </nav>
+  </div>
+
+  <div id="details-overlay" class="overlay" hidden>
+    <div class="overlay-backdrop" data-close="details"></div>
+    <section id="details-panel" class="details-panel" role="dialog" aria-modal="true" aria-label="Detalhes do título"></section>
+  </div>
+  <div id="player-overlay" class="overlay player-overlay" hidden>
+    <div class="overlay-backdrop" data-close="player"></div>
+    <section class="player-sheet" role="dialog" aria-modal="true" aria-label="Reprodutor de vídeo">
+      <div class="player-heading"><button id="close-player" class="back-btn" aria-label="Fechar vídeo">←</button><div class="player-caption"><strong id="player-title">VistaStream Player</strong><small id="player-subtitle">Fonte pessoal</small></div></div>
+      <video id="video-player" controls playsinline preload="metadata" controlslist="nodownload" crossorigin="anonymous"></video>
+      <p id="player-error" class="player-error" hidden></p>
+      <div class="player-footnote">O Safari suporta formatos específicos; conteúdos com DRM, autenticação ou sem permissões de acesso podem não reproduzir.</div>
+    </section>
+  </div>
+  <input type="file" accept="application/json,.json" id="source-file" hidden>
+  <input type="file" accept="application/json,.json" id="backup-file" hidden>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
