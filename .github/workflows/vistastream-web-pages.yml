@@ -1,0 +1,52 @@
+name: VistaStream Web — iPhone PWA
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/vistastream-web-pages.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: vistastream-web-pages
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Validate web app source
+        run: |
+          set -euo pipefail
+          node --check web/app.js
+          node --check web/sw.js
+          python3 -m py_compile web/make_icons.py
+          python3 web/make_icons.py
+          test -s web/index.html
+          test -s web/icons/icon-180.png
+          test -s web/icons/icon-192.png
+          test -s web/icons/icon-512.png
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          manifest=json.loads(Path("web/manifest.webmanifest").read_text())
+          assert manifest["display"]=="standalone"
+          assert manifest["start_url"].startswith("./")
+          print("VistaStream Web PWA verified.")
+          PY
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./web
+      - name: Publish public web app
+        id: deployment
+        uses: actions/deploy-pages@v4
