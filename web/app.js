@@ -200,8 +200,58 @@ function navigate(page){S.page=["home","discover","anime","search","library","so
 async function episodeList(item){if(item.type==="movie")return[];if(item._eps)return item._eps;let out=[];if(item.provider==="Cinemeta"){try{const d=await json(CINE+"/meta/series/"+encodeURIComponent(item.ref)+".json");out=(d.meta?.videos||[]).filter(x=>x.season>0&&x.episode>0).map(x=>({s:Number(x.season),e:Number(x.episode),name:x.title||"Episódio "+x.episode}));}catch{}}if(item.provider==="TVmaze"){try{const d=await json(TV+"/shows/"+item.ref+"/episodes");out=d.filter(x=>x.season>0&&x.number>0).map(x=>({s:x.season,e:x.number,name:x.name||"Episódio "+x.number}));}catch{}}if(!out.length){const matching=S.store.sources.filter(x=>slug(x.title)===slug(item.name));if(matching.length)out=matching.map(x=>({s:x.season,e:x.episode,name:"Episódio "+x.episode}));else out=Array.from({length:Math.min(item.episodes||12,60)},(_,i)=>({s:1,e:i+1,name:"Episódio "+(i+1)}));}item._eps=out;return out;}
 function details(item){S.selected=item;S.season=1;S.episode=1;$("details-overlay").hidden=false;renderDetails();}
 function renderDetails(){const item=S.selected;if(!item)return;const host=$("details-panel");host.replaceChildren();const cover=el("div","detail-cover");if(item.background)cover.style.backgroundImage="url("+JSON.stringify(item.background)+")";append(cover,btn("×","detail-close",closeDetails));const body=el("div","detail-body"),header=el("span","detail-info",item.type.toUpperCase()+" · "+(item.year||"")+" "+(item.rating?" · ★ "+Number(item.rating).toFixed(1):""));append(body,header,el("h2","",item.name),el("p","detail-desc",item.description||"Sem sinopse disponível."));const actions=el("div","action-row");append(actions,btn("▶ "+(sources(item,S.season,S.episode).length?"Reproduzir":"Adicionar fonte para ver"),"primary-btn accent",playSelected),btn(fav(item)?"♥ Na minha lista":"♡ Minha lista","outline-btn",()=>favorite(item)));append(body,actions);
-  if(item.type!=="movie"){const eps=el("div","detail-source"),head=el("h4","","Temporadas e episódios"),sel=el("select"),box=el("div","episode-rows");sel.id="season-pick";append(eps,head,sel,box);append(body,eps);episodeList(item).then(items=>{if(S.selected?.id!==item.id)return;const seasons=[...new Set(items.map(x=>x.s))].sort((a,b)=>a-b);if(!seasons.includes(S.season))S.season=seasons[0]||1;sel.replaceChildren();seasons.forEach(s=>{const o=el("option","", "Temporada "+s);o.value=s;o.selected=s===S.season;sel.append(o);});const show=()=>{box.replaceChildren();items.filter(x=>x.s===S.season).slice(0,100).forEach(x=>{const avail=sources(item,x.s,x.e).length;append(box,btn("▶ E"+String(x.e).padStart(2,"0")+" · "+x.name+(avail?" · fonte disponível":""),"episode-row",()=>{S.episode=x.e;playSelected();}));});};sel.addEventListener("change",()=>{S.season=Number(sel.value);S.episode=1;show();});show();});}
- const list=el("div","detail-source");append(list,el("h4","","Fontes pessoais"));const found=sources(item,S.season,S.episode);found.forEach(x=>{const row=el("div","source-entry");append(row,el("b","",x.quality||"Fonte direta"),btn("▶ Reproduzir","",()=>play(x,item,S.season,S.episode)));list.append(row);});if(!found.length)append(list,el("p","","Ainda não existe uma fonte associada. O catálogo fornece metadados, não os vídeos."));append(list,btn("＋ Adicionar fonte","small-btn",()=>sourceForm(item)));append(body,list);append(host,cover,body);
+  if(item.type!=="movie"){const eps=el("div","detail-source"),head=el("h4","","Temporadas e episódios"),sel=el("select"),box=el("div","episode-rows");sel.id="season-pick";append(eps,head,sel,box);append(body,eps);episodeList(item).then(items=>{if(S.selected?.id!==item.id)return;const seasons=[...new Set(items.map(x=>x.s))].sort((a,b)=>a-b);if(!seasons.includes(S.season))S.season=seasons[0]||1;sel.replaceChildren();seasons.forEach(s=>{const o=el("option","", "Temporada "+s);o.value=s;o.selected=s===S.season;sel.append(o);});const show=()=>{box.replaceChildren();items.filter(x=>x.s===S.season).slice(0,100).forEach(x=>{const avail=sources(item,x.s,x.e).length;append(box,btn("▶ E"+String(x.e).padStart(2,"0")+" · "+x.name+(avail?" · fonte disponível":""),"episode-row",()=>{S.episode=x.e;renderDetails();}));});};sel.addEventListener("change",()=>{S.season=Number(sel.value);S.episode=1;renderDetails();});show();});}
+ const list=el("div","detail-source");append(list,el("h4","","Fontes pessoais"));const found=sources(item,S.season,S.episode);found.forEach(x=>{const row=el("div","source-entry");append(row,el("b","",x.quality||"Fonte direta"),btn("▶ Reproduzir","",()=>play(x,item,S.season,S.episode)));list.append(row);});if(!found.length)append(list,el("p","","Ainda não existe uma fonte associada. O catálogo fornece metadados, não os vídeos."));append(list,btn("＋ Adicionar fonte","small-btn",()=>sourceForm(item)));append(body,list);const addonPanel=el("div","detail-source");addonPanel.id="addon-source-panel";append(body,addonPanel);append(host,cover,body);loadAddonSourcePanel(item,addonPanel,S.season,S.episode);
+}
+async function resolveImdbRef(item){
+  if(typeof item.ref==="string"&&/^tt\d+$/.test(item.ref))return item.ref;
+  if(item._resolvedImdb)return item._resolvedImdb;
+  try{
+    const candidates=await cineList(item.type==="movie"?"movie":"series",item.name);
+    const exact=candidates.find(x=>slug(x.name)===slug(item.name)&&/^tt\d+$/.test(x.ref));
+    if(exact){item._resolvedImdb=exact.ref;return exact.ref;}
+  }catch{}
+  return "";
+}
+async function loadAddonSourcePanel(item,host,season,episode){
+  host.replaceChildren();
+  append(host,el("h4","","Extensões Stremio · Fontes"));
+  const installed=hub.list().filter(x=>x.enabled);
+  if(!installed.length){
+    append(host,el("p","","Ainda não tens extensões Stremio ativas. Instala uma fonte no separador Fontes para pesquisar streams neste título."),
+      btn("Gerir extensões","small-btn",()=>{closeDetails();navigate("sources");}));
+    return;
+  }
+  append(host,el("p","section-sub","A consultar "+installed.length+" extensão(ões) para "+(item.type==="movie"?"este filme":"T"+season+" · E"+episode)+"…"));
+  const refresh=async()=>{
+    const ref=await resolveImdbRef(item);
+    if(S.selected?.id!==item.id||season!==S.season||episode!==S.episode||!host.isConnected)return;
+    let streams=[];
+    try{streams=await hub.streams(item,season,episode,ref);}
+    catch(e){append(host,el("p","status-line","Falha ao consultar fontes: "+e.message));return;}
+    if(S.selected?.id!==item.id||season!==S.season||episode!==S.episode||!host.isConnected)return;
+    host.replaceChildren();
+    append(host,el("h4","","Fontes Stremio · "+streams.length));
+    if(!streams.length){
+      append(host,el("p","","Nenhuma fonte encontrada pelas extensões ativas para este título. Nem todas as extensões reconhecem todos os identificadores ou episódios."),
+        btn("Gerir fontes","small-btn",()=>{closeDetails();navigate("sources");}));
+      return;
+    }
+    streams.forEach(stream=>{
+      const row=el("div","source-card"),details=el("div");
+      append(details,el("strong","",stream.title),el("small","",stream.addon+" · "+(stream.playable?"HTTPS compatível":"Não reproduzível neste navegador")));
+      if(stream.reason&&!stream.playable)append(details,el("small","",stream.reason));
+      row.append(details);
+      if(stream.playable)append(row,btn("▶ Ver","small-btn",()=>play(stream,item,season,episode)));
+      else if(stream.external){
+        const a=el("a","small-btn","Abrir site ↗");
+        a.href=stream.external;a.target="_blank";a.rel="noopener noreferrer";row.append(a);
+      }
+      host.append(row);
+    });
+    append(host,el("p","section-sub","No iPhone, fontes BitTorrent, vídeo com DRM e formatos não suportados pelo Safari podem não funcionar. URLs de streams consultados não são guardadas no catálogo."));
+  };
+  await refresh();
 }
 function closeDetails(){$("details-overlay").hidden=true;S.selected=null;}
 function sourceForm(item){const section=el("div","detail-source");append(section,el("h4","","Adicionar fonte para "+item.name),el("p","","Adiciona apenas uma URL HTTPS direta de conteúdo autorizado. MP4/HLS são recomendados para Safari."));const form=el("form");const input=el("input");input.type="url";input.required=true;input.placeholder="https://servidor.pt/video.m3u8";input.style.width="100%";input.style.padding="14px";input.style.borderRadius="12px";input.style.background="#202638";input.style.color="#fff";input.style.border="1px solid #444a5c";form.append(input,el("p","section-sub","Não guardamos cookies, tokens ou URLs de reprodução protegidas."));const submit=el("button","primary-btn accent","Guardar fonte");submit.type="submit";form.append(submit);form.addEventListener("submit",e=>{e.preventDefault();const count=addSources([{title:item.name,url:input.value,kind:item.type==="series"?"tv":item.type,season:S.season,episode:S.episode}]);if(count){section.remove();renderDetails();notify("Fonte adicionada");}else notify("Fonte inválida. Precisa ser HTTPS direto sem tokens.");});append(section,form);$("details-panel").querySelector(".detail-body").append(section);section.scrollIntoView({behavior:"smooth"});}
@@ -213,7 +263,12 @@ function exportBackup(){download(JSON.stringify({type:"vistastream-web-backup",v
 async function importBackup(file){if(!file||file.size>2*1024*1024)return;try{const m=JSON.parse(await file.text());if(m.type!=="vistastream-web-backup"||m.version!==1||!Array.isArray(m.store?.sources))throw Error("Backup inválido");if(!confirm("Substituir a biblioteca guardada no iPhone?"))return;S.store=emptyStore();S.store.favorites=Array.isArray(m.store.favorites)?m.store.favorites.slice(0,500):[];S.store.progress=m.store.progress||{};S.store.history=Array.isArray(m.store.history)?m.store.history.slice(0,150):[];addSources(m.store.sources);save();notify("Backup restaurado");navigate("library");}catch(e){notify(e.message);}}
 function playSelected(){const item=S.selected;if(!item)return;const xs=sources(item,S.season,S.episode);if(xs.length)play(xs[0],item,S.season,S.episode);else sourceForm(item);}
 function savePlayback(){if(!S.playback||!Number.isFinite($("video-player").currentTime)||$("video-player").currentTime<1)return;const p=S.playback,v=$("video-player"),key=p.item.id+":"+p.s+":"+p.e;S.store.progress[key]={itemId:p.item.id,time:v.currentTime,duration:Number.isFinite(v.duration)?v.duration:0,updated:Date.now()};save();}
-function play(src,item,s,e){if(!sourceOk(src.url)){notify("Esta fonte não pode ser reproduzida.");return;}closeDetails();S.playback={item,s,e};$("player-overlay").hidden=false;$("player-title").textContent=item.name;$("player-subtitle").textContent=item.type==="movie"?"Filme":"Temporada "+s+" · Episódio "+e;const v=$("video-player");v.removeAttribute("crossorigin");v.src=src.url;v.load();S.store.history=[{id:item.id,updated:Date.now()},...S.store.history.filter(x=>x.id!==item.id)].slice(0,100);save();const old=S.store.progress[item.id+":"+s+":"+e]?.time||0;v.addEventListener("loadedmetadata",()=>{if(old>5&&old<v.duration-15)v.currentTime=old;},{once:true});v.play().catch(()=>{const p=$("player-error");p.hidden=false;p.textContent="Toque em ▶ no reprodutor. Alguns formatos ou fontes não são compatíveis com Safari.";});}
+function play(src,item,s,e){
+  let dynamic=false;
+  try{const u=new URL(String(src.url));dynamic=Boolean(src.addonId)&&u.protocol==="https:"&&
+    !u.username&&!u.password&&u.href.length<4096&&/.(mp4|m4v|mov|webm|m3u8)$/i.test(u.pathname);}
+  catch{}
+  if(!sourceOk(src.url)&&!dynamic){notify("Esta fonte não pode ser reproduzida.");return;}closeDetails();S.playback={item,s,e};$("player-overlay").hidden=false;$("player-title").textContent=item.name;$("player-subtitle").textContent=item.type==="movie"?"Filme":"Temporada "+s+" · Episódio "+e;const v=$("video-player");v.removeAttribute("crossorigin");v.src=src.url;v.load();S.store.history=[{id:item.id,updated:Date.now()},...S.store.history.filter(x=>x.id!==item.id)].slice(0,100);save();const old=S.store.progress[item.id+":"+s+":"+e]?.time||0;v.addEventListener("loadedmetadata",()=>{if(old>5&&old<v.duration-15)v.currentTime=old;},{once:true});v.play().catch(()=>{const p=$("player-error");p.hidden=false;p.textContent="Toque em ▶ no reprodutor. Alguns formatos ou fontes não são compatíveis com Safari.";});}
 function closePlayer(){savePlayback();const v=$("video-player");v.pause();v.removeAttribute("src");v.load();S.playback=null;$("player-overlay").hidden=true;render();}
 function closeAll(){if(!$("player-overlay").hidden)closePlayer();else if(!$("details-overlay").hidden)closeDetails();}
 document.addEventListener("click",e=>{const b=e.target.closest("[data-tab],[data-segment],[data-close]");if(b?.dataset.tab)navigate(b.dataset.tab);else if(b?.dataset.segment){S.segment=b.dataset.segment;navigate("home");}else if(b?.dataset.close==="details")closeDetails();else if(b?.dataset.close==="player")closePlayer();});
