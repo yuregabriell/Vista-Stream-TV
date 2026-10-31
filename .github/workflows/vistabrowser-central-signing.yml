@@ -1,4 +1,5 @@
 name: Sign VistaBrowser 4.4.2 using protected VistaStream certificate
+# Re-run after repairing the 4.4.1 -> 4.4.2 sequential upgrade.
 on:
   push:
     branches: [feature/vistabrowser-central-signing-442]
