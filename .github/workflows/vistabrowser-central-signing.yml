@@ -1,7 +1,7 @@
-name: Sign VistaBrowser 4.4.1 using protected VistaStream certificate
+name: Sign VistaBrowser 4.4.2 using protected VistaStream certificate
 on:
   push:
-    branches: [feature/vistabrowser-central-signing]
+    branches: [feature/vistabrowser-central-signing-442]
     paths:
       - .github/workflows/vistabrowser-central-signing.yml
   workflow_dispatch:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 jobs:
   sign_vistabrowser:
-    uses: yuregabrieldev/tiktok-feedback-helpers/.github/workflows/vistabrowser-v441-central-signer.yml@feature/vistabrowser-v441-permanent-signing
+    uses: yuregabrieldev/tiktok-feedback-helpers/.github/workflows/vistabrowser-v442-central-signer.yml@feature/vistabrowser-v442-integrated-queue
     secrets:
       VB_KEYSTORE_BASE64: ${{ secrets.VISTA_SIGNING_KEYSTORE_BASE64 }}
       VB_KEYSTORE_PASSWORD: ${{ secrets.VISTA_KEYSTORE_PASSWORD }}
