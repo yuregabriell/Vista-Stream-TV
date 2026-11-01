@@ -146,7 +146,6 @@ fun TvHomeScreen(
                                     style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.primary
                                 )
-                                TvPill("EXPLORAR CATÁLOGO", onClick = onBrowseCatalog)
                                 TvPill("ANIMES", onClick = onOpenAnime)
                             }
                             Spacer(Modifier.height(14.dp))
@@ -211,6 +210,30 @@ fun TvHomeScreen(
                                         rail = rail,
                                         onOpen = { onOpenTitle(it.tvMediaType(), it.id) },
                                         onFocused = { focus = HomeFocus.Title(it) }
+                                    )
+                                }
+                            }
+                            // Browse after all curated rails, not squeezed into the top hero.
+                            item(key = "browse-catalog-footer") {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth()
+                                        .padding(
+                                            start = TvLayout.ContentStart,
+                                            end = TvLayout.ContentEnd,
+                                            top = 24.dp,
+                                            bottom = 38.dp
+                                        ),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Text(
+                                        "Não encontraste o que procuras?",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    TvPill(
+                                        "EXPLORAR TODO O CATÁLOGO",
+                                        icon = androidx.compose.material.icons.Icons.Default.GridView,
+                                        onClick = onBrowseCatalog
                                     )
                                 }
                             }
