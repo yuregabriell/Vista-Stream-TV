@@ -30,6 +30,8 @@ import com.ivor.openstream.presentation.player.components.SUBTITLES_OFF
 import com.ivor.openstream.presentation.player.sourceSummary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.util.Locale
 
 /** TV episode detail: metadata and pre-resolved sources without starting an audio/video session. */
 @Composable
@@ -39,6 +41,9 @@ fun TvEpisodeDetailsScreen(
     season: Int,
     episode: Int,
     onPlay: () -> Unit,
+    /** OK on an episode thumbnail should play that episode immediately. */
+    onPlayEpisode: (Int, Int) -> Unit,
+    /** Selecting a season changes the preview, without starting playback. */
     onChooseEpisode: (Int, Int) -> Unit,
     playerViewModel: PlayerViewModel = hiltViewModel(),
     detailsViewModel: DetailsViewModel = hiltViewModel()
@@ -68,6 +73,13 @@ fun TvEpisodeDetailsScreen(
     }
     val focus = remember { FocusRequester() }
     val listState = rememberLazyListState()
+    val episodeRailState = rememberLazyListState()
+    val seasonRailState = rememberLazyListState()
+    LaunchedEffect(episodes, season, episode) {
+        val index = episodes.indexOfFirst { it.episodeNumber == episode }
+        if (index >= 0) episodeRailState.scrollToItem(index)
+    }
+    var upcomingDate by remember(season, episode) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val title = details
     if (title == null) {
@@ -75,6 +87,10 @@ fun TvEpisodeDetailsScreen(
         return
     }
     val otherSeasons = title.seasons.orEmpty().filter { it.seasonNumber > 0 }
+    LaunchedEffect(otherSeasons, season) {
+        val index = otherSeasons.indexOfFirst { it.seasonNumber == season }
+        if (index >= 0) seasonRailState.scrollToItem(index)
+    }
     LaunchedEffect(title.id, season, episode) {
         delay(90)
         runCatching { focus.requestFocus() }
@@ -130,10 +146,14 @@ fun TvEpisodeDetailsScreen(
                         Spacer(Modifier.height(14.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Button(onClick = onPlay, modifier = Modifier.focusRequester(focus),
+                                enabled = !isUpcomingEpisode(currentEpisode?.airDate),
                                 contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
                                 Icon(Icons.Default.PlayArrow, null, Modifier.size(ButtonDefaults.IconSize))
                                 Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                                androidx.tv.material3.Text("Reproduzir")
+                                androidx.tv.material3.Text(
+                                    if (isUpcomingEpisode(currentEpisode?.airDate)) "Ainda não estreou"
+                                    else "Reproduzir"
+                                )
                             }
                             OutlinedButton(onClick = detailsViewModel::toggleWatchLater) {
                                 Icon(if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
@@ -221,7 +241,7 @@ fun TvEpisodeDetailsScreen(
                     Text("Preferência de legenda: " + when (preferredSubtitle) {
                         null -> "Automático"
                         SUBTITLES_OFF -> "Desligadas"
-                        else -> preferredSubtitle
+                        else -> preferredSubtitle?.let(::tvLanguageName) ?: "Automático"
                     }, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -230,6 +250,17 @@ fun TvEpisodeDetailsScreen(
                     contentPadding = PaddingValues(start = TvLayout.PageStart, end = TvLayout.ContentEnd),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    item(key = "automatic") {
+                        if (preferredSubtitle == null) {
+                            Button(onClick = playerViewModel::resetPreferredSubtitleLanguage) {
+                                androidx.tv.material3.Text("Automático ✓")
+                            }
+                        } else {
+                            OutlinedButton(onClick = playerViewModel::resetPreferredSubtitleLanguage) {
+                                androidx.tv.material3.Text("Automático")
+                            }
+                        }
+                    }
                     item(key = "none") {
                         OutlinedButton(onClick = { playerViewModel.setPreferredSubtitleLanguage(SUBTITLES_OFF) }) {
                             androidx.tv.material3.Text("Desligadas" + if (preferredSubtitle == SUBTITLES_OFF) " ✓" else "")
@@ -237,7 +268,7 @@ fun TvEpisodeDetailsScreen(
                     }
                     items(languages, key = { it }) { language ->
                         OutlinedButton(onClick = { playerViewModel.setPreferredSubtitleLanguage(language) }) {
-                            androidx.tv.material3.Text(language.uppercase() + if (preferredSubtitle == language) " ✓" else "")
+                            androidx.tv.material3.Text(tvLanguageName(language) + if (preferredSubtitle == language) " ✓" else "")
                         }
                     }
                     if (languages.isEmpty()) item(key = "no-results") {
@@ -253,6 +284,7 @@ fun TvEpisodeDetailsScreen(
                 }
                 item(key = "seasons") {
                     LazyRow(
+                        state = seasonRailState,
                         contentPadding = PaddingValues(start = TvLayout.PageStart, end = TvLayout.ContentEnd),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
@@ -268,24 +300,63 @@ fun TvEpisodeDetailsScreen(
             }
             if (mediaType != "movie") {
                 item(key = "episode-heading") {
-                    TvRowHeader("Episódios · Temporada $season", start = TvLayout.PageStart)
+                    Column(Modifier.padding(start = TvLayout.PageStart)) {
+                        TvRowHeader("Episódios · Temporada $season", start = 0.dp)
+                        Text("Carrega OK num episódio para começar a assistir",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
                 item(key = "episode-rail") {
                     LazyRow(
+                        state = episodeRailState,
                         contentPadding = PaddingValues(start = TvLayout.PageStart, end = TvLayout.ContentEnd),
                         horizontalArrangement = Arrangement.spacedBy(TvLayout.CardGap)
                     ) {
                         items(episodes, key = { it.episodeNumber }) { item ->
                             TvLandscapeCard(
                                 title = "E" + item.episodeNumber + " · " + item.name,
-                                subtitle = item.airDate?.takeIf { it.isNotBlank() },
+                                subtitle = listOfNotNull(
+                                    item.airDate?.takeIf { it.isNotBlank() },
+                                    if (isUpcomingEpisode(item.airDate)) "Estreia prevista"
+                                    else if (item.episodeNumber == episode) "Selecionado · OK para reproduzir"
+                                    else "OK para reproduzir"
+                                ).joinToString("  ·  "),
                                 imageUrl = item.stillPath?.let { "$TV_STILL_BASE$it" },
-                                onClick = { onChooseEpisode(season, item.episodeNumber) }
+                                onClick = {
+                                    if (isUpcomingEpisode(item.airDate)) {
+                                        upcomingDate = item.airDate
+                                    } else {
+                                        onPlayEpisode(season, item.episodeNumber)
+                                    }
+                                }
                             )
                         }
                     }
                 }
             }
         }
+        if (upcomingDate != null) {
+            TvConfirmPanel(
+                title = "Episódio ainda não estreou",
+                message = "Estreia prevista: " + upcomingDate +
+                    ". Não vamos tentar reproduzir uma fonte de outro episódio.",
+                confirmLabel = "Compreendi",
+                onConfirm = { upcomingDate = null },
+                onCancel = { upcomingDate = null }
+            )
+        }
     }
+}
+
+internal fun isUpcomingEpisode(airDate: String?, today: LocalDate = LocalDate.now()): Boolean =
+    airDate?.take(10)?.let { value ->
+        runCatching { LocalDate.parse(value).isAfter(today) }.getOrDefault(false)
+    } ?: false
+
+private fun tvLanguageName(code: String): String {
+    val locale = Locale.forLanguageTag(code.replace('_', '-'))
+    val name = locale.getDisplayLanguage(Locale.forLanguageTag("pt-PT"))
+    return if (name.isBlank() || name.equals(code, ignoreCase = true)) code.uppercase()
+        else name.replaceFirstChar { it.titlecase(Locale.forLanguageTag("pt-PT")) } + " ($code)"
 }

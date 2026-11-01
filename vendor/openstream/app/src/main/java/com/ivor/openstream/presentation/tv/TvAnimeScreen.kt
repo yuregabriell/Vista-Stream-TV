@@ -190,16 +190,18 @@ fun TvAnimeScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            OutlinedTextField(
+            TvDpadTextInput(
                 value = searchText,
-                onValueChange = { searchText = it.take(80) },
+                placeholder = "Pesquisar animes por nome",
+                title = "Pesquisar animes",
                 modifier = Modifier.weight(1f),
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyLarge,
-                placeholder = { Text("Pesquisar animes por nome") },
-                shape = RoundedCornerShape(14.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { searchAnime() })
+                maxLength = 80,
+                onSubmit = { entered ->
+                    searchText = entered
+                    showingAll = false
+                    genre = ""
+                    submittedQuery = entered
+                }
             )
             Button(
                 onClick = { searchAnime() },

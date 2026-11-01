@@ -93,6 +93,7 @@ fun TvExtensionsScreen(
     val rowRequesters = remember { mutableMapOf<String, FocusRequester>() }
     fun rowRequester(key: String) = rowRequesters.getOrPut(key) { FocusRequester() }
     val firstPill = remember { FocusRequester() }
+    val detailAction = remember { FocusRequester() }
 
     LaunchedEffect(showInstalled, visible.isEmpty()) {
         val first = visible.firstOrNull()
@@ -192,11 +193,11 @@ fun TvExtensionsScreen(
                             selected = compatibleOnly,
                             onClick = { compatibleOnly = !compatibleOnly }
                         )
-                        androidx.compose.material3.OutlinedTextField(
+                        TvDpadTextInput(
                             value = state.query,
-                            onValueChange = viewModel::setQuery,
-                            placeholder = { androidx.compose.material3.Text("Pesquisar extensões, pt-BR, animes...") },
-                            singleLine = true,
+                            onSubmit = viewModel::setQuery,
+                            title = "Pesquisar fontes e addons",
+                            placeholder = "Pesquisar extensões, pt-BR, animes…",
                             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
                         )
                     }
@@ -232,7 +233,13 @@ fun TvExtensionsScreen(
                             itemsIndexed(visible, key = { _, it -> it.key }) { index, extension ->
                                 ListItem(
                                     selected = extension.key == selected?.key,
-                                    onClick = { },
+                                    // OK enters the actionable detail pane instead of doing nothing.
+                                    onClick = {
+                                        selectedKey = extension.key
+                                        if (extension.manifest.isSupported || extension.isInstalled) {
+                                            runCatching { detailAction.requestFocus() }
+                                        }
+                                    },
                                     headlineContent = {
                                         Text(extension.manifest.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     },
@@ -271,6 +278,7 @@ fun TvExtensionsScreen(
                         val position = state.installed.indexOfFirst { it.key == selected.key }
                         ExtensionDetail(
                             extension = selected,
+                            actionFocusRequester = detailAction,
                             canMoveUp = showInstalled && position > 0,
                             canMoveDown = showInstalled && position in 0 until state.installed.lastIndex,
                             onInstall = { viewModel.install(selected) },
@@ -367,6 +375,7 @@ private fun statusLabel(extension: MarketplaceExtension): String = when {
 @Composable
 private fun ExtensionDetail(
     extension: MarketplaceExtension,
+    actionFocusRequester: FocusRequester,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     onInstall: () -> Unit,
@@ -431,6 +440,7 @@ private fun ExtensionDetail(
                 !extension.isInstalled -> Button(
                     onClick = onInstall,
                     enabled = manifest.isSupported,
+                    modifier = Modifier.focusRequester(actionFocusRequester),
                     contentPadding = ButtonDefaults.ButtonWithIconContentPadding
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
@@ -439,6 +449,7 @@ private fun ExtensionDetail(
                 }
                 extension.hasUpdate -> Button(
                     onClick = onUpdate,
+                    modifier = Modifier.focusRequester(actionFocusRequester),
                     contentPadding = ButtonDefaults.ButtonWithIconContentPadding
                 ) {
                     Icon(Icons.Default.SystemUpdateAlt, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
@@ -459,6 +470,7 @@ private fun ExtensionDetail(
                 }
                 OutlinedButton(
                     onClick = onRemove,
+                    modifier = if (extension.hasUpdate) Modifier else Modifier.focusRequester(actionFocusRequester),
                     contentPadding = ButtonDefaults.ButtonWithIconContentPadding
                 ) {
                     Icon(Icons.Outlined.DeleteOutline, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
