@@ -122,6 +122,16 @@ class DetailsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     /** What the primary action continues with, or null to start from the beginning. */
+    /**
+     * Remove this title from the Continue Watching rail without erasing finished episodes.
+     * The repository only removes unfinished checkpoints; history of watched episodes survives.
+     */
+    fun dismissFromContinueWatching() {
+        viewModelScope.launch {
+            watchProgressRepository.dismiss(mediaType, animeId)
+        }
+    }
+
     val resumeTarget: StateFlow<WatchProgress?> = titleProgress
         .map { rows -> rows.firstOrNull()?.takeUnless { it.completed } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
