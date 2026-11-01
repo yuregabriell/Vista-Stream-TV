@@ -59,6 +59,26 @@ class ResolvedStreamCacheTest {
     }
 
     @Test
+    fun failingOneMirrorPreservesOtherCandidatesWithOriginalTtl() {
+        val extra = VideoServer("s2", "p2", "P2", "S2", "https://example.com/b.m3u8", StreamQuality.Q720)
+        val multiple = found.copy(servers = found.servers + extra)
+        cache.put(episode, "p@1", multiple)
+        now += 20_000L
+        cache.forgetServer(episode, "s")
+        assertEquals(listOf(extra), cache.get(episode, "p@1")?.servers)
+        // Evicting a broken source must not extend the TTL of the remaining URL.
+        now += ResolvedStreamCache.TTL_MS - 20_000L
+        assertNull(cache.get(episode, "p@1"))
+    }
+
+    @Test
+    fun evictsEntryWhenItsOnlyCandidateFails() {
+        cache.put(episode, "p@1", found)
+        cache.forgetServer(episode, "s")
+        assertNull(cache.get(episode, "p@1"))
+    }
+
+    @Test
     fun staysBounded() {
         repeat(ResolvedStreamCache.MAX_ENTRIES + 1) { index -> cache.put(episode.copy(episode = index), "p@1", found) }
         assertNull(cache.get(episode.copy(episode = 0), "p@1"))

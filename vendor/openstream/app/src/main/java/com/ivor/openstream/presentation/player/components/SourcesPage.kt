@@ -138,6 +138,11 @@ fun LazyListScope.sourcesPage(
 ) {
     val servers = state.availableServers
     val activeId = state.selectedServerId
+    val previousCount = when (state) {
+        is ServersState.Ready -> state.previousCount
+        is ServersState.Resolving -> state.previousCount
+        else -> 0
+    }
     val qualityFilters = servers
         .map { it.quality.filterLabel() }
         .distinct()
@@ -156,6 +161,16 @@ fun LazyListScope.sourcesPage(
                 title = stringResource(R.string.player_checking_sources),
                 body = stringResource(R.string.player_results_as_respond),
                 busy = true,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
+    }
+
+    if (previousCount > 0) {
+        item(key = "previous-candidates") {
+            PanelNotice(
+                title = stringResource(R.string.player_previous_sources_notice_title),
+                body = stringResource(R.string.player_previous_sources_notice_desc, previousCount),
                 modifier = Modifier.padding(bottom = 8.dp)
             )
         }

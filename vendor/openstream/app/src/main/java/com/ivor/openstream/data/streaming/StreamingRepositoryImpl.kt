@@ -97,7 +97,9 @@ class StreamingRepositoryImpl @Inject constructor(
         }
 
         suspend fun publish(resolution: ServerResolution) {
-            if (cacheable) streamCache.put(identity, sources, resolution)
+            // A successful explicit Find more also refreshes the automatic episode cache.
+            // Failed/empty searches never delete the last successful set.
+            streamCache.put(identity, sources, resolution)
             send(resolution)
         }
 
@@ -155,9 +157,7 @@ class StreamingRepositoryImpl @Inject constructor(
                     consecutiveFailures.remove(outcome.provider.id)
                     breakerOpenedAt.remove(outcome.provider.id)
                     providerRegistry.recordOutcome(outcome.provider, incoming.isNotEmpty())
-                    if (incoming.isEmpty()) {
-                        failedProviders += outcome.provider.displayName
-                    } else {
+                    if (incoming.isNotEmpty()) {
                         servers = ServerRanker.mergeAndRank(
                             existing = servers,
                             incoming = incoming,
@@ -344,6 +344,9 @@ class StreamingRepositoryImpl @Inject constructor(
 
     override fun forgetResolvedServers(identity: MediaIdentity) = streamCache.forget(identity)
 
+    override fun forgetResolvedServer(identity: MediaIdentity, server: VideoServer) =
+        streamCache.forgetServer(identity, server.id)
+
     override fun clearResolvedServers() = streamCache.clear()
 
     /** What a cached resolution must match: the same sources, versions, order and search mode. */
@@ -365,6 +368,9 @@ class StreamingRepositoryImpl @Inject constructor(
     override fun rememberWorkingSource(identity: MediaIdentity, server: VideoServer) {
         if (server.providerId.isBlank()) return
         preferences.edit()
+            // The same anime may use different hosts for different episodes.
+            // Store only the provider ID, never expiring signed video URLs or auth headers.
+            .putString("$WORKING_SOURCE_KEY:${identity.cacheKey}", server.providerId)
             .putString("$WORKING_SOURCE_KEY:${identity.tmdbType}", server.providerId)
             .putString(WORKING_SOURCE_KEY, server.providerId)
             .apply()
@@ -372,7 +378,8 @@ class StreamingRepositoryImpl @Inject constructor(
 
     /** The source that last played this kind of title (movie or show), else the last to play anything. */
     private fun lastWorkingSourceId(identity: MediaIdentity): String? =
-        preferences.getString("$WORKING_SOURCE_KEY:${identity.tmdbType}", null)
+        preferences.getString("$WORKING_SOURCE_KEY:${identity.cacheKey}", null)
+            ?: preferences.getString("$WORKING_SOURCE_KEY:${identity.tmdbType}", null)
             ?: preferences.getString(WORKING_SOURCE_KEY, null)
 
     private sealed interface ResolutionEvent {
