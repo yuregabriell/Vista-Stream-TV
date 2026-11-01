@@ -90,6 +90,7 @@ private val TV_ANIME_GENRES = listOf(
 @Composable
 fun TvAnimeScreen(
     onOpenSources: () -> Unit = {},
+    onOpenMovies: () -> Unit = {},
     initialGenre: String = "",
     initialQuery: String = "",
     initialBrowse: Boolean = false,
@@ -145,6 +146,34 @@ fun TvAnimeScreen(
 
     BackHandler(enabled = browsing) {
         browseGenre("")
+    }
+
+    // The TV anime Home shares the exact same cinematic structure as Movies:
+    // backdrop hero + dedicated genre row + horizontal rails + browse footer.
+    val homeAnimes = state.sections["anime"].orEmpty()
+    if (!browsing && homeAnimes.isNotEmpty()) {
+        TvAnimeCinematicHome(
+            animeItems = homeAnimes,
+            genres = TV_ANIME_GENRES,
+            onOpenTitle = { selectedTitle = it },
+            onGenre = ::browseGenre,
+            onSearch = { entered ->
+                searchText = entered
+                showingAll = false
+                genre = ""
+                submittedQuery = entered
+            },
+            onOpenMovies = onOpenMovies,
+            onBrowseAll = {
+                showingAll = true
+                genre = ""
+                searchText = ""
+                submittedQuery = ""
+            },
+            onRefresh = viewModel::refresh,
+            modifier = modifier
+        )
+        return
     }
 
     Column(

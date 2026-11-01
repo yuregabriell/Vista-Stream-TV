@@ -195,7 +195,10 @@ private fun TvAppScaffold(
             }
 
             composable(TvDestination.ANIME.route) {
-                TvAnimeScreen(onOpenSources = { go(TvDestination.EXTENSIONS) })
+                TvAnimeScreen(
+                    onOpenSources = { go(TvDestination.EXTENSIONS) },
+                    onOpenMovies = { go(TvDestination.HOME) }
+                )
             }
 
             composable(
