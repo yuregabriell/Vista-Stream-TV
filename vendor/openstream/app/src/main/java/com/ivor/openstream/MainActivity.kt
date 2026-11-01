@@ -22,7 +22,9 @@ import com.ivor.openstream.presentation.navigation.AppNavigation
 import com.ivor.openstream.presentation.navigation.DeepLinkRequest
 import com.ivor.openstream.presentation.navigation.DeepLinks
 import com.ivor.openstream.presentation.tv.TvNavigation
-import com.ivor.openstream.presentation.tv.rememberTvMode
+import com.ivor.openstream.presentation.tv.DeviceKind
+import com.ivor.openstream.presentation.tv.TvDetect
+import com.ivor.openstream.presentation.tv.rememberDeviceKind
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import com.ivor.openstream.data.settings.AppSettingsStore
@@ -105,7 +107,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             val windowSizeClass = calculateWindowSizeClass(this)
             val settings by appSettings.settings.collectAsState()
-            val tvMode = rememberTvMode()
+            val deviceKind = rememberDeviceKind()
+            // The phone/tablet distinction remains available for future responsive features.
+            val tvMode = deviceKind == DeviceKind.TV
             val amoled = settings.amoledBlack
             val darkTheme = if (tvMode) true else when (settings.themeMode) {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()
@@ -140,6 +144,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStop() {
+        // A TV is a foreground viewing device, not a background audio player.
+        // Clear the stream and its media service when Home or another app takes focus.
+        // Keep phone/tablet background playback and Cast behaviour untouched.
+        if (TvDetect.isTv(this)) {
+            playbackSession.stop()
+            stopService(Intent(this, com.ivor.openstream.presentation.player.PlaybackService::class.java))
+        }
+        super.onStop()
     }
 
     override fun onNewIntent(intent: Intent) {
