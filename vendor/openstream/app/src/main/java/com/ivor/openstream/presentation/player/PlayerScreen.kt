@@ -154,6 +154,7 @@ fun PlayerScreen(
     localMediaId: Long? = null,
     onBackClick: () -> Unit,
     onEpisodeClick: (season: Int, episode: Int) -> Unit,
+    onEpisodeDetailsClick: (season: Int, episode: Int) -> Unit = onEpisodeClick,
     onOpenDetails: (mediaType: String, id: Int) -> Unit = { _, _ -> },
     onOpenTitle: (id: Int, mediaType: String) -> Unit = { _, _ -> },
     /** Android TV: the player gets D-pad controls, media notifications and a leanback start. */
@@ -442,6 +443,15 @@ fun PlayerScreen(
         showServerPicker = false
     }
 
+    // The TV player must release its shared Media3 session on *every* navigation
+    // away (system Back, replacement route, episode details, Home). Explicit back
+    // callbacks alone miss the NavController's own pop and leave audio behind.
+    DisposableEffect(tvControls, viewModel) {
+        onDispose {
+            if (tvControls) viewModel.stopPlaybackOnTvExit()
+        }
+    }
+
     // Clean up on dispose
     DisposableEffect(Unit) {
         onDispose {
@@ -705,7 +715,10 @@ fun PlayerScreen(
                             episodes = if (mediaType == "movie") emptyList() else seasonEpisodes,
                             currentEpisodeNumber = episode,
                             episodeProgress = episodeProgress,
-                            onEpisodeSelected = { picked -> onEpisodeClick(picked.seasonNumber, picked.episodeNumber) },
+                            onEpisodeSelected = { picked ->
+                                if (tvControls) onEpisodeDetailsClick(picked.seasonNumber, picked.episodeNumber)
+                                else onEpisodeClick(picked.seasonNumber, picked.episodeNumber)
+                            },
                             onIsPlayingChanged = { isVideoPlaying = it },
                             isInPictureInPicture = isInPictureInPicture,
                             togglePlaybackSignal = togglePlaybackSignal,
