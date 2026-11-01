@@ -1,6 +1,12 @@
 package com.ivor.openstream.presentation.tv
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
@@ -134,7 +140,15 @@ private fun TvAppScaffold(
     // the screen, and the menu can never float over or steal its cards/episodes.
     Row(modifier = Modifier.fillMaxSize()) {
         if (showDrawer) {
-            Column(
+            // Selected-section halo physically glides along the fixed seven-item
+            // rail, while the glyph itself has an independent D-pad focus motion.
+            val selectedIndex = TvDestination.topLevel.indexOf(selected).coerceAtLeast(0)
+            val selectedOffset by animateDpAsState(
+                targetValue = ((selectedIndex - 3) * 58).dp,
+                animationSpec = spring(dampingRatio = 0.82f, stiffness = 430f),
+                label = "tvSidebarSlidingIndicator"
+            )
+            Box(
                 modifier = Modifier
                     .width(TvSidebarWidth)
                     .fillMaxHeight()
@@ -145,19 +159,34 @@ private fun TvAppScaffold(
                                 MaterialTheme.colorScheme.background.copy(alpha = 0.10f)
                             )
                         )
-                    )
-                    .padding(horizontal = 6.dp, vertical = 16.dp)
-                    .selectableGroup(),
-                verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                TvDestination.topLevel.forEach { destination ->
-                    TvSidebarNavItem(
-                        destination = destination,
-                        selected = destination == selected,
-                        onClick = { go(destination) },
-                        modifier = Modifier.focusRequester(requesters.getValue(destination))
-                    )
+                Box(
+                    modifier = Modifier
+                        .offset(y = selectedOffset)
+                        .size(56.dp)
+                        .background(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                            RoundedCornerShape(18.dp)
+                        )
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .padding(horizontal = 6.dp, vertical = 16.dp)
+                        .selectableGroup(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    TvDestination.topLevel.forEach { destination ->
+                        TvSidebarNavItem(
+                            destination = destination,
+                            selected = destination == selected,
+                            onClick = { go(destination) },
+                            modifier = Modifier.focusRequester(requesters.getValue(destination))
+                        )
+                    }
                 }
             }
         }
