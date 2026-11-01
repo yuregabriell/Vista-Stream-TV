@@ -1,7 +1,9 @@
 package com.ivor.openstream.presentation.tv
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,7 +19,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -53,22 +54,37 @@ internal fun TvSidebarNavItem(
     modifier: Modifier = Modifier
 ) {
     var focused by remember { mutableStateOf(false) }
-    val zoom by animateFloatAsState(
-        targetValue = if (focused) 1.18f else 1f,
-        animationSpec = spring(dampingRatio = 0.76f, stiffness = 560f),
-        label = "tvMenuGlyphZoom"
+    // Animate the actual vector layout size, never scale a cached bitmap;
+    // the glyph is drawn at each new size and cannot become stretched.
+    val glyphSize by animateDpAsState(
+        targetValue = if (focused) 34.dp else 28.dp,
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = 480f),
+        label = "tvMenuIconSize"
     )
     val scheme = MaterialTheme.colorScheme
+    val surfaceColor by animateColorAsState(
+        targetValue = when {
+            selected -> scheme.primary
+            focused -> scheme.primary.copy(alpha = 0.22f)
+            else -> Color.Transparent
+        },
+        animationSpec = tween(durationMillis = 220),
+        label = "tvMenuSelectedMotion"
+    )
+    val iconColor by animateColorAsState(
+        targetValue = if (selected) scheme.onPrimary else scheme.onSurface,
+        animationSpec = tween(durationMillis = 180),
+        label = "tvMenuIconMotion"
+    )
     Surface(
         modifier = modifier.size(52.dp).onFocusChanged { focused = it.isFocused },
         onClick = onClick,
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(16.dp)),
         colors = ClickableSurfaceDefaults.colors(
-            // The active route is bright even *without* remote focus.
-            containerColor = if (selected) scheme.primary else Color.Transparent,
-            contentColor = if (selected) scheme.onPrimary else scheme.onSurface,
-            focusedContainerColor = if (selected) scheme.primary else scheme.surfaceContainerHigh,
-            focusedContentColor = if (selected) scheme.onPrimary else scheme.onSurface
+            containerColor = surfaceColor,
+            contentColor = iconColor,
+            focusedContainerColor = surfaceColor,
+            focusedContentColor = iconColor
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
     ) {
@@ -76,7 +92,7 @@ internal fun TvSidebarNavItem(
             Icon(
                 imageVector = destination.roundedGlyph(),
                 contentDescription = stringResource(destination.labelRes),
-                modifier = Modifier.size(29.dp).scale(zoom)
+                modifier = Modifier.size(glyphSize)
             )
         }
     }
