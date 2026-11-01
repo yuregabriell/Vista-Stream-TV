@@ -31,6 +31,7 @@ import com.ivor.openstream.presentation.player.sourceSummary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.util.Locale
 
 /** TV episode detail: metadata and pre-resolved sources without starting an audio/video session. */
 @Composable
@@ -230,7 +231,7 @@ fun TvEpisodeDetailsScreen(
                     Text("Preferência de legenda: " + when (preferredSubtitle) {
                         null -> "Automático"
                         SUBTITLES_OFF -> "Desligadas"
-                        else -> preferredSubtitle
+                        else -> tvLanguageName(preferredSubtitle)
                     }, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -239,6 +240,17 @@ fun TvEpisodeDetailsScreen(
                     contentPadding = PaddingValues(start = TvLayout.PageStart, end = TvLayout.ContentEnd),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    item(key = "automatic") {
+                        if (preferredSubtitle == null) {
+                            Button(onClick = playerViewModel::resetPreferredSubtitleLanguage) {
+                                androidx.tv.material3.Text("Automático ✓")
+                            }
+                        } else {
+                            OutlinedButton(onClick = playerViewModel::resetPreferredSubtitleLanguage) {
+                                androidx.tv.material3.Text("Automático")
+                            }
+                        }
+                    }
                     item(key = "none") {
                         OutlinedButton(onClick = { playerViewModel.setPreferredSubtitleLanguage(SUBTITLES_OFF) }) {
                             androidx.tv.material3.Text("Desligadas" + if (preferredSubtitle == SUBTITLES_OFF) " ✓" else "")
@@ -246,7 +258,7 @@ fun TvEpisodeDetailsScreen(
                     }
                     items(languages, key = { it }) { language ->
                         OutlinedButton(onClick = { playerViewModel.setPreferredSubtitleLanguage(language) }) {
-                            androidx.tv.material3.Text(language.uppercase() + if (preferredSubtitle == language) " ✓" else "")
+                            androidx.tv.material3.Text(tvLanguageName(language) + if (preferredSubtitle == language) " ✓" else "")
                         }
                     }
                     if (languages.isEmpty()) item(key = "no-results") {
@@ -329,3 +341,10 @@ internal fun isUpcomingEpisode(airDate: String?, today: LocalDate = LocalDate.no
     airDate?.take(10)?.let { value ->
         runCatching { LocalDate.parse(value).isAfter(today) }.getOrDefault(false)
     } ?: false
+
+private fun tvLanguageName(code: String): String {
+    val locale = Locale.forLanguageTag(code.replace('_', '-'))
+    val name = locale.getDisplayLanguage(Locale.forLanguageTag("pt-PT"))
+    return if (name.isBlank() || name.equals(code, ignoreCase = true)) code.uppercase()
+        else name.replaceFirstChar { it.titlecase(Locale.forLanguageTag("pt-PT")) } + " ($code)"
+}
