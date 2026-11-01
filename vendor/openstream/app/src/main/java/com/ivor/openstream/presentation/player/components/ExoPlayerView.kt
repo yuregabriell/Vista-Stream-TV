@@ -584,9 +584,12 @@ fun ExoPlayerView(
 
     // While locked, back does nothing except show the unlock button.
     BackHandler(enabled = isLocked) { revealUnlockButton() }
-    // Android TV: back hides the chrome first, then leaves the player.
+    // On a TV, Back means leave playback. Hiding the chrome on the first Back
+    // made the app appear to have left while the audio continued; the parent
+    // handler now stops Media3 and the playback service before navigation.
+    // A modal dialog keeps its own Back handler while it is open.
     BackHandler(enabled = dpadControls && !isLocked) {
-        if (areControlsVisible) areControlsVisible = false else onBackClick()
+        onBackClick()
     }
 
     LaunchedEffect(seekFeedbackSequence) {

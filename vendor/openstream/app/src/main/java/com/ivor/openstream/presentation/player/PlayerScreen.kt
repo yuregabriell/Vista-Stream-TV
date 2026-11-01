@@ -103,6 +103,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -154,6 +157,7 @@ fun PlayerScreen(
     localMediaId: Long? = null,
     onBackClick: () -> Unit,
     onEpisodeClick: (season: Int, episode: Int) -> Unit,
+    onEpisodeDetailsClick: (season: Int, episode: Int) -> Unit = onEpisodeClick,
     onOpenDetails: (mediaType: String, id: Int) -> Unit = { _, _ -> },
     onOpenTitle: (id: Int, mediaType: String) -> Unit = { _, _ -> },
     /** Android TV: the player gets D-pad controls, media notifications and a leanback start. */
@@ -442,6 +446,28 @@ fun PlayerScreen(
         showServerPicker = false
     }
 
+    // The current NavBackStackEntry reaches STOP when another TV screen covers it,
+    // sometimes before its transition removes it from composition.
+    val playerLifecycle = LocalLifecycleOwner.current
+    DisposableEffect(playerLifecycle, tvControls, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (tvControls && event == Lifecycle.Event.ON_STOP) {
+                viewModel.stopPlaybackOnTvExit()
+            }
+        }
+        playerLifecycle.lifecycle.addObserver(observer)
+        onDispose { playerLifecycle.lifecycle.removeObserver(observer) }
+    }
+
+    // The TV player must release its shared Media3 session on *every* navigation
+    // away (system Back, replacement route, episode details, Home). Explicit back
+    // callbacks alone miss the NavController's own pop and leave audio behind.
+    DisposableEffect(tvControls, viewModel) {
+        onDispose {
+            if (tvControls) viewModel.stopPlaybackOnTvExit()
+        }
+    }
+
     // Clean up on dispose
     DisposableEffect(Unit) {
         onDispose {
@@ -705,7 +731,10 @@ fun PlayerScreen(
                             episodes = if (mediaType == "movie") emptyList() else seasonEpisodes,
                             currentEpisodeNumber = episode,
                             episodeProgress = episodeProgress,
-                            onEpisodeSelected = { picked -> onEpisodeClick(picked.seasonNumber, picked.episodeNumber) },
+                            onEpisodeSelected = { picked ->
+                                if (tvControls) onEpisodeDetailsClick(picked.seasonNumber, picked.episodeNumber)
+                                else onEpisodeClick(picked.seasonNumber, picked.episodeNumber)
+                            },
                             onIsPlayingChanged = { isVideoPlaying = it },
                             isInPictureInPicture = isInPictureInPicture,
                             togglePlaybackSignal = togglePlaybackSignal,

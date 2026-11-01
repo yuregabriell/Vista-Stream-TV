@@ -81,6 +81,7 @@ fun TvDetailsScreen(
     mediaType: String,
     animeId: Int,
     onPlay: (season: Int, episode: Int) -> Unit,
+    onEpisodeInfo: (season: Int, episode: Int) -> Unit = onPlay,
     onOpenTitle: (mediaType: String, id: Int) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: DetailsViewModel = hiltViewModel()
@@ -239,7 +240,7 @@ fun TvDetailsScreen(
                                     EpisodeCard(
                                         episode = episode,
                                         progress = episodeProgress[episode.seasonNumber to episode.episodeNumber],
-                                        onClick = { onPlay(episode.seasonNumber, episode.episodeNumber) }
+                                        onClick = { onEpisodeInfo(episode.seasonNumber, episode.episodeNumber) }
                                     )
                                 }
                             }

@@ -51,9 +51,12 @@ private object TvRoutes {
         "tv_anime/browse?genre=${android.net.Uri.encode(genre)}&query=${android.net.Uri.encode(query)}"
 
     const val DETAILS = "tv_details/{mediaType}/{animeId}"
+    const val EPISODE = "tv_episode/{mediaType}/{animeId}/{season}/{episode}"
     const val PLAYER = "tv_player/{mediaType}/{animeId}/{season}/{episode}?downloadId={downloadId}"
 
     fun details(mediaType: String, animeId: Int) = "tv_details/$mediaType/$animeId"
+    fun episode(mediaType: String, animeId: Int, season: Int, episode: Int) =
+        "tv_episode/$mediaType/$animeId/$season/$episode"
     /** With [downloadId] the player opens the copy on the device instead of searching sources. */
     fun player(mediaType: String, animeId: Int, season: Int, episode: Int, downloadId: String? = null) =
         "tv_player/$mediaType/$animeId/$season/$episode" +
@@ -253,7 +256,38 @@ private fun TvAppScaffold(
                     onPlay = { season, episode ->
                         navController.navigate(TvRoutes.player(mediaType, animeId, season, episode))
                     },
+                    onEpisodeInfo = { season, episode ->
+                        navController.navigate(TvRoutes.episode(mediaType, animeId, season, episode))
+                    },
                     onOpenTitle = { type, id -> navController.navigate(TvRoutes.details(type, id)) }
+                )
+            }
+
+            composable(
+                route = TvRoutes.EPISODE,
+                arguments = listOf(
+                    navArgument("mediaType") { type = NavType.StringType },
+                    navArgument("animeId") { type = NavType.IntType },
+                    navArgument("season") { type = NavType.IntType },
+                    navArgument("episode") { type = NavType.IntType }
+                )
+            ) { entry ->
+                val args = entry.arguments ?: return@composable
+                val mediaType = args.getString("mediaType") ?: "tv"
+                val animeId = args.getInt("animeId")
+                val season = args.getInt("season")
+                val episode = args.getInt("episode")
+                TvEpisodeDetailsScreen(
+                    mediaType = mediaType,
+                    animeId = animeId,
+                    season = season,
+                    episode = episode,
+                    onPlay = { navController.navigate(TvRoutes.player(mediaType, animeId, season, episode)) },
+                    onChooseEpisode = { nextSeason, nextEpisode ->
+                        navController.navigate(TvRoutes.episode(mediaType, animeId, nextSeason, nextEpisode)) {
+                            popUpTo(TvRoutes.EPISODE) { inclusive = true }
+                        }
+                    }
                 )
             }
 
@@ -286,6 +320,9 @@ private fun TvAppScaffold(
                         navController.navigate(TvRoutes.player(mediaType, animeId, newSeason, newEpisode)) {
                             popUpTo(TvRoutes.PLAYER) { inclusive = true }
                         }
+                    },
+                    onEpisodeDetailsClick = { nextSeason, nextEpisode ->
+                        navController.navigate(TvRoutes.episode(mediaType, animeId, nextSeason, nextEpisode))
                     },
                     onOpenDetails = { type, id -> navController.navigate(TvRoutes.details(type, id)) }
                 )
