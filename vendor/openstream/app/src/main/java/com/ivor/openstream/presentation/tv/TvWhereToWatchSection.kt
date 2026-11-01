@@ -13,7 +13,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.OutlinedButton
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import com.ivor.openstream.data.remote.model.WatchProviderDto
 
 /** Official subscription availability, separate from unofficial Vista playback sources. */
