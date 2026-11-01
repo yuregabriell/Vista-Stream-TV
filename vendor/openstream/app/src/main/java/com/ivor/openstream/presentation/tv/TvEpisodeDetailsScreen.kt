@@ -73,6 +73,12 @@ fun TvEpisodeDetailsScreen(
     }
     val focus = remember { FocusRequester() }
     val listState = rememberLazyListState()
+    val episodeRailState = rememberLazyListState()
+    val seasonRailState = rememberLazyListState()
+    LaunchedEffect(episodes, season, episode) {
+        val index = episodes.indexOfFirst { it.episodeNumber == episode }
+        if (index >= 0) episodeRailState.scrollToItem(index)
+    }
     var upcomingDate by remember(season, episode) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val title = details
@@ -81,6 +87,10 @@ fun TvEpisodeDetailsScreen(
         return
     }
     val otherSeasons = title.seasons.orEmpty().filter { it.seasonNumber > 0 }
+    LaunchedEffect(otherSeasons, season) {
+        val index = otherSeasons.indexOfFirst { it.seasonNumber == season }
+        if (index >= 0) seasonRailState.scrollToItem(index)
+    }
     LaunchedEffect(title.id, season, episode) {
         delay(90)
         runCatching { focus.requestFocus() }
@@ -274,6 +284,7 @@ fun TvEpisodeDetailsScreen(
                 }
                 item(key = "seasons") {
                     LazyRow(
+                        state = seasonRailState,
                         contentPadding = PaddingValues(start = TvLayout.PageStart, end = TvLayout.ContentEnd),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
@@ -298,6 +309,7 @@ fun TvEpisodeDetailsScreen(
                 }
                 item(key = "episode-rail") {
                     LazyRow(
+                        state = episodeRailState,
                         contentPadding = PaddingValues(start = TvLayout.PageStart, end = TvLayout.ContentEnd),
                         horizontalArrangement = Arrangement.spacedBy(TvLayout.CardGap)
                     ) {
