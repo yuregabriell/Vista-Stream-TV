@@ -46,6 +46,7 @@ import androidx.tv.material3.rememberDrawerState
 import com.ivor.openstream.presentation.player.PlayerScreen
 
 private object TvRoutes {
+    const val CATALOG = "tv_catalog"
     const val ANIME_BROWSE = "tv_anime/browse?genre={genre}&query={query}"
     fun animeBrowse(genre: String = "", query: String = "") =
         "tv_anime/browse?genre=${android.net.Uri.encode(genre)}&query=${android.net.Uri.encode(query)}"
@@ -172,6 +173,7 @@ private fun TvAppScaffold(
             composable(TvDestination.HOME.route) {
                 TvHomeScreen(
                     onOpenAnime = { go(TvDestination.ANIME) },
+                    onBrowseCatalog = { navController.navigate(TvRoutes.CATALOG) },
                     onOpenExtensions = { go(TvDestination.EXTENSIONS) },
                     onOpenTitle = { mediaType, id -> navController.navigate(TvRoutes.details(mediaType, id)) },
                     onPlay = { mediaType, id, season, episode ->
@@ -184,6 +186,14 @@ private fun TvAppScaffold(
                         navController.navigate(TvRoutes.episode(mediaType, id, season, episode)) {
                             launchSingleTop = true
                         }
+                    }
+                )
+            }
+
+            composable(TvRoutes.CATALOG) {
+                TvCatalogScreen(
+                    onOpenTitle = { mediaType, id ->
+                        navController.navigate(TvRoutes.details(mediaType, id))
                     }
                 )
             }
