@@ -85,6 +85,7 @@ fun TvHomeScreen(
     /** Opening a continue-watching card is not the same as pressing Play. */
     onOpenEpisode: (mediaType: String, id: Int, season: Int, episode: Int) -> Unit,
     onOpenAnime: () -> Unit = {},
+    onBrowseCatalog: () -> Unit = {},
     onOpenExtensions: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel(),
@@ -145,6 +146,7 @@ fun TvHomeScreen(
                                     style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.primary
                                 )
+                                TvPill("EXPLORAR CATÁLOGO", onClick = onBrowseCatalog)
                                 TvPill("ANIMES", onClick = onOpenAnime)
                             }
                             Spacer(Modifier.height(14.dp))
