@@ -542,6 +542,17 @@ fun ExtensionDetailsSheet(
             Spacer(Modifier.height(18.dp))
             DetailLine(label = stringResource(R.string.st_repository), value = repoName)
             DetailLine(label = stringResource(R.string.sheet_engine), value = manifest.engine.type.key)
+            if (manifest.contentTypes.isNotEmpty()) {
+                DetailLine(label = "Tipos", value = manifest.contentTypes.joinToString(", "))
+            }
+            if (manifest.titleExamples.isNotEmpty()) {
+                DetailLine(label = "Títulos", value = manifest.titleExamples.joinToString(", "))
+            }
+            if (manifest.manifestUrl != null) {
+                TextButton(onClick = { uriHandler.openUri(manifest.manifestUrl) }) {
+                    Text("Ver manifest.json")
+                }
+            }
             if (manifest.tags.isNotEmpty()) {
                 DetailLine(label = stringResource(R.string.st_tags), value = manifest.tags.joinToString(", "))
             }

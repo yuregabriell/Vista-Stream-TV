@@ -1,0 +1,25 @@
+name: Vista Live Catalog JSON
+
+on:
+  pull_request:
+    paths:
+      - 'extensions/vista-catalog.json'
+      - 'scripts/validate_vista_catalog.py'
+      - '.github/workflows/vista-live-catalog.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'extensions/vista-catalog.json'
+      - 'scripts/validate_vista_catalog.py'
+      - '.github/workflows/vista-live-catalog.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-json:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate public Vista JSON directory
+        run: python3 scripts/validate_vista_catalog.py

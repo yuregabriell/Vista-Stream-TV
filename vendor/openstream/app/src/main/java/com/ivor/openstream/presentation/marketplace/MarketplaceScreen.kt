@@ -114,6 +114,8 @@ fun MarketplaceScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
+    LaunchedEffect(viewModel) { viewModel.liveRefreshWhileVisible() }
+
     LaunchedEffect(state.message) {
         val message = state.message ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(message)
@@ -300,6 +302,21 @@ private fun BrowseTab(
                     shape = ExpressiveShapes.medium,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search)
                 )
+            }
+
+            item(key = "directory-scope") {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    MarketplaceDirectory.entries.forEach { directory ->
+                        FilterChip(
+                            selected = state.directory == directory,
+                            onClick = { viewModel.setDirectory(directory) },
+                            label = { Text(directory.label) }
+                        )
+                    }
+                }
             }
 
             item(key = "compatibility") {

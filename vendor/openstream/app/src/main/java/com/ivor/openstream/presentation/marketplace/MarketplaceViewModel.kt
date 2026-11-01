@@ -20,7 +20,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import javax.inject.Inject
+
+enum class MarketplaceDirectory(val label: String) {
+    ALL("Todas"), VISTA("Vista"), STREMIO("Stremio")
+}
 
 data class MarketplaceUiState(
     val catalog: ExtensionCatalog = ExtensionCatalog(),
@@ -28,13 +33,14 @@ data class MarketplaceUiState(
     val charts: List<MarketplaceExtension> = emptyList(),
     val tags: List<String> = emptyList(),
     val query: String = "",
+    val directory: MarketplaceDirectory = MarketplaceDirectory.ALL,
     val sort: MarketplaceSort = MarketplaceSort.POPULAR,
     val tag: String? = null,
     val message: String? = null
 ) {
     val installed: List<MarketplaceExtension> get() = catalog.installed
     val updatable: List<MarketplaceExtension> get() = catalog.updatable
-    val isFiltered: Boolean get() = query.isNotBlank() || tag != null
+    val isFiltered: Boolean get() = query.isNotBlank() || tag != null || directory != MarketplaceDirectory.ALL
 }
 
 @HiltViewModel
@@ -62,19 +68,30 @@ class MarketplaceViewModel @Inject constructor(
     }
 
     private val query = MutableStateFlow("")
+    private val directory = MutableStateFlow(MarketplaceDirectory.ALL)
+    private val criteria = combine(query, directory) { term, category -> term to category }
     private val sort = MutableStateFlow(MarketplaceSort.POPULAR)
     private val tag = MutableStateFlow<String?>(null)
     private val message = MutableStateFlow<String?>(null)
 
     val state: StateFlow<MarketplaceUiState> = combine(
         repository.catalog,
-        query,
+        criteria,
         sort,
         tag,
         message
-    ) { catalog, currentQuery, currentSort, currentTag, currentMessage ->
+    ) { catalog, (currentQuery, currentDirectory), currentSort, currentTag, currentMessage ->
+        val selectedRepos = catalog.extensions.filter { extension ->
+            when (currentDirectory) {
+                MarketplaceDirectory.ALL -> true
+                MarketplaceDirectory.VISTA ->
+                    extension.manifest.repoId == com.ivor.openstream.data.extensions.VistaRemoteRepositories.VISTA_ID
+                MarketplaceDirectory.STREMIO ->
+                    extension.manifest.repoId == com.ivor.openstream.data.extensions.VistaRemoteRepositories.STREMIO_ID
+            }
+        }
         val filtered = MarketplaceRanker.search(
-            MarketplaceRanker.filterByTag(catalog.extensions, currentTag),
+            MarketplaceRanker.filterByTag(selectedRepos, currentTag),
             currentQuery
         )
         MarketplaceUiState(
@@ -83,11 +100,28 @@ class MarketplaceViewModel @Inject constructor(
             charts = MarketplaceRanker.topCharts(catalog.extensions),
             tags = MarketplaceRanker.tags(catalog.extensions),
             query = currentQuery,
+            directory = currentDirectory,
             sort = currentSort,
             tag = currentTag,
             message = currentMessage
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MarketplaceUiState())
+
+    fun setDirectory(value: MarketplaceDirectory) {
+        directory.value = value
+        tag.value = null
+    }
+
+    /**
+     * Poll only while the marketplace is on screen. GitHub is not a push service:
+     * the user can also press Refresh to fetch immediately. Old snapshots survive outages.
+     */
+    suspend fun liveRefreshWhileVisible() {
+        while (kotlinx.coroutines.currentCoroutineContext().isActive) {
+            runCatching { repository.refresh(force = true) }
+            kotlinx.coroutines.delay(60_000L)
+        }
+    }
 
     fun setQuery(value: String) {
         query.value = value

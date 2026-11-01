@@ -83,6 +83,8 @@ object MarketplaceRanker {
             manifest.name.lowercase().contains(needle) ||
                 manifest.description.lowercase().contains(needle) ||
                 manifest.language.lowercase().contains(needle) ||
+                manifest.contentTypes.any { it.lowercase().contains(needle) } ||
+                manifest.titleExamples.any { it.lowercase().contains(needle) } ||
                 manifest.tags.any { it.contains(needle) } ||
                 manifest.authors.any { it.lowercase().contains(needle) }
         }

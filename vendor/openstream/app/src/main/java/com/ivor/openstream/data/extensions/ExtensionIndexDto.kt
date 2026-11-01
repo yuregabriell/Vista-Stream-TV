@@ -39,6 +39,11 @@ data class ExtensionEntryDto(
     val apiVersion: Int = 1,
     val authors: List<String> = emptyList(),
     val language: String = "Multi",
+    /** Human-readable optional examples for search and detail pages, not proof of availability. */
+    val contentTypes: List<String> = emptyList(),
+    val titleExamples: List<String> = emptyList(),
+    /** Original Stremio manifest address, including a configured path where applicable. */
+    val manifestUrl: String? = null,
     val iconUrl: String? = null,
     val tags: List<String> = emptyList(),
     /** 0 down, 1 ok, 2 slow, 3 beta. */

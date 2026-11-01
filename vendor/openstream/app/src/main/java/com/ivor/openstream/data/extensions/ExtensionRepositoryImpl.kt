@@ -128,7 +128,7 @@ class ExtensionRepositoryImpl @Inject constructor(
 
     override suspend fun removeRepo(repoId: String): Result<Unit> {
         ensureLoaded()
-        if (repoId == BundledExtensionCatalog.OFFICIAL_REPO_ID) {
+        if (repoId in VistaRemoteRepositories.builtinIds) {
             return Result.failure(IllegalStateException(context.getString(R.string.st_official_cannot_remove)))
         }
         store.removeCustomRepo(repoId)
@@ -265,6 +265,18 @@ class ExtensionRepositoryImpl @Inject constructor(
                 ?: bundled.load()
                 ?: CachedRepoSnapshot(url = BundledExtensionCatalog.OFFICIAL_REPO_URL, name = "OpenStream Official")
             snapshots[officialId] = official
+            // The Vista and public Stremio directories are first-class repositories.
+            // They are seeded on every existing installation, not just fresh APK installs.
+            VistaRemoteRepositories.builtinUrls.forEach { url ->
+                val id = RepoUrlNormalizer.repoId(url)
+                snapshots[id] = cache.read(id) ?: CachedRepoSnapshot(
+                    url = url,
+                    name = if (id == VistaRemoteRepositories.VISTA_ID) "Vista · Catálogo" else "Stremio · Community Addons",
+                    description = if (id == VistaRemoteRepositories.VISTA_ID)
+                        "Manifestos aprovados do GitHub Vista, sem atualizar o APK"
+                    else "Catálogo público de addons da comunidade Stremio"
+                )
+            }
 
             store.customRepos().forEach { record ->
                 snapshots[record.id] = cache.read(record.id)
@@ -393,14 +405,14 @@ class ExtensionRepositoryImpl @Inject constructor(
         description = snapshot.description,
         iconUrl = snapshot.iconUrl,
         website = snapshot.website,
-        isBuiltIn = repoId == BundledExtensionCatalog.OFFICIAL_REPO_ID,
+        isBuiltIn = repoId in VistaRemoteRepositories.builtinIds,
         lastSyncedAt = snapshot.fetchedAt,
         extensionCount = snapshot.extensions.size,
         error = repoErrors[repoId]
     )
 
     private companion object {
-        val STALE_WINDOW_MS = 6 * 60 * 60 * 1000L
+        val STALE_WINDOW_MS = 5 * 60 * 1000L
     }
 }
 

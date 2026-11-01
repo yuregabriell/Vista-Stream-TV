@@ -117,7 +117,10 @@ class StremioAddonProvider(
         }
         val seenIds = HashSet<String>()
         val labelCounts = HashMap<String, Int>()
-        return firstPlayableMirrors(releases.values.take(MAX_STREAMS)).map { server ->
+        // Preserve every distinct mirror the addon supplies (not just the first host
+        // per release). Deduplicate identical URLs, never cap by a fixed source count.
+        val allMirrors = releases.values.flatMap { it }.distinctBy { it.url }
+        return firstPlayableMirrors(allMirrors.map { listOf(it) }).map { server ->
             // Two releases with the same label still need different ids, and names to tell them apart.
             var serverId = server.id
             var suffix = 2
@@ -128,10 +131,9 @@ class StremioAddonProvider(
     }
 
     /**
-     * For each release, the first mirror that answers like a video. Add-ons hand out links that are
-     * already dead (expired signed URLs, hosts asking for a captcha, redirects to a 404); listing
-     * those made the player fail over through them one by one. Releases are checked in parallel
-     * within [VERIFY_BUDGET_MS]; whatever hasn't answered by then is left out.
+     * Opportunistic bounded preflight on each distinct candidate. All candidates
+     * remain visible when the check runs out of time: slow hosts should not silently
+     * disappear from the list. Actual playbacks still validate streams and fail over.
      */
     private suspend fun firstPlayableMirrors(releases: List<List<VideoServer>>): List<VideoServer> = coroutineScope {
         val playable = AtomicReferenceArray<VideoServer?>(releases.size)
@@ -148,7 +150,12 @@ class StremioAddonProvider(
                 }
             }.joinAll()
         }
-        List(releases.size) { playable.get(it) }.filterNotNull()
+        // The verification budget is for *ranking/fast rejection*, never a quota.
+        // Keep the first plausible mirror when verification times out; Media3 checks
+        // it on actual playback and the failover system can try the next candidate.
+        List(releases.size) { index ->
+            playable.get(index) ?: releases[index].firstOrNull()
+        }.filterNotNull()
     }
 
     /** A 16-byte range request: video bytes (or an HLS playlist) rather than an error page. */
@@ -298,7 +305,6 @@ class StremioAddonProvider(
 
     private companion object {
         const val TAG = "StremioAddon"
-        const val MAX_STREAMS = 30
         const val MAX_LABEL_LENGTH = 110
         const val VERIFY_PARALLELISM = 8
         const val VERIFY_BUDGET_MS = 8_000L
