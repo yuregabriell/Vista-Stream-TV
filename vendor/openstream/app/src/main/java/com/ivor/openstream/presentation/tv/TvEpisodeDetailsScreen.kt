@@ -17,6 +17,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.background
@@ -85,7 +86,20 @@ fun TvEpisodeDetailsScreen(
         val index = episodes.indexOfFirst { it.episodeNumber == episode }
         if (index >= 0) episodeRailState.scrollToItem(index)
     }
-    var upcomingDate by remember(season, episode) { mutableStateOf<String?>(null) }
+    val appContext = LocalContext.current
+    var pendingFutureEpisode by remember(season, episode) { mutableStateOf<Pair<Int, Int>?>(null) }
+    var pendingDate by remember(season, episode) { mutableStateOf<String?>(null) }
+    var doNotWarn by remember(mediaType, animeId) {
+        mutableStateOf(TvReleaseWarningPreferences.isSuppressed(appContext, mediaType, animeId))
+    }
+    fun beginPlayback(selectedSeason: Int, selectedEpisode: Int, airDate: String?, play: () -> Unit) {
+        if (!isUpcomingEpisode(airDate) || doNotWarn) {
+            play()
+        } else {
+            pendingFutureEpisode = selectedSeason to selectedEpisode
+            pendingDate = airDate
+        }
+    }
     val scope = rememberCoroutineScope()
     val title = details
     if (title == null) {
@@ -181,15 +195,16 @@ fun TvEpisodeDetailsScreen(
                         }
                         Spacer(Modifier.height(4.dp))
                         Button(
-                            onClick = onPlay,
+                            onClick = {
+                                beginPlayback(season, episode, currentEpisode?.airDate, onPlay)
+                            },
                             modifier = Modifier.width(294.dp).focusRequester(focus),
-                            enabled = !isUpcomingEpisode(currentEpisode?.airDate),
                             contentPadding = ButtonDefaults.ButtonWithIconContentPadding
                         ) {
                             Icon(Icons.Default.PlayArrow, null, Modifier.size(22.dp))
                             Spacer(Modifier.width(10.dp))
                             androidx.tv.material3.Text(
-                                if (isUpcomingEpisode(currentEpisode?.airDate)) "Ainda não estreou"
+                                if (isUpcomingEpisode(currentEpisode?.airDate)) "Verificar reprodução"
                                 else "Reproduzir"
                             )
                         }
@@ -299,15 +314,13 @@ fun TvEpisodeDetailsScreen(
                                 title = "E" + item.episodeNumber + " · " + item.name,
                                 subtitle = listOfNotNull(
                                     item.airDate?.takeIf { it.isNotBlank() },
-                                    if (isUpcomingEpisode(item.airDate)) "Estreia prevista"
+                                    if (isUpcomingEpisode(item.airDate)) "Data de estreia por confirmar"
                                     else if (item.episodeNumber == episode) "Selecionado · OK para reproduzir"
                                     else "OK para reproduzir"
                                 ).joinToString("  ·  "),
                                 imageUrl = item.stillPath?.let { "$TV_STILL_BASE$it" },
                                 onClick = {
-                                    if (isUpcomingEpisode(item.airDate)) {
-                                        upcomingDate = item.airDate
-                                    } else {
+                                    beginPlayback(season, item.episodeNumber, item.airDate) {
                                         onPlayEpisode(season, item.episodeNumber)
                                     }
                                 }
@@ -343,14 +356,25 @@ fun TvEpisodeDetailsScreen(
                 onCancel = { confirmRemove = false }
             )
         }
-        if (upcomingDate != null) {
-            TvConfirmPanel(
-                title = "Episódio ainda não estreou",
-                message = "Estreia prevista: " + upcomingDate +
-                    ". Não vamos tentar reproduzir uma fonte de outro episódio.",
-                confirmLabel = "Compreendi",
-                onConfirm = { upcomingDate = null },
-                onCancel = { upcomingDate = null }
+        pendingFutureEpisode?.let { selected ->
+            TvReleaseConflictDialog(
+                airDate = pendingDate,
+                availableSources = if (selected.first == season && selected.second == episode) servers.size else 0,
+                doNotWarn = doNotWarn,
+                onToggleDoNotWarn = { checked ->
+                    doNotWarn = checked
+                    TvReleaseWarningPreferences.setSuppressed(appContext, mediaType, animeId, checked)
+                },
+                onBack = {
+                    pendingFutureEpisode = null
+                    pendingDate = null
+                },
+                onContinue = {
+                    pendingFutureEpisode = null
+                    pendingDate = null
+                    if (selected.first == season && selected.second == episode) onPlay()
+                    else onPlayEpisode(selected.first, selected.second)
+                }
             )
         }
     }
