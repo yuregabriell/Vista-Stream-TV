@@ -192,6 +192,11 @@ fun PlayerScreen(
     val castLoading by viewModel.castLoading.collectAsState()
     val castSubtitles by viewModel.castSubtitles.collectAsState()
     val isCasting = castStatus.isCasting
+    // Back leaves TV playback entirely; next-episode navigation must NOT call this.
+    val exitPlayer: () -> Unit = {
+        if (tvControls) viewModel.stopPlaybackOnTvExit()
+        onBackClick()
+    }
     var showCastSheet by remember { mutableStateOf(false) }
     val enterPictureInPicture = rememberEnterPictureInPicture()
 
@@ -631,7 +636,7 @@ fun PlayerScreen(
                         onRetry = viewModel::retryCast,
                         onChooseSource = { showServerPicker = true }.takeIf { !isLocalOrDownloaded },
                         onNextClick = onNextClick,
-                        onBackClick = onBackClick,
+                        onBackClick = exitPlayer,
                         onCastClick = { showCastSheet = true }.takeIf { !tvControls },
                         onPlaybackEnded = {
                             val stoppedBySleepTimer = viewModel.consumeEndedBySleepTimer()
@@ -655,7 +660,9 @@ fun PlayerScreen(
                                 if (isFullscreen) exitFullscreen() else enterFullscreen()
                             },
                             onBackClick = {
-                                if (isFullscreen) exitFullscreen() else onBackClick()
+                                if (tvControls) exitPlayer()
+                                else if (isFullscreen) exitFullscreen()
+                                else onBackClick()
                             },
                             modifier = Modifier.fillMaxSize(),
                             remoteSubtitles = allSubtitles,
@@ -715,7 +722,7 @@ fun PlayerScreen(
                             onCastClick = { showCastSheet = true }.takeIf { castStatus.supported && !tvControls },
                             onPictureInPictureClick = enterPictureInPicture,
                             loadSubtitleText = viewModel::loadSubtitleText,
-                            keepPlayingInBackground = appSettings.keepPlayingInBackground,
+                            keepPlayingInBackground = !tvControls && appSettings.keepPlayingInBackground,
                             volumeBoostPercent = appSettings.volumeBoostPercent,
                             onVolumeBoostChange = viewModel::setVolumeBoostPercent,
                             // No shader stage in this player: the row would change nothing until a restart.
@@ -929,7 +936,8 @@ fun PlayerScreen(
                         onEpisodeClick(target.season, target.episode)
                     },
                     onCancel = { showUpNext = false },
-                    autoAdvance = !tvControls,
+                    autoAdvance = true,
+                    tvControls = tvControls,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(if (isFullscreen) 32.dp else 12.dp)
