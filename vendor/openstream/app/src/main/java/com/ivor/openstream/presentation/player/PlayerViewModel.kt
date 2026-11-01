@@ -297,6 +297,11 @@ class PlayerViewModel @Inject constructor(
         _preferredSubtitleLanguage.value = language
         sharedPreferences.edit().putString(KEY_PREFERRED_SUBTITLE, language).apply()
     }
+    /** Return to automatic subtitle selection, distinct from explicitly disabling subtitles. */
+    fun resetPreferredSubtitleLanguage() {
+        _preferredSubtitleLanguage.value = null
+        sharedPreferences.edit().remove(KEY_PREFERRED_SUBTITLE).apply()
+    }
 
     private val _nextEpisodes = MutableStateFlow<List<EpisodeDto>>(emptyList())
     val nextEpisodes = _nextEpisodes.asStateFlow()
