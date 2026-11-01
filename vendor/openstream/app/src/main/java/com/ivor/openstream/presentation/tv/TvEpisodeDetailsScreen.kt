@@ -23,6 +23,7 @@ import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.OutlinedButton
 import com.ivor.openstream.presentation.details.DetailsViewModel
+import com.ivor.openstream.data.local.entity.TitleRatingEntity
 import com.ivor.openstream.presentation.player.PlayerViewModel
 import com.ivor.openstream.presentation.player.ServersState
 import com.ivor.openstream.presentation.player.components.SUBTITLES_OFF
@@ -140,15 +141,15 @@ fun TvEpisodeDetailsScreen(
                                 Spacer(Modifier.width(6.dp))
                                 androidx.tv.material3.Text(if (isSaved) "Guardado" else "Guardar")
                             }
-                            OutlinedButton(onClick = { detailsViewModel.rate(10) }) {
+                            OutlinedButton(onClick = { detailsViewModel.rate(TitleRatingEntity.LIKE) }) {
                                 Icon(Icons.Default.ThumbUp, null, Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
-                                androidx.tv.material3.Text(if (rating == 10) "Gostei ✓" else "Gostei")
+                                androidx.tv.material3.Text(if (rating == TitleRatingEntity.LIKE) "Gostei ✓" else "Gostei")
                             }
-                            OutlinedButton(onClick = { detailsViewModel.rate(1) }) {
+                            OutlinedButton(onClick = { detailsViewModel.rate(TitleRatingEntity.DISLIKE) }) {
                                 Icon(Icons.Default.ThumbDown, null, Modifier.size(18.dp))
                                 Spacer(Modifier.width(6.dp))
-                                androidx.tv.material3.Text(if (rating == 1) "Não gostei ✓" else "Não gostei")
+                                androidx.tv.material3.Text(if (rating == TitleRatingEntity.DISLIKE) "Não gostei ✓" else "Não gostei")
                             }
                         }
                         Spacer(Modifier.height(12.dp))
