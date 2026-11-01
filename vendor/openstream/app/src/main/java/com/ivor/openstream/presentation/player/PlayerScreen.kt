@@ -268,6 +268,7 @@ fun PlayerScreen(
     val videoUrl = (localVideoUrl ?: activeServer?.url)
         ?.takeIf { startPositionMs != null && !inspectingSource }
     var showUpNext by remember(tmdbId, season, episode) { mutableStateOf(false) }
+    var upNextDismissed by remember(tmdbId, season, episode) { mutableStateOf(false) }
 
     LaunchedEffect(videoUrl) {
         videoUrl?.let { viewModel.onMediaLoaded(it, downloadId) }
@@ -640,7 +641,7 @@ fun PlayerScreen(
                         onCastClick = { showCastSheet = true }.takeIf { !tvControls },
                         onPlaybackEnded = {
                             val stoppedBySleepTimer = viewModel.consumeEndedBySleepTimer()
-                            showUpNext = nextEpisode != null && appSettings.autoPlayNext && !stoppedBySleepTimer
+                            showUpNext = nextEpisode != null && appSettings.autoPlayNext && !stoppedBySleepTimer && !upNextDismissed
                         },
                         onPlaybackReady = viewModel::onPlaybackReady,
                         modifier = Modifier.fillMaxSize()
@@ -679,10 +680,17 @@ fun PlayerScreen(
                             canChangeSource = !isLocalOrDownloaded,
                             initialPositionMs = resumePositionMs,
                             onPositionChanged = { resumePositionMs = it },
+                            onCreditsDetected = {
+                                // On TV, start the five-second overlay while timed credits roll,
+                                // not only on the final black frame. No guessed credit timestamps.
+                                if (tvControls && nextEpisode != null && appSettings.autoPlayNext && !upNextDismissed) {
+                                    showUpNext = true
+                                }
+                            },
                             onPlaybackEnded = {
                                 // Always consumed, so a sleep-timer stop never leaks into the next ending.
                                 val stoppedBySleepTimer = viewModel.consumeEndedBySleepTimer()
-                                showUpNext = nextEpisode != null && appSettings.autoPlayNext && !stoppedBySleepTimer
+                                showUpNext = nextEpisode != null && appSettings.autoPlayNext && !stoppedBySleepTimer && !upNextDismissed
                             },
                             isRotationLocked = isRotationLocked,
                             onRotationLockToggle = { toggleRotationLock() },
@@ -935,7 +943,10 @@ fun PlayerScreen(
                         showUpNext = false
                         onEpisodeClick(target.season, target.episode)
                     },
-                    onCancel = { showUpNext = false },
+                    onCancel = {
+                        upNextDismissed = true
+                        showUpNext = false
+                    },
                     autoAdvance = true,
                     tvControls = tvControls,
                     modifier = Modifier
