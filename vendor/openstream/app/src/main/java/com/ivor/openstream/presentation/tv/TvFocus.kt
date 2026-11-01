@@ -129,10 +129,13 @@ fun TvOutlinedButton(
     shape: Shape = CircleShape,
     focusRequester: FocusRequester? = null,
     border: BorderStroke? = null,
-    colors: ButtonColors = ButtonDefaults.outlinedButtonColors(),
+    colors: ButtonColors = ButtonDefaults.outlinedButtonColors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.93f),
+        contentColor = MaterialTheme.colorScheme.onSurface
+    ),
     focusedColors: ButtonColors = ButtonDefaults.outlinedButtonColors(
-        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+        containerColor = MaterialTheme.colorScheme.onSurface,
+        contentColor = MaterialTheme.colorScheme.surface
     ),
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
     content: @Composable RowScope.() -> Unit
