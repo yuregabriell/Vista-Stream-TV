@@ -17,6 +17,18 @@ import retrofit2.http.Query
 import retrofit2.http.QueryMap
 
 interface TmdbApi {
+    @GET("movie/{id}/images")
+    suspend fun movieTitleImages(
+        @Path("id") id: Int,
+        @Query("include_image_language") languages: String = "pt,en,null"
+    ): com.ivor.openstream.data.remote.model.TitleImagesDto
+
+    @GET("tv/{id}/images")
+    suspend fun tvTitleImages(
+        @Path("id") id: Int,
+        @Query("include_image_language") languages: String = "pt,en,null"
+    ): com.ivor.openstream.data.remote.model.TitleImagesDto
+
     @GET("movie/{id}/watch/providers")
     suspend fun movieWatchProviders(@Path("id") id: Int): WatchProvidersDto
 
