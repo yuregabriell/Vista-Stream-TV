@@ -79,6 +79,7 @@ fun TvExtensionsScreen(
     val uriHandler = LocalUriHandler.current
     val state by viewModel.state.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
+    LaunchedEffect(viewModel) { viewModel.liveRefreshWhileVisible() }
     var showInstalled by remember { mutableStateOf(false) }
     var compatibleOnly by remember { mutableStateOf(false) }
     var showAddRepo by remember { mutableStateOf(false) }
@@ -172,6 +173,20 @@ fun TvExtensionsScreen(
                         }
                     }
                     if (!showInstalled) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            contentPadding = PaddingValues(bottom = 6.dp)
+                        ) {
+                            com.ivor.openstream.presentation.marketplace.MarketplaceDirectory.entries.forEach { directory ->
+                                item(key = directory.name) {
+                                    TvPill(
+                                        label = directory.label,
+                                        selected = state.directory == directory,
+                                        onClick = { viewModel.setDirectory(directory) }
+                                    )
+                                }
+                            }
+                        }
                         TvPill(
                             label = if (compatibleOnly) "Compatíveis" else "Todas as fontes",
                             selected = compatibleOnly,
