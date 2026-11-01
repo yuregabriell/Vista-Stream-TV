@@ -175,7 +175,15 @@ private fun TvAppScaffold(
                     onOpenExtensions = { go(TvDestination.EXTENSIONS) },
                     onOpenTitle = { mediaType, id -> navController.navigate(TvRoutes.details(mediaType, id)) },
                     onPlay = { mediaType, id, season, episode ->
+                        // Pressing the clearly labelled Play button always starts playback.
                         navController.navigate(TvRoutes.player(mediaType, id, season, episode))
+                    },
+                    onOpenEpisode = { mediaType, id, season, episode ->
+                        // Episode cards open the Netflix-style landing page, where sources
+                        // are discovered before playback begins.
+                        navController.navigate(TvRoutes.episode(mediaType, id, season, episode)) {
+                            launchSingleTop = true
+                        }
                     }
                 )
             }
