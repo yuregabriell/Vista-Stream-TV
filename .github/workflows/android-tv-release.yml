@@ -3,6 +3,12 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    # Editing the live JSON is a catalogue update, not an APK release.
+    paths-ignore:
+      - 'extensions/vista-catalog.json'
+      - 'extensions/README.md'
+      - 'scripts/validate_vista_catalog.py'
+      - '.github/workflows/vista-live-catalog.yml'
 permissions:
   contents: write
 concurrency:
