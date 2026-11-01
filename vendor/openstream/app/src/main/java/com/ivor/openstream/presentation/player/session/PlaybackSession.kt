@@ -183,6 +183,16 @@ class PlaybackSession @Inject constructor(
     private var endedBySleepTimer = false
 
     private var lastSavedPositionMs = -1L
+    /** Last position observed by the visible player surface, even when Media3 has no duration. */
+    private var lastSurfaceSnapshot: Triple<String, Long, Long>? = null
+
+    fun recordSurfaceProgress(mediaUri: String, positionMs: Long, durationMs: Long) {
+        val item = _nowPlaying.value ?: return
+        if (item.mediaUri != mediaUri || positionMs <= 0L || durationMs <= 0L) return
+        lastSurfaceSnapshot = Triple(mediaUri, positionMs, durationMs)
+        saveProgress(item, positionMs, durationMs, force = false)
+    }
+
     private var completionRecordedFor: String? = null
 
         private var localPlayerCreated = false
@@ -495,6 +505,7 @@ class PlaybackSession @Inject constructor(
         val previous = _nowPlaying.value
         if (previous == null || !previous.matches(nowPlaying.mediaType, nowPlaying.tmdbId, nowPlaying.season, nowPlaying.episode)) {
             lastSavedPositionMs = -1L
+            lastSurfaceSnapshot = null
             completionRecordedFor = null
             endedBySleepTimer = false
         }
@@ -553,6 +564,7 @@ class PlaybackSession @Inject constructor(
             player.stop()
             player.clearMediaItems()
         }
+        lastSurfaceSnapshot = null
         volumeBooster.release()
         _nowPlaying.value = null
         requestHeaders = emptyMap()
@@ -1189,8 +1201,13 @@ class PlaybackSession @Inject constructor(
             if (playingUri != Uri.parse(item.mediaUri)) return
             player
         }
-        val duration = active.duration.takeIf { it != C.TIME_UNSET && it > 0 } ?: return
+        // Some HLS streams report TIME_UNSET for duration even while the video
+        // surface has a usable duration. Reuse the matching surface snapshot.
+        val snapshot = lastSurfaceSnapshot?.takeIf { it.first == item.mediaUri }
+        val duration = active.duration.takeIf { it != C.TIME_UNSET && it > 0 }
+            ?: snapshot?.third ?: return
         val position = if (ended) duration else active.currentPosition.coerceAtLeast(0L)
+            .takeIf { it > 0L } ?: snapshot?.second ?: 0L
         saveProgress(item, position, duration, force)
     }
 
