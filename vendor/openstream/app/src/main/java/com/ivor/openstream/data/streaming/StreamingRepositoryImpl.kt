@@ -157,9 +157,7 @@ class StreamingRepositoryImpl @Inject constructor(
                     consecutiveFailures.remove(outcome.provider.id)
                     breakerOpenedAt.remove(outcome.provider.id)
                     providerRegistry.recordOutcome(outcome.provider, incoming.isNotEmpty())
-                    if (incoming.isEmpty()) {
-                        failedProviders += outcome.provider.displayName
-                    } else {
+                    if (incoming.isNotEmpty()) {
                         servers = ServerRanker.mergeAndRank(
                             existing = servers,
                             incoming = incoming,
