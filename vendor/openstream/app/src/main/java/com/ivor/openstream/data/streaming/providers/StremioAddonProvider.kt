@@ -117,7 +117,10 @@ class StremioAddonProvider(
         }
         val seenIds = HashSet<String>()
         val labelCounts = HashMap<String, Int>()
-        return firstPlayableMirrors(releases.values.toList()).map { server ->
+        // Preserve every distinct mirror the addon supplies (not just the first host
+        // per release). Deduplicate identical URLs, never cap by a fixed source count.
+        val allMirrors = releases.values.flatMap { it }.distinctBy { it.url }
+        return firstPlayableMirrors(allMirrors.map { listOf(it) }).map { server ->
             // Two releases with the same label still need different ids, and names to tell them apart.
             var serverId = server.id
             var suffix = 2
@@ -128,10 +131,9 @@ class StremioAddonProvider(
     }
 
     /**
-     * For each release, the first mirror that answers like a video. Add-ons hand out links that are
-     * already dead (expired signed URLs, hosts asking for a captcha, redirects to a 404); listing
-     * those made the player fail over through them one by one. Releases are checked in parallel
-     * within [VERIFY_BUDGET_MS]; whatever hasn't answered by then is left out.
+     * Opportunistic bounded preflight on each distinct candidate. All candidates
+     * remain visible when the check runs out of time: slow hosts should not silently
+     * disappear from the list. Actual playbacks still validate streams and fail over.
      */
     private suspend fun firstPlayableMirrors(releases: List<List<VideoServer>>): List<VideoServer> = coroutineScope {
         val playable = AtomicReferenceArray<VideoServer?>(releases.size)
