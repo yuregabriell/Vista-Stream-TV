@@ -470,7 +470,7 @@ private fun ExtensionDetail(
                 }
                 OutlinedButton(
                     onClick = onRemove,
-                    modifier = Modifier.focusRequester(actionFocusRequester),
+                    modifier = if (extension.hasUpdate) Modifier else Modifier.focusRequester(actionFocusRequester),
                     contentPadding = ButtonDefaults.ButtonWithIconContentPadding
                 ) {
                     Icon(Icons.Outlined.DeleteOutline, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
