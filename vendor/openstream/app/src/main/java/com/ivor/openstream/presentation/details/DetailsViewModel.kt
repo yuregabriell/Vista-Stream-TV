@@ -197,25 +197,33 @@ class DetailsViewModel @Inject constructor(
         }
     }
 
-    fun toggleWatchLater() {
-        val currentState = _uiState.value
-        if (currentState is DetailsUiState.Success) {
-            viewModelScope.launch {
-                val details = currentState.details
-                val item = WatchLaterEntity(
-                    id = details.id,
-                    title = details.name,
-                    posterPath = details.posterPath,
-                    mediaType = mediaType,
-                    voteAverage = details.voteAverage
+    /**
+     * Saves the title from metadata already present in the TV episode page.
+     * This must work even if the independent DetailsViewModel network request
+     * is still loading (or fails): TV used to show a save button that did nothing.
+     */
+    fun toggleWatchLaterFor(details: AnimeDetailsDto) {
+        viewModelScope.launch {
+            val isSavedNow = watchLaterRepository.isWatchLater(details.id).first()
+            if (isSavedNow) {
+                watchLaterRepository.removeFromWatchLaterById(details.id)
+            } else {
+                watchLaterRepository.addToWatchLater(
+                    WatchLaterEntity(
+                        id = details.id,
+                        title = details.name,
+                        posterPath = details.posterPath,
+                        mediaType = mediaType,
+                        voteAverage = details.voteAverage
+                    )
                 )
-                if (isWatchLater.value) {
-                    watchLaterRepository.removeFromWatchLaterById(details.id)
-                } else {
-                    watchLaterRepository.addToWatchLater(item)
-                }
             }
         }
+    }
+
+    fun toggleWatchLater() {
+        val details = (_uiState.value as? DetailsUiState.Success)?.details ?: return
+        toggleWatchLaterFor(details)
     }
 
     fun loadSeason(seasonNumber: Int) {

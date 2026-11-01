@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -46,12 +47,17 @@ fun TvSavedScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     var pendingRemove by remember { mutableStateOf<WatchLaterEntity?>(null) }
+    var showHistory by remember { mutableStateOf(false) }
     val firstPoster = remember { FocusRequester() }
     val firstPill = remember { FocusRequester() }
 
-    LaunchedEffect(state.isLoading) {
-        if (state.isLoading) return@LaunchedEffect
-        runCatching { firstPoster.requestFocus() }.recoverCatching { firstPill.requestFocus() }
+    LaunchedEffect(state.isLoading, state.items.size, showHistory) {
+        if (!showHistory && state.isLoading) return@LaunchedEffect
+        if (showHistory || state.items.isEmpty()) {
+            runCatching { firstPill.requestFocus() }
+        } else {
+            runCatching { firstPoster.requestFocus() }.recoverCatching { firstPill.requestFocus() }
+        }
     }
 
     Box(
@@ -61,10 +67,28 @@ fun TvSavedScreen(
     ) {
         Column(Modifier.fillMaxSize()) {
             TvPageHeader(
-                title = stringResource(R.string.nav_saved),
-                supporting = if (state.totalCount > 0) stringResource(R.string.tv_hold_to_remove) else null
+                title = if (showHistory) "Histórico" else stringResource(R.string.nav_saved),
+                supporting = if (showHistory) "Vídeos e episódios reproduzidos neste perfil"
+                    else if (state.totalCount > 0) stringResource(R.string.tv_hold_to_remove)
+                    else "Guarda títulos com o marcador na página de detalhes"
             )
-            LazyRow(
+            Row(
+                modifier = Modifier.padding(start = TvLayout.ContentStart, end = TvLayout.ContentEnd),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                TvPill(
+                    label = "Minha lista",
+                    selected = !showHistory,
+                    onClick = { showHistory = false },
+                    modifier = Modifier.focusRequester(firstPill)
+                )
+                TvPill(
+                    label = "Histórico",
+                    selected = showHistory,
+                    onClick = { showHistory = true }
+                )
+            }
+            if (!showHistory) LazyRow(
                 contentPadding = PaddingValues(start = TvLayout.ContentStart, end = TvLayout.ContentEnd, top = 8.dp, bottom = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -73,7 +97,7 @@ fun TvSavedScreen(
                         label = stringResource(filter.labelRes),
                         selected = state.filter == filter,
                         onClick = { viewModel.onFilterChange(filter) },
-                        modifier = if (filter == SavedFilter.entries.first()) Modifier.focusRequester(firstPill) else Modifier
+                        modifier = Modifier
                     )
                 }
                 item(key = "divider") {
@@ -94,12 +118,13 @@ fun TvSavedScreen(
                 }
             }
 
-            when {
+            if (showHistory) {
+                TvHistoryPanel(onOpenTitle = onOpenTitle, modifier = Modifier.weight(1f))
+            } else when {
                 state.isLoading -> TvLoading()
                 state.items.isEmpty() -> TvEmptyPage(
-                    stringResource(
-                        if (state.totalCount == 0) R.string.li_nothing_saved else R.string.li_nothing_saved_filter
-                    )
+                    if (state.totalCount == 0) "Ainda não guardaste títulos. Usa o marcador na página de detalhes."
+                    else "Nenhum título corresponde a este filtro. Escolhe Tudo para ver todos os salvos."
                 )
                 else -> LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = TvLayout.PosterWidth),

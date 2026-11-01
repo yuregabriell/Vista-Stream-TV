@@ -262,6 +262,11 @@ class PlayerViewModel @Inject constructor(
     private val _mediaUri = MutableStateFlow<Pair<String, String?>?>(null)
 
     /** The screen reports what it handed to the player (stream URL, plus the download id offline). */
+    /** Checkpoint from Media3 surface. Keeps history reliable on TV/HLS sources. */
+    fun recordVisiblePlayback(videoUrl: String, positionMs: Long, durationMs: Long) {
+        playbackSession.recordSurfaceProgress(videoUrl, positionMs, durationMs)
+    }
+
     fun onMediaLoaded(mediaUri: String, downloadId: String?) {
         _mediaUri.value = mediaUri to downloadId
     }

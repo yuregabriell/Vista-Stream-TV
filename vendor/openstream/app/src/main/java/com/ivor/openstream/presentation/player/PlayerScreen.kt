@@ -706,6 +706,9 @@ fun PlayerScreen(
                             canChangeSource = !isLocalOrDownloaded,
                             initialPositionMs = resumePositionMs,
                             onPositionChanged = { resumePositionMs = it },
+                            onProgressChanged = { positionMs, durationMs ->
+                                viewModel.recordVisiblePlayback(currentUrl, positionMs, durationMs)
+                            },
                             onCreditsDetected = {
                                 // On TV, start the five-second overlay while timed credits roll,
                                 // not only on the final black frame. No guessed credit timestamps.

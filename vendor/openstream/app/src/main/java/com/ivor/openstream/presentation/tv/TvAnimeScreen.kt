@@ -67,6 +67,10 @@ import com.ivor.openstream.presentation.catalog.KeylessCatalogViewModel
  * catalog. The existing keyless Details + Media3 playback remain shared, so
  * favorites, sources and watch-memory are not copied or lost.
  */
+// The content root already starts after the permanent 84dp TV navigation rail.
+// Extra internal safe space is needed for focused cards/buttons (1.06x scale).
+private val AnimeSafeStart = 52.dp
+
 private val TV_ANIME_GENRES = listOf(
     "Action" to "Ação",
     "Adventure" to "Aventura",
@@ -151,7 +155,7 @@ fun TvAnimeScreen(
         // Permanent section identity, as on the premium phone anime home.
         Row(
             Modifier.fillMaxWidth()
-                .padding(start = TvLayout.ContentStart, end = TvLayout.ContentEnd, top = 27.dp, bottom = 12.dp),
+                .padding(start = AnimeSafeStart, end = TvLayout.ContentEnd, top = 27.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -186,7 +190,7 @@ fun TvAnimeScreen(
 
         Row(
             Modifier.fillMaxWidth()
-                .padding(start = TvLayout.ContentStart, end = TvLayout.ContentEnd, bottom = 12.dp),
+                .padding(start = AnimeSafeStart, end = TvLayout.ContentEnd, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -194,7 +198,7 @@ fun TvAnimeScreen(
                 value = searchText,
                 placeholder = "Pesquisar animes por nome",
                 title = "Pesquisar animes",
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
                 maxLength = 80,
                 onSubmit = { entered ->
                     searchText = entered
@@ -203,17 +207,12 @@ fun TvAnimeScreen(
                     submittedQuery = entered
                 }
             )
-            Button(
-                onClick = { searchAnime() },
-                colors = ButtonDefaults.colors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            ) { androidx.tv.material3.Text("Pesquisar") }
+            // The D-pad search control already runs the query on OK/IME Search.
+            // A second button beside it truncated the field on 720p TVs.
         }
 
         LazyRow(
-            contentPadding = PaddingValues(start = TvLayout.ContentStart, end = TvLayout.ContentEnd,
+            contentPadding = PaddingValues(start = AnimeSafeStart, end = TvLayout.ContentEnd,
                 top = 2.dp, bottom = 18.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -251,7 +250,7 @@ fun TvAnimeScreen(
                     state = gridState,
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(
-                        start = TvLayout.ContentStart,
+                        start = AnimeSafeStart,
                         end = TvLayout.ContentEnd,
                         top = 12.dp,
                         bottom = 52.dp
@@ -330,7 +329,7 @@ fun TvAnimeScreen(
                 railData.forEach { (title, titles) ->
                     if (titles.isNotEmpty()) {
                         item(key = title) {
-                            TvRail(title = title) {
+                            TvRail(title = title, start = AnimeSafeStart) {
                                 lazyItems(titles, key = { it.sourceId }) { anime ->
                                     TvCaptionedPoster(
                                         title = anime.title,
@@ -345,7 +344,7 @@ fun TvAnimeScreen(
                 }
                 item(key = "browse-all-anime") {
                     Box(
-                        Modifier.fillMaxWidth().padding(start = TvLayout.ContentStart, top = 8.dp)
+                        Modifier.fillMaxWidth().padding(start = AnimeSafeStart, top = 8.dp)
                     ) {
                         TvPill("Explorar todo o catálogo de animes", onClick = {
                             // Display the paged AniList catalog rather than only Home previews.
@@ -366,7 +365,7 @@ private fun TvAnimeHero(anime: KeylessTitle, onClick: () -> Unit) {
     Box(
         Modifier
             .fillMaxWidth()
-            .padding(start = TvLayout.ContentStart, end = TvLayout.ContentEnd)
+            .padding(start = AnimeSafeStart, end = TvLayout.ContentEnd)
             .height(235.dp)
             .clip(RoundedCornerShape(18.dp))
     ) {

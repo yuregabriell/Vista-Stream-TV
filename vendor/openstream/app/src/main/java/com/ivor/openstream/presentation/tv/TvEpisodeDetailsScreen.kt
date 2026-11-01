@@ -107,6 +107,11 @@ fun TvEpisodeDetailsScreen(
         return
     }
     val otherSeasons = title.seasons.orEmpty().filter { it.seasonNumber > 0 }
+    val allSeasonCount = title.numberOfSeasons?.takeIf { it > 0 }
+        ?: otherSeasons.size.takeIf { it > 0 } ?: 1
+    val allEpisodeCount = title.numberOfEpisodes?.takeIf { it > 0 }
+        ?: otherSeasons.sumOf { it.episodeCount }.takeIf { it > 0 }
+        ?: episodes.size
     LaunchedEffect(otherSeasons, season) {
         val index = otherSeasons.indexOfFirst { it.seasonNumber == season }
         if (index >= 0) seasonRailState.scrollToItem(index)
@@ -161,16 +166,23 @@ fun TvEpisodeDetailsScreen(
                             .padding(start = TvLayout.PageStart, end = TvLayout.ContentEnd, bottom = 18.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text(
-                            if (mediaType == "movie") title.name
-                            else currentEpisode?.name?.takeIf { it.isNotBlank() }
-                                ?: "Temporada $season · Episódio $episode",
-                            style = MaterialTheme.typography.displaySmall,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.widthIn(max = 570.dp)
+                        // Official artwork when TMDB has a logo; plain text remains the fallback.
+                        TvOfficialTitleLogo(
+                            title = title.name,
+                            mediaType = mediaType,
+                            titleId = title.id
                         )
+                        if (mediaType != "movie") {
+                            Text(
+                                currentEpisode?.name?.takeIf { it.isNotBlank() }
+                                    ?: "Temporada $season · Episódio $episode",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.widthIn(max = 570.dp)
+                            )
+                        }
                         Text(
                             listOfNotNull(
                                 if (mediaType == "movie") "Filme" else "T$season · E$episode",
@@ -216,7 +228,7 @@ fun TvEpisodeDetailsScreen(
                                 icon = if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                                 label = if (isSaved) "Remover da lista" else "Guardar na lista",
                                 active = isSaved,
-                                onClick = detailsViewModel::toggleWatchLater
+                                onClick = { detailsViewModel.toggleWatchLaterFor(title) }
                             )
                             TvEpisodeIconAction(
                                 icon = Icons.Default.ThumbUp,
@@ -240,11 +252,12 @@ fun TvEpisodeDetailsScreen(
                                 TvEpisodeMenuAction(
                                     icon = Icons.Default.VideoLibrary,
                                     label = "Episódios e temporadas",
-                                    supporting = "Temporada $season",
+                                    supporting = "$allSeasonCount temporadas · $allEpisodeCount episódios",
                                     onClick = {
                                         scope.launch {
+                                            // Hero + optional season heading and season rail precede episodes.
                                             listState.animateScrollToItem(
-                                                if (otherSeasons.size > 1) 2 else 1
+                                                if (otherSeasons.size > 1) 3 else 1
                                             )
                                         }
                                     }
@@ -416,23 +429,33 @@ private fun TvEpisodeMenuAction(
         shape = RoundedCornerShape(12.dp),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+        androidx.compose.material3.Icon(
+            icon, contentDescription = null,
+            tint = androidx.compose.material3.LocalContentColor.current,
+            modifier = Modifier.size(22.dp)
+        )
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            androidx.tv.material3.Text(
+            androidx.compose.material3.Text(
                 label,
-                style = androidx.tv.material3.MaterialTheme.typography.titleSmall,
+                color = androidx.compose.material3.LocalContentColor.current,
+                style = MaterialTheme.typography.titleSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            androidx.tv.material3.Text(
+            androidx.compose.material3.Text(
                 supporting,
-                style = androidx.tv.material3.MaterialTheme.typography.bodySmall,
+                color = androidx.compose.material3.LocalContentColor.current.copy(alpha = 0.84f),
+                style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
         Spacer(Modifier.width(8.dp))
-        Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp))
+        androidx.compose.material3.Icon(
+            Icons.Default.ChevronRight, contentDescription = null,
+            tint = androidx.compose.material3.LocalContentColor.current,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }

@@ -535,6 +535,7 @@ private fun settingRows(
         }
         SettingsCategory.SOURCES -> {
             val counts by viewModel.state.collectAsState()
+            val context = androidx.compose.ui.platform.LocalContext.current
             listOf(
             SettingRow.Toggle(
                 key = "tv-watch-platforms",
@@ -552,6 +553,22 @@ private fun settingRows(
                 ),
                 opensPage = true,
                 onClick = onOpenExtensions
+            ),
+            SettingRow.Action(
+                key = "icons8-credit",
+                title = "Créditos dos ícones · Icons8",
+                subtitle = "Ícones fornecidos por icons8.com · licença e atribuição",
+                opensPage = true,
+                onClick = {
+                    runCatching {
+                        context.startActivity(
+                            android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse("https://icons8.com/license")
+                            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }
+                }
             )
             )
         }

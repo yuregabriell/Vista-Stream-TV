@@ -18,6 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import com.ivor.openstream.presentation.tv.TvDetect
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -53,7 +54,8 @@ class ArtworkPrefetcher @Inject constructor(
     /** Queues [urls] (nulls skipped) behind whatever is already queued. */
     fun prefetch(urls: List<String?>) {
         if (!allowedNow()) return
-        val batch = urls.asSequence().filterNotNull().distinct().take(MAX_BATCH).toList()
+        val limit = if (TvDetect.isTv(context)) 24 else MAX_BATCH
+        val batch = urls.asSequence().filterNotNull().distinct().take(limit).toList()
         if (batch.isEmpty()) return
         scope.launch {
             // Let the images on screen go first; they share the network and the decoder.
