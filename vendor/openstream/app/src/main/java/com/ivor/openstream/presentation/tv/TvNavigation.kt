@@ -291,6 +291,13 @@ private fun TvAppScaffold(
                     season = season,
                     episode = episode,
                     onPlay = { navController.navigate(TvRoutes.player(mediaType, animeId, season, episode)) },
+                    onPlayEpisode = { selectedSeason, selectedEpisode ->
+                        // Episode cards are direct play actions; leaving the previous episode
+                        // landing behind would show stale metadata after pressing Back.
+                        navController.navigate(TvRoutes.player(mediaType, animeId, selectedSeason, selectedEpisode)) {
+                            popUpTo(TvRoutes.EPISODE) { inclusive = true }
+                        }
+                    },
                     onChooseEpisode = { nextSeason, nextEpisode ->
                         navController.navigate(TvRoutes.episode(mediaType, animeId, nextSeason, nextEpisode)) {
                             popUpTo(TvRoutes.EPISODE) { inclusive = true }
