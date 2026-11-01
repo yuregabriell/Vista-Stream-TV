@@ -117,7 +117,7 @@ class StremioAddonProvider(
         }
         val seenIds = HashSet<String>()
         val labelCounts = HashMap<String, Int>()
-        return firstPlayableMirrors(releases.values.take(MAX_STREAMS)).map { server ->
+        return firstPlayableMirrors(releases.values.toList()).map { server ->
             // Two releases with the same label still need different ids, and names to tell them apart.
             var serverId = server.id
             var suffix = 2
@@ -148,7 +148,12 @@ class StremioAddonProvider(
                 }
             }.joinAll()
         }
-        List(releases.size) { playable.get(it) }.filterNotNull()
+        // The verification budget is for *ranking/fast rejection*, never a quota.
+        // Keep the first plausible mirror when verification times out; Media3 checks
+        // it on actual playback and the failover system can try the next candidate.
+        List(releases.size) { index ->
+            playable.get(index) ?: releases[index].firstOrNull()
+        }.filterNotNull()
     }
 
     /** A 16-byte range request: video bytes (or an HLS playlist) rather than an error page. */
@@ -298,7 +303,6 @@ class StremioAddonProvider(
 
     private companion object {
         const val TAG = "StremioAddon"
-        const val MAX_STREAMS = 30
         const val MAX_LABEL_LENGTH = 110
         const val VERIFY_PARALLELISM = 8
         const val VERIFY_BUDGET_MS = 8_000L
