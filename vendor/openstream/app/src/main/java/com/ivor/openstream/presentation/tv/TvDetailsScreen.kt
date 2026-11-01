@@ -110,7 +110,7 @@ fun TvDetailsScreen(
             val showLatest = latest != null && (seasons.size > 1 || latest.episodeNumber > 12)
             val hasSeasonRow = !isMovie && (seasons.size > 1 || showLatest)
             val hasEpisodeRow = !isMovie && episodes.isNotEmpty()
-            val similarIndex = 1 + (if (hasSeasonRow) 1 else 0) + (if (hasEpisodeRow) 1 else 0)
+            val similarIndex = 2 + (if (hasSeasonRow) 1 else 0) + (if (hasEpisodeRow) 1 else 0)
 
             BoxWithConstraints(modifier.fillMaxSize()) {
                 TvBackdrop(
@@ -155,13 +155,17 @@ fun TvDetailsScreen(
                                 },
                                 onToggleSaved = viewModel::toggleWatchLater,
                                 onBrowseEpisodes = if (hasEpisodeRow) {
-                                    { scope.launch { listState.animateScrollToItem(if (hasSeasonRow) 2 else 1) } }
+                                    { scope.launch { listState.animateScrollToItem(if (hasSeasonRow) 3 else 2) } }
                                 } else null,
                                 onBrowseSimilar = if (recommendations.isNotEmpty()) {
                                     { scope.launch { listState.animateScrollToItem(similarIndex) } }
                                 } else null
                             )
                         }
+                    }
+
+                    item(key = "where-to-watch") {
+                        TvWhereToWatchSection(mediaType = mediaType, titleId = animeId)
                     }
 
                     if (hasSeasonRow) {
