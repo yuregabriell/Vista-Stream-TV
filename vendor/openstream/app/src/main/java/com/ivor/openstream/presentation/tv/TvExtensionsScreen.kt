@@ -192,11 +192,11 @@ fun TvExtensionsScreen(
                             selected = compatibleOnly,
                             onClick = { compatibleOnly = !compatibleOnly }
                         )
-                        androidx.compose.material3.OutlinedTextField(
+                        TvDpadTextInput(
                             value = state.query,
-                            onValueChange = viewModel::setQuery,
-                            placeholder = { androidx.compose.material3.Text("Pesquisar extensões, pt-BR, animes...") },
-                            singleLine = true,
+                            onSubmit = viewModel::setQuery,
+                            title = "Pesquisar fontes e addons",
+                            placeholder = "Pesquisar extensões, pt-BR, animes…",
                             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
                         )
                     }
