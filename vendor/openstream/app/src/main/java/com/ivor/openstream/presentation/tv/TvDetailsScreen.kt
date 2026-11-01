@@ -11,6 +11,8 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.filled.NewReleases
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
@@ -103,6 +105,11 @@ fun TvDetailsScreen(
             val episodes = state.selectedSeasonDetails?.episodes.orEmpty()
             val selectedSeason = state.selectedSeasonDetails?.seasonNumber ?: resumeTarget?.season ?: details.firstPlayableSeason()
             val recommendations = details.recommendations?.results.orEmpty().filter { it.posterPath != null }
+            val latest = latestEpisode
+            val showLatest = latest != null && (seasons.size > 1 || latest.episodeNumber > 12)
+            val hasSeasonRow = !isMovie && (seasons.size > 1 || showLatest)
+            val hasEpisodeRow = !isMovie && episodes.isNotEmpty()
+            val similarIndex = 1 + (if (hasSeasonRow) 1 else 0) + (if (hasEpisodeRow) 1 else 0)
 
             BoxWithConstraints(modifier.fillMaxSize()) {
                 TvBackdrop(
@@ -129,7 +136,7 @@ fun TvDetailsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 // Leaves the season tabs and the top of the episode row in view.
-                                .height(maxHeight - 176.dp)
+                                .height(maxHeight - 32.dp)
                                 .padding(start = TvLayout.PageStart, end = TvLayout.ContentEnd)
                                 .onFocusChanged { if (it.hasFocus) scope.launch { listState.animateScrollToItem(0) } },
                             contentAlignment = Alignment.CenterStart
@@ -145,14 +152,18 @@ fun TvDetailsScreen(
                                     if (resume != null) onPlay(resume.season, resume.episode)
                                     else onPlay(details.firstPlayableSeason(), 1)
                                 },
-                                onToggleSaved = viewModel::toggleWatchLater
+                                onToggleSaved = viewModel::toggleWatchLater,
+                                onBrowseEpisodes = if (hasEpisodeRow) {
+                                    { scope.launch { listState.animateScrollToItem(if (hasSeasonRow) 2 else 1) } }
+                                } else null,
+                                onBrowseSimilar = if (recommendations.isNotEmpty()) {
+                                    { scope.launch { listState.animateScrollToItem(similarIndex) } }
+                                } else null
                             )
                         }
                     }
 
-                    val latest = latestEpisode
-                    val showLatest = latest != null && (seasons.size > 1 || latest.episodeNumber > 12)
-                    if (!isMovie && (seasons.size > 1 || showLatest)) {
+                    if (hasSeasonRow) {
                         item(key = "seasons") {
                             val seasonRowState = rememberLazyListState()
                             // Start on the season shown, not on Season 1 of twenty.
@@ -204,7 +215,7 @@ fun TvDetailsScreen(
                         }
                     }
 
-                    if (!isMovie && episodes.isNotEmpty()) {
+                    if (hasEpisodeRow) {
                         item(key = "episodes:$selectedSeason") {
                             val episodeRowState = rememberLazyListState()
                             // Open on the episode asked for (Latest), else where the user is up to.
@@ -263,9 +274,18 @@ private fun Header(
     resumeTarget: WatchProgress?,
     playRequester: FocusRequester,
     onPlay: () -> Unit,
-    onToggleSaved: () -> Unit
+    onToggleSaved: () -> Unit,
+    onBrowseEpisodes: (() -> Unit)?,
+    onBrowseSimilar: (() -> Unit)?
 ) {
     Column(Modifier.width(500.dp)) {
+        Text(
+            text = "VISTASTREAM",
+            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(Modifier.height(8.dp))
         Text(
             text = details.name,
             style = MaterialTheme.typography.displayMedium,
@@ -295,7 +315,7 @@ private fun Header(
                 text = details.overview,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 4,
+                maxLines = 3,
                 overflow = TextOverflow.Ellipsis
             )
         }
@@ -328,6 +348,30 @@ private fun Header(
                 )
                 Spacer(Modifier.width(ButtonDefaults.IconSpacing))
                 androidx.tv.material3.Text(stringResource(if (isSaved) R.string.cd_saved else R.string.action_save))
+            }
+        }
+        // Netflix-style secondary actions stay under Play, with D-pad focus and without
+        // creating a touch-only sheet. Seasons and sources remain in the existing rails.
+        if (onBrowseEpisodes != null) {
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = onBrowseEpisodes,
+                contentPadding = ButtonDefaults.ButtonWithIconContentPadding
+            ) {
+                Icon(Icons.Default.List, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                androidx.tv.material3.Text(stringResource(R.string.details_episodes))
+            }
+        }
+        if (onBrowseSimilar != null) {
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = onBrowseSimilar,
+                contentPadding = ButtonDefaults.ButtonWithIconContentPadding
+            ) {
+                Icon(Icons.Default.GridView, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                androidx.tv.material3.Text(stringResource(R.string.details_more_like_this))
             }
         }
     }

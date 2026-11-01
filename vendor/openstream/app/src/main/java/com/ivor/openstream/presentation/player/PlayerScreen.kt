@@ -192,6 +192,11 @@ fun PlayerScreen(
     val castLoading by viewModel.castLoading.collectAsState()
     val castSubtitles by viewModel.castSubtitles.collectAsState()
     val isCasting = castStatus.isCasting
+    // Back leaves TV playback entirely; next-episode navigation must NOT call this.
+    val exitPlayer: () -> Unit = {
+        if (tvControls) viewModel.stopPlaybackOnTvExit()
+        onBackClick()
+    }
     var showCastSheet by remember { mutableStateOf(false) }
     val enterPictureInPicture = rememberEnterPictureInPicture()
 
@@ -263,6 +268,7 @@ fun PlayerScreen(
     val videoUrl = (localVideoUrl ?: activeServer?.url)
         ?.takeIf { startPositionMs != null && !inspectingSource }
     var showUpNext by remember(tmdbId, season, episode) { mutableStateOf(false) }
+    var upNextDismissed by remember(tmdbId, season, episode) { mutableStateOf(false) }
 
     LaunchedEffect(videoUrl) {
         videoUrl?.let { viewModel.onMediaLoaded(it, downloadId) }
@@ -631,11 +637,11 @@ fun PlayerScreen(
                         onRetry = viewModel::retryCast,
                         onChooseSource = { showServerPicker = true }.takeIf { !isLocalOrDownloaded },
                         onNextClick = onNextClick,
-                        onBackClick = onBackClick,
+                        onBackClick = exitPlayer,
                         onCastClick = { showCastSheet = true }.takeIf { !tvControls },
                         onPlaybackEnded = {
                             val stoppedBySleepTimer = viewModel.consumeEndedBySleepTimer()
-                            showUpNext = nextEpisode != null && appSettings.autoPlayNext && !stoppedBySleepTimer
+                            showUpNext = nextEpisode != null && appSettings.autoPlayNext && !stoppedBySleepTimer && !upNextDismissed
                         },
                         onPlaybackReady = viewModel::onPlaybackReady,
                         modifier = Modifier.fillMaxSize()
@@ -655,7 +661,9 @@ fun PlayerScreen(
                                 if (isFullscreen) exitFullscreen() else enterFullscreen()
                             },
                             onBackClick = {
-                                if (isFullscreen) exitFullscreen() else onBackClick()
+                                if (tvControls) exitPlayer()
+                                else if (isFullscreen) exitFullscreen()
+                                else onBackClick()
                             },
                             modifier = Modifier.fillMaxSize(),
                             remoteSubtitles = allSubtitles,
@@ -672,10 +680,17 @@ fun PlayerScreen(
                             canChangeSource = !isLocalOrDownloaded,
                             initialPositionMs = resumePositionMs,
                             onPositionChanged = { resumePositionMs = it },
+                            onCreditsDetected = {
+                                // On TV, start the five-second overlay while timed credits roll,
+                                // not only on the final black frame. No guessed credit timestamps.
+                                if (tvControls && nextEpisode != null && appSettings.autoPlayNext && !upNextDismissed) {
+                                    showUpNext = true
+                                }
+                            },
                             onPlaybackEnded = {
                                 // Always consumed, so a sleep-timer stop never leaks into the next ending.
                                 val stoppedBySleepTimer = viewModel.consumeEndedBySleepTimer()
-                                showUpNext = nextEpisode != null && appSettings.autoPlayNext && !stoppedBySleepTimer
+                                showUpNext = nextEpisode != null && appSettings.autoPlayNext && !stoppedBySleepTimer && !upNextDismissed
                             },
                             isRotationLocked = isRotationLocked,
                             onRotationLockToggle = { toggleRotationLock() },
@@ -715,7 +730,7 @@ fun PlayerScreen(
                             onCastClick = { showCastSheet = true }.takeIf { castStatus.supported && !tvControls },
                             onPictureInPictureClick = enterPictureInPicture,
                             loadSubtitleText = viewModel::loadSubtitleText,
-                            keepPlayingInBackground = appSettings.keepPlayingInBackground,
+                            keepPlayingInBackground = !tvControls && appSettings.keepPlayingInBackground,
                             volumeBoostPercent = appSettings.volumeBoostPercent,
                             onVolumeBoostChange = viewModel::setVolumeBoostPercent,
                             // No shader stage in this player: the row would change nothing until a restart.
@@ -910,7 +925,7 @@ fun PlayerScreen(
                                     .padding(if (isFullscreen) 16.dp else 12.dp)
                                 ) {
                                     ExpressiveBackButton(
-                                        onClick = onBackClick,
+                                        onClick = exitPlayer,
                                         containerColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.1f),
                                         contentColor = MaterialTheme.colorScheme.onScrim
                                     )
@@ -928,8 +943,12 @@ fun PlayerScreen(
                         showUpNext = false
                         onEpisodeClick(target.season, target.episode)
                     },
-                    onCancel = { showUpNext = false },
-                    autoAdvance = !tvControls,
+                    onCancel = {
+                        upNextDismissed = true
+                        showUpNext = false
+                    },
+                    autoAdvance = true,
+                    tvControls = tvControls,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(if (isFullscreen) 32.dp else 12.dp)
@@ -983,8 +1002,14 @@ fun PlayerScreen(
                             // (a ModalBottomSheet) is a phone affordance.
                             if (tvControls) viewModel.toggleSaved() else showListSheet = true
                         },
-                        onOpenDetails = { onOpenDetails(mediaType, tmdbId) },
-                        onOpenTitle = onOpenTitle,
+                        onOpenDetails = {
+                            if (tvControls) viewModel.stopPlaybackOnTvExit()
+                            onOpenDetails(mediaType, tmdbId)
+                        },
+                        onOpenTitle = { id, type ->
+                            if (tvControls) viewModel.stopPlaybackOnTvExit()
+                            onOpenTitle(id, type)
+                        },
                         sections = sections
                     )
                 }

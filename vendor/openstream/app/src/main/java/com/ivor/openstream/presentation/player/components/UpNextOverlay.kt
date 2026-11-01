@@ -1,5 +1,6 @@
 package com.ivor.openstream.presentation.player.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import com.ivor.openstream.R
 import androidx.compose.animation.core.LinearEasing
@@ -30,6 +31,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,7 +46,8 @@ import com.ivor.openstream.presentation.components.ExpressiveMotion
 import com.ivor.openstream.presentation.player.NextEpisodeTarget
 import com.ivor.openstream.ui.theme.ExpressiveShapes
 
-private const val UP_NEXT_COUNTDOWN_MS = 8_000
+private const val UP_NEXT_PHONE_COUNTDOWN_MS = 8_000
+private const val UP_NEXT_TV_COUNTDOWN_MS = 5_000
 
 /**
  * Shown when an episode ends. Counts down and continues automatically, the way every streaming
@@ -55,19 +59,30 @@ fun UpNextOverlay(
     onPlayNow: () -> Unit,
     onCancel: () -> Unit,
     autoAdvance: Boolean = true,
+    tvControls: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val latestPlayNow by rememberUpdatedState(onPlayNow)
-    val countdown = remember(target) { Animatable(1f) }
-    // Same 8s timing with reduced motion, but the ring jumps instead of sweeping.
+    // The ring fills clockwise; a new episode always starts with an empty ring.
+    val countdown = remember(target) { Animatable(0f) }
+    val countdownDurationMs = if (tvControls) UP_NEXT_TV_COUNTDOWN_MS else UP_NEXT_PHONE_COUNTDOWN_MS
     val reducedCountdown = ExpressiveMotion.reducedMotion()
+    val playFocusRequester = remember { FocusRequester() }
+    BackHandler(enabled = tvControls, onBack = onCancel)
+    LaunchedEffect(tvControls, target) {
+        if (tvControls) {
+            // Focus the overlay itself, not the underlying D-pad player chrome.
+            delay(60)
+            runCatching { playFocusRequester.requestFocus() }
+        }
+    }
     if (autoAdvance) {
-        LaunchedEffect(target) {
+        LaunchedEffect(target, countdownDurationMs) {
             if (reducedCountdown) {
-                delay(UP_NEXT_COUNTDOWN_MS.toLong())
-                countdown.snapTo(0f)
+                delay(countdownDurationMs.toLong())
+                countdown.snapTo(1f)
             } else {
-                countdown.animateTo(0f, tween(UP_NEXT_COUNTDOWN_MS, easing = LinearEasing))
+                countdown.animateTo(1f, tween(countdownDurationMs, easing = LinearEasing))
             }
             latestPlayNow()
         }
@@ -137,7 +152,7 @@ fun UpNextOverlay(
                 )
                 FilledIconButton(
                     onClick = onPlayNow,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(48.dp).focusRequester(playFocusRequester),
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary

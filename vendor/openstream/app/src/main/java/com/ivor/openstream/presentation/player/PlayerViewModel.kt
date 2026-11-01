@@ -5,6 +5,7 @@ import com.ivor.openstream.data.local.entity.LocalMediaEntity
 import com.ivor.openstream.data.repository.LocalMediaRepository
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import com.ivor.openstream.data.playback.ExternalPlayer
 import com.ivor.openstream.data.playback.ExternalPlayerRequest
@@ -229,6 +230,12 @@ class PlayerViewModel @Inject constructor(
     val castPlayer: Player? get() = playbackSession.castPlayer
 
     val castRouteSelector: MediaRouteSelector? get() = playbackSession.castRouteSelector
+
+    /** TV exit owns no persistent mini-player: persist progress, unload buffers and stop service. */
+    fun stopPlaybackOnTvExit() {
+        playbackSession.stop()
+        context.stopService(Intent(context, PlaybackService::class.java))
+    }
 
     fun stopCasting() = playbackSession.stopCasting()
 
