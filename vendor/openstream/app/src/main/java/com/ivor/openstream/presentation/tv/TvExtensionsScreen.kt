@@ -403,6 +403,24 @@ private fun ExtensionDetail(
                 overflow = TextOverflow.Ellipsis
             )
         }
+        if (manifest.contentTypes.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            androidx.compose.material3.Text(
+                text = "Conteúdos: " + manifest.contentTypes.joinToString(", "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        if (manifest.titleExamples.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            androidx.compose.material3.Text(
+                text = "Títulos indicativos: " + manifest.titleExamples.take(5).joinToString(", "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         Spacer(Modifier.height(20.dp))
 
         Row(
