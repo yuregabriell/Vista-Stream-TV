@@ -82,6 +82,8 @@ private fun AnimeDto.tvMediaType(): String = mediaType ?: if (isMovie) "movie" e
 fun TvHomeScreen(
     onOpenTitle: (mediaType: String, id: Int) -> Unit,
     onPlay: (mediaType: String, id: Int, season: Int, episode: Int) -> Unit,
+    /** Opening a continue-watching card is not the same as pressing Play. */
+    onOpenEpisode: (mediaType: String, id: Int, season: Int, episode: Int) -> Unit,
     onOpenAnime: () -> Unit = {},
     onOpenExtensions: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -192,7 +194,7 @@ fun TvHomeScreen(
                                                 ContinueCard(
                                                     progress = progress,
                                                     onClick = {
-                                                        onPlay(progress.mediaType, progress.tmdbId, progress.season, progress.episode)
+                                                        onOpenEpisode(progress.mediaType, progress.tmdbId, progress.season, progress.episode)
                                                     },
                                                     onFocused = { focus = HomeFocus.Resume(progress) }
                                                 )
