@@ -166,16 +166,23 @@ fun TvEpisodeDetailsScreen(
                             .padding(start = TvLayout.PageStart, end = TvLayout.ContentEnd, bottom = 18.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text(
-                            if (mediaType == "movie") title.name
-                            else currentEpisode?.name?.takeIf { it.isNotBlank() }
-                                ?: "Temporada $season · Episódio $episode",
-                            style = MaterialTheme.typography.displaySmall,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.widthIn(max = 570.dp)
+                        // Official artwork when TMDB has a logo; plain text remains the fallback.
+                        TvOfficialTitleLogo(
+                            title = title.name,
+                            mediaType = mediaType,
+                            titleId = title.id
                         )
+                        if (mediaType != "movie") {
+                            Text(
+                                currentEpisode?.name?.takeIf { it.isNotBlank() }
+                                    ?: "Temporada $season · Episódio $episode",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.widthIn(max = 570.dp)
+                            )
+                        }
                         Text(
                             listOfNotNull(
                                 if (mediaType == "movie") "Filme" else "T$season · E$episode",
