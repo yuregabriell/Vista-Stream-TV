@@ -87,6 +87,8 @@ private const val MAX_AUTOMATIC_FAILOVERS = 3
 private const val STREAM_REFRESH_AGE_MS = 6 * 60 * 60 * 1_000L
 /** Episode stills preloaded behind the player, so the Up Next card and panel have them ready. */
 private const val UP_NEXT_PRELOAD_EPISODES = 3
+/** Old URLs may be session-bound. Display a recent candidate but never keep it forever. */
+private const val PREVIOUS_RESULT_MAX_AGE_MS = 10 * 60_000L
 
 /** The episode playback continues with, possibly the first episode of the next season. */
 data class NextEpisodeTarget(
@@ -104,13 +106,16 @@ sealed interface ServersState {
         val activeId: String?,
         val completedProviders: Int,
         val totalProviders: Int,
-        val failedProviders: List<String>
+        val failedProviders: List<String>,
+        /** Previous results are candidates only; some signed URLs may have expired. */
+        val previousCount: Int = 0
     ) : ServersState
 
     data class Ready(
         val servers: List<VideoServer>,
         val activeId: String?,
-        val failedProviders: List<String>
+        val failedProviders: List<String>,
+        val previousCount: Int = 0
     ) : ServersState
 
     data class Empty(val failedProviders: List<String>) : ServersState
@@ -780,7 +785,7 @@ class PlayerViewModel @Inject constructor(
         val failed = _activeServer.value ?: return
         failedServerIds += failed.id
         // Its links may have expired: the next open of this episode searches the sources again.
-        currentIdentity?.let(streamingRepository::forgetResolvedServers)
+        currentIdentity?.let { streamingRepository.forgetResolvedServer(it, failed) }
         // A source the user picked by hand (often a dub) failed: go back to what was playing rather
         // than jumping to an arbitrary server. Some dub hosts lock links to Vidking's own servers.
         val previous = switchedFrom?.takeIf { it.id !in failedServerIds }
@@ -839,6 +844,12 @@ class PlayerViewModel @Inject constructor(
 
     private fun startResolution(identity: MediaIdentity, includeFallbacks: Boolean = false) {
         resolutionJob?.cancel()
+        // Never erase a still-recent, playable candidate merely because refresh timed out.
+        // Keep old URLs only in memory; never persist tokens/headers to storage.
+        val previous = if (includeFallbacks) availableServers().filter { server ->
+            val age = System.currentTimeMillis() - server.resolvedAt
+            age in 0 until PREVIOUS_RESULT_MAX_AGE_MS && server.id !in failedServerIds
+        } else emptyList()
         resolutionJob = viewModelScope.launch {
             // The automatic search asks the source that played last time first; a widened search
             // ("Find more", failover) goes to everything.
@@ -852,27 +863,47 @@ class PlayerViewModel @Inject constructor(
                 val rememberedId = currentIdentity?.let { streamingRepository.getRememberedServerId(it) }
                 val targetServerId = (userChosenServerId ?: rememberedId).takeUnless { playbackStarted }
                 // Keep the stream the mini player is already playing at the top of the list.
+                // A fresh response replaces the same URL/ID from the old search. Other
+                // candidates stay visible until they fail, expire or the viewer leaves.
+                val latestIds = progress.servers.mapTo(HashSet()) { it.id }
+                val latestUrls = progress.servers.mapTo(HashSet()) { it.url }
+                val previousOnly = previous.filterNot {
+                    it.id in latestIds || it.url in latestUrls
+                }
+                val combined = progress.servers + previousOnly
                 val candidates = adoptedServer?.let { adopted ->
-                    listOf(adopted) + progress.servers.filterNot { it.id == adopted.id }
-                } ?: progress.servers
-                val healthyServers = candidates.filterNot { it.id in failedServerIds }
-                val active = healthyServers.firstOrNull { it.id == targetServerId }
-                    ?: _activeServer.value?.takeIf { current -> healthyServers.any { it.id == current.id } }
-                    ?: healthyServers.firstOrNull()
+                    listOf(adopted) + combined.filterNot { it.id == adopted.id || it.url == adopted.url }
+                } ?: combined
+                val healthyServers = candidates
+                    .filterNot { it.id in failedServerIds }
+                    .distinctBy { it.url }
+                    .distinctBy { it.id }
+                // Before refresh completes, wait for fresh links; don't autoplay an old
+                // signed URL solely because the provider has not answered yet.
+                val eligible = if (progress.isComplete) healthyServers else healthyServers.filter {
+                    it.id in latestIds || adoptedServer?.id == it.id
+                }
+                val active = eligible.firstOrNull { it.id == targetServerId }
+                    ?: _activeServer.value?.takeIf { current -> eligible.any { it.id == current.id } }
+                    ?: eligible.firstOrNull()
                 _activeServer.value = active
 
+                val oldCount = healthyServers.count { old ->
+                    previousOnly.any { it.id == old.id && it.url == old.url }
+                }
                 _serversState.value = when {
                     progress.isComplete && healthyServers.isEmpty() ->
                         ServersState.Empty(progress.failedProviders)
                     progress.isComplete ->
-                        ServersState.Ready(healthyServers, active?.id, progress.failedProviders)
+                        ServersState.Ready(healthyServers, active?.id, progress.failedProviders, oldCount)
                     else ->
                         ServersState.Resolving(
                             servers = healthyServers,
                             activeId = active?.id,
                             completedProviders = progress.completedProviders,
                             totalProviders = progress.totalProviders,
-                            failedProviders = progress.failedProviders
+                            failedProviders = progress.failedProviders,
+                            previousCount = oldCount
                         )
                 }
             }
