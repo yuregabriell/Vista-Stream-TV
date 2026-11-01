@@ -30,6 +30,7 @@ import com.ivor.openstream.presentation.player.components.SUBTITLES_OFF
 import com.ivor.openstream.presentation.player.sourceSummary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 /** TV episode detail: metadata and pre-resolved sources without starting an audio/video session. */
 @Composable
@@ -71,6 +72,7 @@ fun TvEpisodeDetailsScreen(
     }
     val focus = remember { FocusRequester() }
     val listState = rememberLazyListState()
+    var upcomingDate by remember(season, episode) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val title = details
     if (title == null) {
@@ -133,10 +135,14 @@ fun TvEpisodeDetailsScreen(
                         Spacer(Modifier.height(14.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             Button(onClick = onPlay, modifier = Modifier.focusRequester(focus),
+                                enabled = !isUpcomingEpisode(currentEpisode?.airDate),
                                 contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
                                 Icon(Icons.Default.PlayArrow, null, Modifier.size(ButtonDefaults.IconSize))
                                 Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                                androidx.tv.material3.Text("Reproduzir")
+                                androidx.tv.material3.Text(
+                                    if (isUpcomingEpisode(currentEpisode?.airDate)) "Ainda não estreou"
+                                    else "Reproduzir"
+                                )
                             }
                             OutlinedButton(onClick = detailsViewModel::toggleWatchLater) {
                                 Icon(if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
@@ -288,16 +294,38 @@ fun TvEpisodeDetailsScreen(
                                 title = "E" + item.episodeNumber + " · " + item.name,
                                 subtitle = listOfNotNull(
                                     item.airDate?.takeIf { it.isNotBlank() },
-                                    if (item.episodeNumber == episode) "Selecionado · OK para reproduzir"
+                                    if (isUpcomingEpisode(item.airDate)) "Estreia prevista"
+                                    else if (item.episodeNumber == episode) "Selecionado · OK para reproduzir"
                                     else "OK para reproduzir"
                                 ).joinToString("  ·  "),
                                 imageUrl = item.stillPath?.let { "$TV_STILL_BASE$it" },
-                                onClick = { onPlayEpisode(season, item.episodeNumber) }
+                                onClick = {
+                                    if (isUpcomingEpisode(item.airDate)) {
+                                        upcomingDate = item.airDate
+                                    } else {
+                                        onPlayEpisode(season, item.episodeNumber)
+                                    }
+                                }
                             )
                         }
                     }
                 }
             }
         }
+        if (upcomingDate != null) {
+            TvConfirmPanel(
+                title = "Episódio ainda não estreou",
+                message = "Estreia prevista: " + upcomingDate +
+                    ". Não vamos tentar reproduzir uma fonte de outro episódio.",
+                confirmLabel = "Compreendi",
+                onConfirm = { upcomingDate = null },
+                onCancel = { upcomingDate = null }
+            )
+        }
     }
 }
+
+internal fun isUpcomingEpisode(airDate: String?, today: LocalDate = LocalDate.now()): Boolean =
+    airDate?.take(10)?.let { value ->
+        runCatching { LocalDate.parse(value).isAfter(today) }.getOrDefault(false)
+    } ?: false
