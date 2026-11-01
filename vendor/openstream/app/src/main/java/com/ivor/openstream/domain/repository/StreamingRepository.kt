@@ -26,6 +26,9 @@ interface StreamingRepository {
     /** A stream [resolveServers] handed out for [identity] failed: search afresh next time. */
     fun forgetResolvedServers(identity: MediaIdentity)
 
+    /** Drop only the broken link from the short-lived cache; preserve unrelated mirrors. */
+    fun forgetResolvedServer(identity: MediaIdentity, server: VideoServer)
+
     /** Drops every remembered search result ("Clear cache"). */
     fun clearResolvedServers()
 
