@@ -9,12 +9,26 @@ import com.ivor.openstream.data.remote.model.ExternalIdsDto
 import com.ivor.openstream.data.remote.model.PersonDto
 import com.ivor.openstream.data.remote.model.ContentRatingsDto
 import com.ivor.openstream.data.remote.model.ReleaseDatesDto
+import com.ivor.openstream.data.remote.model.WatchProvidersDto
+import com.ivor.openstream.data.remote.model.WatchProviderDirectoryDto
 import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.QueryMap
 
 interface TmdbApi {
+    @GET("movie/{id}/watch/providers")
+    suspend fun movieWatchProviders(@Path("id") id: Int): WatchProvidersDto
+
+    @GET("tv/{id}/watch/providers")
+    suspend fun tvWatchProviders(@Path("id") id: Int): WatchProvidersDto
+
+    @GET("watch/providers/movie")
+    suspend fun movieWatchProviderDirectory(@Query("watch_region") region: String = "PT"): WatchProviderDirectoryDto
+
+    @GET("watch/providers/tv")
+    suspend fun tvWatchProviderDirectory(@Query("watch_region") region: String = "PT"): WatchProviderDirectoryDto
+
     /** Per-country certifications (US "PG", "R"...) for a movie. */
     @GET("movie/{id}/release_dates")
     suspend fun getMovieReleaseDates(@Path("id") id: Int): ReleaseDatesDto
