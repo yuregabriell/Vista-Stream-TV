@@ -103,6 +103,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -441,6 +444,19 @@ fun PlayerScreen(
     // Android TV: closing an open source picker leaves the player.
     BackHandler(enabled = tvControls && showServerPicker) {
         showServerPicker = false
+    }
+
+    // The current NavBackStackEntry reaches STOP when another TV screen covers it,
+    // sometimes before its transition removes it from composition.
+    val playerLifecycle = LocalLifecycleOwner.current
+    DisposableEffect(playerLifecycle, tvControls, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (tvControls && event == Lifecycle.Event.ON_STOP) {
+                viewModel.stopPlaybackOnTvExit()
+            }
+        }
+        playerLifecycle.lifecycle.addObserver(observer)
+        onDispose { playerLifecycle.lifecycle.removeObserver(observer) }
     }
 
     // The TV player must release its shared Media3 session on *every* navigation
