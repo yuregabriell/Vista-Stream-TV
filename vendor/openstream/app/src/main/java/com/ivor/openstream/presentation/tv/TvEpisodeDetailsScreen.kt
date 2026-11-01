@@ -39,6 +39,9 @@ fun TvEpisodeDetailsScreen(
     season: Int,
     episode: Int,
     onPlay: () -> Unit,
+    /** OK on an episode thumbnail should play that episode immediately. */
+    onPlayEpisode: (Int, Int) -> Unit,
+    /** Selecting a season changes the preview, without starting playback. */
     onChooseEpisode: (Int, Int) -> Unit,
     playerViewModel: PlayerViewModel = hiltViewModel(),
     detailsViewModel: DetailsViewModel = hiltViewModel()
@@ -268,7 +271,12 @@ fun TvEpisodeDetailsScreen(
             }
             if (mediaType != "movie") {
                 item(key = "episode-heading") {
-                    TvRowHeader("Episódios · Temporada $season", start = TvLayout.PageStart)
+                    Column(Modifier.padding(start = TvLayout.PageStart)) {
+                        TvRowHeader("Episódios · Temporada $season", start = 0.dp)
+                        Text("Carrega OK num episódio para começar a assistir",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
                 item(key = "episode-rail") {
                     LazyRow(
@@ -278,9 +286,13 @@ fun TvEpisodeDetailsScreen(
                         items(episodes, key = { it.episodeNumber }) { item ->
                             TvLandscapeCard(
                                 title = "E" + item.episodeNumber + " · " + item.name,
-                                subtitle = item.airDate?.takeIf { it.isNotBlank() },
+                                subtitle = listOfNotNull(
+                                    item.airDate?.takeIf { it.isNotBlank() },
+                                    if (item.episodeNumber == episode) "Selecionado · OK para reproduzir"
+                                    else "OK para reproduzir"
+                                ).joinToString("  ·  "),
                                 imageUrl = item.stillPath?.let { "$TV_STILL_BASE$it" },
-                                onClick = { onChooseEpisode(season, item.episodeNumber) }
+                                onClick = { onPlayEpisode(season, item.episodeNumber) }
                             )
                         }
                     }
