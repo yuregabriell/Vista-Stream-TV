@@ -75,6 +75,7 @@ import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import com.ivor.openstream.data.catalog.KeylessTitle
 import com.ivor.openstream.presentation.tv.TvAnimeDetails
+import com.ivor.openstream.presentation.tv.TvDpadTextInput
 import com.ivor.openstream.presentation.tv.rememberTvMode
 import com.ivor.openstream.domain.model.VideoServer
 
@@ -598,27 +599,44 @@ fun KeylessCatalogScreen(
             }
         }
         item(key = "home-search") {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                placeholder = { Text(if (animeHome) "Pesquisar animes" else "Filmes, séries e animes") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
-                    .onGloballyPositioned { searchBounds = it.boundsInWindow() },
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    imeAction = androidx.compose.ui.text.input.ImeAction.Search
-                ),
-                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                    onSearch = { viewModel.search(query); focusManager.clearFocus(); keyboard?.hide(); discover = false }
-                ),
-                trailingIcon = {
-                    TextButton(onClick = { viewModel.search(query); focusManager.clearFocus(); keyboard?.hide(); discover = false }, enabled = query.isNotBlank()) {
-                        Text("Buscar")
+            if (rememberTvMode()) {
+                // Some Android TVs use the keyless catalog, including when TMDB is not
+                // configured. D-pad focus must not trigger the system IME by itself.
+                TvDpadTextInput(
+                    value = query,
+                    placeholder = if (animeHome) "Pesquisar animes" else "Filmes, séries e animes",
+                    title = "Pesquisa VistaStream",
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    onSubmit = { selected ->
+                        query = selected
+                        viewModel.search(selected)
+                        discover = false
+                        focusManager.clearFocus()
                     }
-                }
-            )
+                )
+            } else {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text(if (animeHome) "Pesquisar animes" else "Filmes, séries e animes") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp)
+                        .onGloballyPositioned { searchBounds = it.boundsInWindow() },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Search
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                        onSearch = { viewModel.search(query); focusManager.clearFocus(); keyboard?.hide(); discover = false }
+                    ),
+                    trailingIcon = {
+                        TextButton(onClick = { viewModel.search(query); focusManager.clearFocus(); keyboard?.hide(); discover = false }, enabled = query.isNotBlank()) {
+                            Text("Buscar")
+                        }
+                    }
+                )
+            }
         }
         item(key = "home-categories") {
             LazyRow(
