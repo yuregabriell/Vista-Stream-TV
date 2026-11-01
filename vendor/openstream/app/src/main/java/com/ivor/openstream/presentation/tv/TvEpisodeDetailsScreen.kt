@@ -219,7 +219,7 @@ fun TvEpisodeDetailsScreen(
                                 icon = if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                                 label = if (isSaved) "Remover da lista" else "Guardar na lista",
                                 active = isSaved,
-                                onClick = detailsViewModel::toggleWatchLater
+                                onClick = { detailsViewModel.toggleWatchLaterFor(title) }
                             )
                             TvEpisodeIconAction(
                                 icon = Icons.Default.ThumbUp,
