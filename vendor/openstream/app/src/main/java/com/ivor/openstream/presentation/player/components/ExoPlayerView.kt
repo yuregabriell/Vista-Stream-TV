@@ -187,6 +187,8 @@ fun ExoPlayerView(
     onPositionChanged: (Long) -> Unit = {},
     onProgressChanged: (positionMs: Long, durationMs: Long) -> Unit = { _, _ -> },
     onPlaybackEnded: () -> Unit = {},
+    /** Called once when timed credit markers become active (TV Up Next). */
+    onCreditsDetected: (() -> Unit)? = null,
     onIsPlayingChanged: (Boolean) -> Unit = {},
     isInPictureInPicture: Boolean = false,
     togglePlaybackSignal: Int = 0,
@@ -1915,6 +1917,12 @@ fun ExoPlayerView(
         var manualSkipUsed by remember(videoUrl) { mutableStateOf(false) }
         val fittingSegments = remember(skipSegments, totalTime / 10_000) { skipSegments.forDuration(totalTime) }
         val activeSegment = fittingSegments.firstOrNull { currentTime >= it.startMs && currentTime < it.endMs - 1_000 }
+        val latestCreditsDetected by rememberUpdatedState(onCreditsDetected)
+        LaunchedEffect(videoUrl, activeSegment?.type) {
+            if (activeSegment?.type == SkipType.CREDITS) {
+                latestCreditsDetected?.invoke()
+            }
+        }
         val offerManualSkip = skipSegments.isEmpty() && !manualSkipUsed && areControlsVisible &&
             totalTime > MANUAL_SKIP_MS * 4 && currentTime in 5_000L..MANUAL_SKIP_WINDOW_MS
         val skipLabel = activeSegment?.let { stringResource(it.type.labelRes) } ?: stringResource(R.string.player_skip_seconds, MANUAL_SKIP_MS / 1_000)
