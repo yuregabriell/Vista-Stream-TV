@@ -47,6 +47,22 @@ class ResolvedStreamCache internal constructor(private val clock: () -> Long) {
         entries[identity.cacheKey] = Entry(sources, resolution, clock())
     }
 
+    /**
+     * A failed URL should not erase other known working candidates for the same episode.
+     * Keep the original insertion timestamp: removing one stream must not renew stale links.
+     */
+    @Synchronized
+    fun forgetServer(identity: MediaIdentity, serverId: String) {
+        val key = identity.cacheKey
+        val entry = entries[key] ?: return
+        val remaining = entry.resolution.servers.filterNot { it.id == serverId }
+        if (remaining.isEmpty()) {
+            entries.remove(key)
+        } else {
+            entries[key] = entry.copy(resolution = entry.resolution.copy(servers = remaining))
+        }
+    }
+
     @Synchronized
     fun forget(identity: MediaIdentity) {
         entries.remove(identity.cacheKey)
