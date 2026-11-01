@@ -80,7 +80,7 @@ fun TvNavigation(
         val navController = rememberNavController()
         val configuration = LocalConfiguration.current
         // Screens still sized by TvDimens get the width right of the collapsed drawer.
-        val contentWidth = configuration.screenWidthDp - 84 - TvLayout.ContentStart.value.toInt()
+        val contentWidth = configuration.screenWidthDp - TvSidebarWidth.value.toInt() - TvLayout.ContentStart.value.toInt()
         val metrics = remember(contentWidth, configuration.screenHeightDp) {
             TvDimens.of(contentWidth, configuration.screenHeightDp)
         }
@@ -136,35 +136,28 @@ private fun TvAppScaffold(
         if (showDrawer) {
             Column(
                 modifier = Modifier
-                    .width(84.dp)
+                    .width(TvSidebarWidth)
                     .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.surfaceContainer)
-                    .padding(horizontal = 10.dp, vertical = 16.dp)
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.46f),
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.10f)
+                            )
+                        )
+                    )
+                    .padding(horizontal = 6.dp, vertical = 16.dp)
                     .selectableGroup(),
                 verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 TvDestination.topLevel.forEach { destination ->
-                    Button(
+                    TvSidebarNavItem(
+                        destination = destination,
+                        selected = destination == selected,
                         onClick = { go(destination) },
-                        modifier = Modifier
-                            .width(62.dp)
-                            .height(55.dp)
-                            .focusRequester(requesters.getValue(destination)),
-                        colors = ButtonDefaults.colors(
-                            containerColor = if (destination == selected)
-                                MaterialTheme.colorScheme.primaryContainer
-                            else MaterialTheme.colorScheme.surfaceContainer,
-                            contentColor = if (destination == selected)
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            else MaterialTheme.colorScheme.onSurface
-                        )
-                    ) {
-                        Icon(
-                            destination.icon,
-                            contentDescription = stringResource(destination.labelRes)
-                        )
-                    }
+                        modifier = Modifier.focusRequester(requesters.getValue(destination))
+                    )
                 }
             }
         }
