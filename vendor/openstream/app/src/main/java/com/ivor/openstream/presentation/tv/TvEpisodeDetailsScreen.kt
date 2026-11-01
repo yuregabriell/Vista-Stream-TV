@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -79,6 +80,8 @@ fun TvEpisodeDetailsScreen(
             .filter { it.isNotBlank() }.distinct().sorted()
     }
     val focus = remember { FocusRequester() }
+    val episodeCardFocus = remember { FocusRequester() }
+    var focusedEpisodeTarget by remember(season, animeId) { mutableIntStateOf(episode) }
     val listState = rememberLazyListState()
     val episodeRailState = rememberLazyListState()
     val seasonRailState = rememberLazyListState()
@@ -117,8 +120,28 @@ fun TvEpisodeDetailsScreen(
         if (index >= 0) seasonRailState.scrollToItem(index)
     }
     LaunchedEffect(title.id, season, episode) {
+        listState.scrollToItem(0)
         delay(90)
         runCatching { focus.requestFocus() }
+    }
+    val resumeEpisodeNumber = episodeProgress.values
+        .filter { it.season == season && !it.completed }
+        .maxByOrNull { it.updatedAt }?.episode
+    val suggestedEpisodeNumber = resumeEpisodeNumber
+        ?.takeIf { preferred -> episodes.any { it.episodeNumber == preferred } }
+        ?: episode.takeIf { selected -> episodes.any { it.episodeNumber == selected } }
+        ?: episodes.firstOrNull()?.episodeNumber ?: 1
+
+    suspend fun focusEpisodeCarousel() {
+        val selected = suggestedEpisodeNumber
+        val index = episodes.indexOfFirst { it.episodeNumber == selected }.coerceAtLeast(0)
+        focusedEpisodeTarget = selected
+        val railIndex = if (otherSeasons.size > 1) 4 else 2
+        listState.animateScrollToItem(railIndex)
+        episodeRailState.scrollToItem(index)
+        withFrameNanos { }
+        withFrameNanos { }
+        runCatching { episodeCardFocus.requestFocus() }
     }
     val inContinueWatching = episodeProgress.values.any { !it.completed }
     val subtitleSummary = when (preferredSubtitle) {
@@ -131,39 +154,40 @@ fun TvEpisodeDetailsScreen(
             ?.let { "$TV_BACKDROP_BASE$it" })
         TvBackdropScrims()
         Column(Modifier.fillMaxSize()) {
-            // A fixed breadcrumb never scrolls off or gets clipped when focus returns
-            // to an earlier row after navigating lower in the page.
-            Row(
-                modifier = Modifier.fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.68f))
-                    .padding(start = TvLayout.PageStart, end = TvLayout.ContentEnd, top = 14.dp, bottom = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    title.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    if (mediaType == "movie") "Filme" else "T$season · E$episode",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            // Show the compact breadcrumb only after the user scrolls past the hero.
+            if (listState.firstVisibleItemIndex > 0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.87f))
+                        .padding(start = TvLayout.PageStart, end = TvLayout.ContentEnd, top = 10.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        title.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        if (mediaType == "movie") "Filme" else "T$season · E$episode",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = 14.dp, bottom = 70.dp),
+                contentPadding = PaddingValues(top = 40.dp, bottom = 84.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 item(key = "hero") {
                     Column(
                         modifier = Modifier.fillMaxWidth()
-                            .padding(start = TvLayout.PageStart, end = TvLayout.ContentEnd, bottom = 18.dp),
+                            .padding(start = TvLayout.PageStart, end = TvLayout.ContentEnd, top = 12.dp, bottom = 18.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         // Official artwork when TMDB has a logo; plain text remains the fallback.
@@ -206,21 +230,6 @@ fun TvEpisodeDetailsScreen(
                             )
                         }
                         Spacer(Modifier.height(4.dp))
-                        Button(
-                            onClick = {
-                                beginPlayback(season, episode, currentEpisode?.airDate, onPlay)
-                            },
-                            modifier = Modifier.width(294.dp).focusRequester(focus),
-                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding
-                        ) {
-                            Icon(Icons.Default.PlayArrow, null, Modifier.size(22.dp))
-                            Spacer(Modifier.width(10.dp))
-                            androidx.tv.material3.Text(
-                                if (isUpcomingEpisode(currentEpisode?.airDate)) "Verificar reprodução"
-                                else "Reproduzir"
-                            )
-                        }
-
                         // Netflix-style compact actions; focused TV icons still have a clear
                         // visible ring and accessible descriptions for screen readers.
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -243,6 +252,21 @@ fun TvEpisodeDetailsScreen(
                                 onClick = { detailsViewModel.rate(TitleRatingEntity.DISLIKE) }
                             )
                         }
+                        Button(
+                            onClick = {
+                                beginPlayback(season, episode, currentEpisode?.airDate, onPlay)
+                            },
+                            modifier = Modifier.width(294.dp).focusRequester(focus),
+                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding
+                        ) {
+                            Icon(Icons.Default.PlayArrow, null, Modifier.size(22.dp))
+                            Spacer(Modifier.width(10.dp))
+                            androidx.tv.material3.Text(
+                                if (isUpcomingEpisode(currentEpisode?.airDate)) "Verificar reprodução"
+                                else "Reproduzir"
+                            )
+                        }
+
                         Spacer(Modifier.height(4.dp))
                         Column(
                             modifier = Modifier.widthIn(max = 380.dp),
@@ -254,12 +278,7 @@ fun TvEpisodeDetailsScreen(
                                     label = "Episódios e temporadas",
                                     supporting = "$allSeasonCount temporadas · $allEpisodeCount episódios",
                                     onClick = {
-                                        scope.launch {
-                                            // Hero + optional season heading and season rail precede episodes.
-                                            listState.animateScrollToItem(
-                                                if (otherSeasons.size > 1) 3 else 1
-                                            )
-                                        }
+                                        scope.launch { focusEpisodeCarousel() }
                                     }
                                 )
                             }
@@ -332,6 +351,8 @@ fun TvEpisodeDetailsScreen(
                                     else "OK para reproduzir"
                                 ).joinToString("  ·  "),
                                 imageUrl = item.stillPath?.let { "$TV_STILL_BASE$it" },
+                                modifier = if (item.episodeNumber == focusedEpisodeTarget)
+                                    Modifier.focusRequester(episodeCardFocus) else Modifier,
                                 onClick = {
                                     beginPlayback(season, item.episodeNumber, item.airDate) {
                                         onPlayEpisode(season, item.episodeNumber)

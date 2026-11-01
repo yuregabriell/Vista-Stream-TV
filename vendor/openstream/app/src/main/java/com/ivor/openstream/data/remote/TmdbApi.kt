@@ -20,13 +20,21 @@ interface TmdbApi {
     @GET("movie/{id}/images")
     suspend fun movieTitleImages(
         @Path("id") id: Int,
-        @Query("include_image_language") languages: String = "pt,en,null"
+        // The public gateway defaults to pt-BR, which filters out most official
+        // logos. Explicit en-US plus additional languages includes PT/EN/JA
+        // artwork without altering the app's normal Portuguese metadata.
+        @Query("include_image_language") languages: String = "pt,en,null",
+        @Query("language") language: String = "en-US"
     ): com.ivor.openstream.data.remote.model.TitleImagesDto
 
     @GET("tv/{id}/images")
     suspend fun tvTitleImages(
         @Path("id") id: Int,
-        @Query("include_image_language") languages: String = "pt,en,null"
+        // The public gateway defaults to pt-BR, which filters out most official
+        // logos. Explicit en-US plus additional languages includes PT/EN/JA
+        // artwork without altering the app's normal Portuguese metadata.
+        @Query("include_image_language") languages: String = "pt,en,null",
+        @Query("language") language: String = "en-US"
     ): com.ivor.openstream.data.remote.model.TitleImagesDto
 
     @GET("movie/{id}/watch/providers")
