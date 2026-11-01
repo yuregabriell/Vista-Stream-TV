@@ -6,6 +6,8 @@ import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
+import coil3.memory.MemoryCache
+import com.ivor.openstream.presentation.tv.TvDetect
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import com.ivor.openstream.data.cache.CacheBudget
 import com.ivor.openstream.data.diagnostics.Diagnostics
@@ -59,7 +61,15 @@ class OpenStreamApp : Application(), SingletonImageLoader.Factory {
         val directory = File(cacheDir, CacheBudget.IMAGE_DIR)
         // Hilt injects in onCreate; nothing should ask for images before that, but never crash on it.
         val wanted = (if (::appSettingsStore.isInitialized) appSettingsStore.current.cacheSize else CacheSize.STANDARD).imageBytes
+        val tvDevice = TvDetect.isTv(this)
         return ImageLoader.Builder(context)
+            // A TV can hold several cinematic backdrops plus Media3 decoder buffers.
+            // Keep its decoded-bitmaps LRU modest: evicted images still reload from disk.
+            .memoryCache {
+                MemoryCache.Builder()
+                    .maxSizePercent(context, if (tvDevice) 0.10 else 0.25)
+                    .build()
+            }
             .components { add(OkHttpNetworkFetcherFactory(client)) }
             .diskCache {
                 DiskCache.Builder()
