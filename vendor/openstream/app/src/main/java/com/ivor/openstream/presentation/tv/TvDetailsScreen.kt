@@ -136,7 +136,7 @@ fun TvDetailsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 // Leaves the season tabs and the top of the episode row in view.
-                                .height(maxHeight - 176.dp)
+                                .height(maxHeight - 32.dp)
                                 .padding(start = TvLayout.PageStart, end = TvLayout.ContentEnd)
                                 .onFocusChanged { if (it.hasFocus) scope.launch { listState.animateScrollToItem(0) } },
                             contentAlignment = Alignment.CenterStart
@@ -315,7 +315,7 @@ private fun Header(
                 text = details.overview,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 4,
+                maxLines = 3,
                 overflow = TextOverflow.Ellipsis
             )
         }
