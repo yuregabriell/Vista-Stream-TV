@@ -44,6 +44,9 @@ import androidx.tv.material3.NavigationDrawerItem
 import androidx.tv.material3.Text
 import androidx.tv.material3.rememberDrawerState
 import com.ivor.openstream.presentation.player.PlayerScreen
+import com.ivor.openstream.presentation.details.DetailsViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.runtime.collectAsState
 
 private object TvRoutes {
     const val CATALOG = "tv_catalog"
@@ -268,16 +271,24 @@ private fun TvAppScaffold(
             ) { entry ->
                 val mediaType = entry.arguments?.getString("mediaType") ?: "tv"
                 val animeId = entry.arguments?.getInt("animeId") ?: return@composable
-                TvDetailsScreen(
+                // All TV entry points (Home rails, catalog, search, saved, deep links)
+                // share the same premium detail UI as Continue Watching.
+                val titleVm: DetailsViewModel = hiltViewModel()
+                val resume by titleVm.resumeTarget.collectAsState()
+                val targetSeason = if (mediaType == "movie") 1 else resume?.season?.takeIf { it > 0 } ?: 1
+                val targetEpisode = if (mediaType == "movie") 1 else resume?.episode?.takeIf { it > 0 } ?: 1
+                TvEpisodeDetailsScreen(
                     mediaType = mediaType,
                     animeId = animeId,
-                    onPlay = { season, episode ->
-                        navController.navigate(TvRoutes.player(mediaType, animeId, season, episode))
+                    season = targetSeason,
+                    episode = targetEpisode,
+                    onPlay = { navController.navigate(TvRoutes.player(mediaType, animeId, targetSeason, targetEpisode)) },
+                    onPlayEpisode = { selectedSeason, selectedEpisode ->
+                        navController.navigate(TvRoutes.player(mediaType, animeId, selectedSeason, selectedEpisode))
                     },
-                    onEpisodeInfo = { season, episode ->
-                        navController.navigate(TvRoutes.episode(mediaType, animeId, season, episode))
-                    },
-                    onOpenTitle = { type, id -> navController.navigate(TvRoutes.details(type, id)) }
+                    onChooseEpisode = { selectedSeason, selectedEpisode ->
+                        navController.navigate(TvRoutes.episode(mediaType, animeId, selectedSeason, selectedEpisode))
+                    }
                 )
             }
 
