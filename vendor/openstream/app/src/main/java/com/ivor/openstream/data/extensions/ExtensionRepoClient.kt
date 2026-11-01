@@ -27,7 +27,11 @@ class ExtensionRepoClient @Inject constructor(
             noStreamsNote = context.getString(R.string.st_addon_no_streams),
             needsConfigNote = context.getString(R.string.st_addon_needs_config)
         )
-        val repo = parser.parseRepo(get(url), sourceUrl = url, strings = strings)
+        val repo = if (url == VistaRemoteRepositories.STREMIO_URL) {
+            parser.parseStremioCollection(get(url), strings)
+        } else {
+            parser.parseRepo(get(url), sourceUrl = url, strings = strings)
+        }
         val lists = (repo.extensionLists + repo.pluginLists).distinct()
         val linked = lists
             .mapNotNull { RepoUrlNormalizer.normalize(it) }
@@ -52,8 +56,13 @@ class ExtensionRepoClient @Inject constructor(
     }
 
     private fun get(url: String): String {
+        // Raw GitHub files can be CDN-cached. A minute-scoped cache buster makes
+        // updates visible without APK rebuild, without requesting on every frame.
+        val requestUrl = if (url == VistaRemoteRepositories.VISTA_URL) {
+            "$url?v=${System.currentTimeMillis() / 60_000L}"
+        } else url
         val request = Request.Builder()
-            .url(url)
+            .url(requestUrl)
             .header("Accept", "application/json")
             .header("Cache-Control", "no-cache")
             .build()
