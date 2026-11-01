@@ -73,6 +73,7 @@ fun TvEpisodeDetailsScreen(
         TvLoading()
         return
     }
+    val otherSeasons = title.seasons.orEmpty().filter { it.seasonNumber > 0 }
     LaunchedEffect(title.id, season, episode) {
         delay(90)
         runCatching { focus.requestFocus() }
@@ -164,7 +165,9 @@ fun TvEpisodeDetailsScreen(
                                 androidx.tv.material3.Text("Legendas")
                             }
                             if (mediaType != "movie") {
-                                OutlinedButton(onClick = { scope.launch { listState.animateScrollToItem(5) } }) {
+                                OutlinedButton(onClick = {
+                                    scope.launch { listState.animateScrollToItem(if (otherSeasons.size > 1) 7 else 5) }
+                                }) {
                                     androidx.tv.material3.Text("Episódios")
                                 }
                             }
@@ -240,6 +243,25 @@ fun TvEpisodeDetailsScreen(
                         Text("A aguardar opções de legendas",
                             modifier = Modifier.padding(12.dp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            if (mediaType != "movie" && otherSeasons.size > 1) {
+                item(key = "season-heading") {
+                    TvRowHeader("Temporadas", start = TvLayout.PageStart)
+                }
+                item(key = "seasons") {
+                    LazyRow(
+                        contentPadding = PaddingValues(start = TvLayout.PageStart, end = TvLayout.ContentEnd),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(otherSeasons, key = { it.seasonNumber }) { item ->
+                            TvPill(
+                                label = "Temporada " + item.seasonNumber,
+                                selected = item.seasonNumber == season,
+                                onClick = { onChooseEpisode(item.seasonNumber, 1) }
+                            )
+                        }
                     }
                 }
             }
