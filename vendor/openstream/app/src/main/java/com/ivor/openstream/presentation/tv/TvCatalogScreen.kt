@@ -1,8 +1,6 @@
 package com.ivor.openstream.presentation.tv
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items as rowItems
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -57,44 +55,43 @@ fun TvCatalogScreen(
             )
         }
         item(key = "content-type", span = { GridItemSpan(maxLineSpan) }) {
-            FilterRail("Tipo de conteúdo") {
-                TvPill("Todos", selected = state.mediaType == "all", onClick = { viewModel.selectType("all") })
-                TvPill("Filmes", selected = state.mediaType == "movie", onClick = { viewModel.selectType("movie") })
-                TvPill("Séries", selected = state.mediaType == "tv", onClick = { viewModel.selectType("tv") })
-            }
+            FilterRail(
+                label = "Tipo de conteúdo",
+                choices = listOf(
+                    TvFilterChoice("all", "Todos"),
+                    TvFilterChoice("movie", "Filmes"),
+                    TvFilterChoice("tv", "Séries")
+                ),
+                selected = state.mediaType,
+                onSelect = viewModel::selectType
+            )
         }
         item(key = "genres", span = { GridItemSpan(maxLineSpan) }) {
-            FilterRail("Género") {
-                TV_CATALOG_GENRES.forEach { genre ->
-                    TvPill(
-                        genre.label,
-                        selected = state.genre == genre.key,
-                        onClick = { viewModel.selectGenre(genre.key) }
-                    )
-                }
-            }
+            FilterRail(
+                label = "Género",
+                choices = TV_CATALOG_GENRES.map { TvFilterChoice(it.key, it.label) },
+                selected = state.genre,
+                onSelect = viewModel::selectGenre
+            )
         }
         item(key = "year", span = { GridItemSpan(maxLineSpan) }) {
-            FilterRail("Ano") {
-                TvPill("Todos os anos", selected = state.year == null, onClick = { viewModel.selectYear(null) })
-                (Year.now().value downTo 1980).forEach { year ->
-                    TvPill(year.toString(), selected = state.year == year, onClick = { viewModel.selectYear(year) })
-                }
-            }
+            FilterRail(
+                label = "Ano",
+                choices = listOf(TvFilterChoice("all", "Todos os anos")) +
+                    (Year.now().value downTo 1980).map { TvFilterChoice(it.toString(), it.toString()) },
+                selected = state.year?.toString() ?: "all",
+                onSelect = { viewModel.selectYear(it.toIntOrNull()) }
+            )
         }
         if (state.providersEnabled) {
             item(key = "platforms", span = { GridItemSpan(maxLineSpan) }) {
-                FilterRail("Plataforma · Portugal") {
-                    TvPill("Todas as plataformas", selected = state.providerId == null,
-                        onClick = { viewModel.selectProvider(null) })
-                    state.providers.forEach { provider ->
-                        TvPill(
-                            provider.providerName,
-                            selected = state.providerId == provider.providerId,
-                            onClick = { viewModel.selectProvider(provider.providerId) }
-                        )
-                    }
-                }
+                FilterRail(
+                    label = "Plataforma · Portugal",
+                    choices = listOf(TvFilterChoice("all", "Todas as plataformas")) +
+                        state.providers.map { TvFilterChoice(it.providerId.toString(), it.providerName) },
+                    selected = state.providerId?.toString() ?: "all",
+                    onSelect = { viewModel.selectProvider(it.toIntOrNull()) }
+                )
             }
         }
         item(key = "results-heading", span = { GridItemSpan(maxLineSpan) }) {
@@ -144,10 +141,14 @@ fun TvCatalogScreen(
     }
 }
 
+private data class TvFilterChoice(val id: String, val label: String)
+
 @Composable
 private fun FilterRail(
     label: String,
-    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit
+    choices: List<TvFilterChoice>,
+    selected: String,
+    onSelect: (String) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
@@ -155,14 +156,19 @@ private fun FilterRail(
             modifier = Modifier.padding(start = TvLayout.ContentStart),
             style = MaterialTheme.typography.titleMedium
         )
-        // Use an ordinary horizontally scrollable row with TV pill focus. Do not
-        // truncate provider/year choices to the titles visible on Home.
-        Row(
-            modifier = Modifier.fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(start = TvLayout.ContentStart, end = TvLayout.ContentEnd),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            content = content
-        )
+        // LazyRow keeps provider catalogs (often 200+ brands) lightweight on
+        // low-memory TV hardware, and D-pad focus scrolls the selected pill into view.
+        LazyRow(
+            contentPadding = PaddingValues(start = TvLayout.ContentStart, end = TvLayout.ContentEnd),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            rowItems(choices, key = { it.id }) { option ->
+                TvPill(
+                    option.label,
+                    selected = selected == option.id,
+                    onClick = { onSelect(option.id) }
+                )
+            }
+        }
     }
 }
