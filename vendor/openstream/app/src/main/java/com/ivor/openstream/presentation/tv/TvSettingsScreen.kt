@@ -128,7 +128,8 @@ fun TvSettingsScreen(
     onOpenExtensions: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
-    profilesViewModel: ProfilesViewModel = hiltViewModel()
+    profilesViewModel: ProfilesViewModel = hiltViewModel(),
+    providersViewModel: TvProvidersViewModel = hiltViewModel()
 ) {
     var category by remember { mutableStateOf(SettingsCategory.PLAYBACK) }
     var openChoice by remember { mutableStateOf<String?>(null) }
@@ -140,7 +141,11 @@ fun TvSettingsScreen(
     fun rowRequester(key: String) = rowRequesters.getOrPut(key) { FocusRequester() }
     val firstOptionRequester = remember { FocusRequester() }
 
-    val rows = settingRows(category, viewModel, profilesViewModel, onOpenExtensions)
+    val providersEnabled by providersViewModel.enabled.collectAsState()
+    val rows = settingRows(
+        category, viewModel, profilesViewModel, onOpenExtensions,
+        providersEnabled, providersViewModel::setEnabled
+    )
     val choice = rows.firstOrNull { it.key == openChoice } as? SettingRow.Choice
 
     LaunchedEffect(Unit) { runCatching { categoryRequesters.getValue(category).requestFocus() } }
@@ -330,7 +335,9 @@ private fun settingRows(
     category: SettingsCategory,
     viewModel: SettingsViewModel,
     profilesViewModel: ProfilesViewModel,
-    onOpenExtensions: () -> Unit
+    onOpenExtensions: () -> Unit,
+    providersEnabled: Boolean,
+    setProvidersEnabled: (Boolean) -> Unit
 ): List<SettingRow> {
     val s by viewModel.appSettings.collectAsState()
     return when (category) {
@@ -529,6 +536,13 @@ private fun settingRows(
         SettingsCategory.SOURCES -> {
             val counts by viewModel.state.collectAsState()
             listOf(
+            SettingRow.Toggle(
+                key = "tv-watch-platforms",
+                title = "Complemento · Onde assistir",
+                subtitle = "Netflix, Prime Video, Apple TV+ e outras plataformas em Portugal. Metadados TMDB/JustWatch.",
+                checked = providersEnabled,
+                onChange = setProvidersEnabled
+            ),
             SettingRow.Action(
                 key = "extensions",
                 title = stringResource(R.string.mk_title),
