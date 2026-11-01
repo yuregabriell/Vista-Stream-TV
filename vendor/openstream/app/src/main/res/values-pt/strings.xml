@@ -168,8 +168,8 @@
     <string name="player_up_next">A seguir</string>
     <string name="player_next_prefix">Próximo: %1$s</string>
     <string name="player_no_source_ready">Nenhuma fonte pronta</string>
-    <string name="player_no_source_responded">Nenhuma fonte respondeu</string>
-    <string name="player_no_servers">Nenhum servidor respondeu</string>
+    <string name="player_no_source_responded">Nenhuma fonte reproduzível nesta pesquisa</string>
+    <string name="player_no_servers">Não foi encontrada nenhuma fonte reproduzível</string>
     <string name="player_no_healthy_servers">Sem mais servidores íntegros</string>
     <string name="player_no_healthy_action">Sem mais servidores íntegros. Escolha uma fonte ou tente de novo.</string>
     <string name="player_source_stopped">Fonte parou de responder</string>
