@@ -917,7 +917,7 @@ fun PlayerScreen(
                                     .padding(if (isFullscreen) 16.dp else 12.dp)
                                 ) {
                                     ExpressiveBackButton(
-                                        onClick = onBackClick,
+                                        onClick = exitPlayer,
                                         containerColor = MaterialTheme.colorScheme.scrim.copy(alpha = 0.1f),
                                         contentColor = MaterialTheme.colorScheme.onScrim
                                     )
@@ -991,8 +991,14 @@ fun PlayerScreen(
                             // (a ModalBottomSheet) is a phone affordance.
                             if (tvControls) viewModel.toggleSaved() else showListSheet = true
                         },
-                        onOpenDetails = { onOpenDetails(mediaType, tmdbId) },
-                        onOpenTitle = onOpenTitle,
+                        onOpenDetails = {
+                            if (tvControls) viewModel.stopPlaybackOnTvExit()
+                            onOpenDetails(mediaType, tmdbId)
+                        },
+                        onOpenTitle = { id, type ->
+                            if (tvControls) viewModel.stopPlaybackOnTvExit()
+                            onOpenTitle(id, type)
+                        },
                         sections = sections
                     )
                 }
