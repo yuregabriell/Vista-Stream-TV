@@ -107,6 +107,9 @@ fun TvEpisodeDetailsScreen(
         return
     }
     val otherSeasons = title.seasons.orEmpty().filter { it.seasonNumber > 0 }
+    val allSeasonCount = title.numberOfSeasons?.takeIf { it > 0 } ?: otherSeasons.size
+    val allEpisodeCount = title.numberOfEpisodes?.takeIf { it > 0 }
+        ?: otherSeasons.sumOf { it.episodeCount }
     LaunchedEffect(otherSeasons, season) {
         val index = otherSeasons.indexOfFirst { it.seasonNumber == season }
         if (index >= 0) seasonRailState.scrollToItem(index)
@@ -240,11 +243,12 @@ fun TvEpisodeDetailsScreen(
                                 TvEpisodeMenuAction(
                                     icon = Icons.Default.VideoLibrary,
                                     label = "Episódios e temporadas",
-                                    supporting = "Temporada $season",
+                                    supporting = "$allSeasonCount temporadas · $allEpisodeCount episódios",
                                     onClick = {
                                         scope.launch {
+                                            // Hero + optional season heading and season rail precede episodes.
                                             listState.animateScrollToItem(
-                                                if (otherSeasons.size > 1) 2 else 1
+                                                if (otherSeasons.size > 1) 3 else 1
                                             )
                                         }
                                     }
@@ -416,23 +420,33 @@ private fun TvEpisodeMenuAction(
         shape = RoundedCornerShape(12.dp),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+        androidx.compose.material3.Icon(
+            icon, contentDescription = null,
+            tint = androidx.compose.material3.LocalContentColor.current,
+            modifier = Modifier.size(22.dp)
+        )
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            androidx.tv.material3.Text(
+            androidx.compose.material3.Text(
                 label,
-                style = androidx.tv.material3.MaterialTheme.typography.titleSmall,
+                color = androidx.compose.material3.LocalContentColor.current,
+                style = MaterialTheme.typography.titleSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            androidx.tv.material3.Text(
+            androidx.compose.material3.Text(
                 supporting,
-                style = androidx.tv.material3.MaterialTheme.typography.bodySmall,
+                color = androidx.compose.material3.LocalContentColor.current.copy(alpha = 0.84f),
+                style = MaterialTheme.typography.bodySmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
         Spacer(Modifier.width(8.dp))
-        Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp))
+        androidx.compose.material3.Icon(
+            Icons.Default.ChevronRight, contentDescription = null,
+            tint = androidx.compose.material3.LocalContentColor.current,
+            modifier = Modifier.size(20.dp)
+        )
     }
 }
