@@ -157,13 +157,12 @@ private fun FilterRail(
         )
         // Use an ordinary horizontally scrollable row with TV pill focus. Do not
         // truncate provider/year choices to the titles visible on Home.
-        androidx.compose.foundation.horizontalScroll(rememberScrollState()).let { scrollModifier ->
-            Row(
-                modifier = Modifier.fillMaxWidth().then(scrollModifier)
-                    .padding(start = TvLayout.ContentStart, end = TvLayout.ContentEnd),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                content = content
-            )
-        }
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(start = TvLayout.ContentStart, end = TvLayout.ContentEnd),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            content = content
+        )
     }
 }
