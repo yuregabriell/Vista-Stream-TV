@@ -231,7 +231,7 @@ fun TvEpisodeDetailsScreen(
                     Text("Preferência de legenda: " + when (preferredSubtitle) {
                         null -> "Automático"
                         SUBTITLES_OFF -> "Desligadas"
-                        else -> tvLanguageName(preferredSubtitle)
+                        else -> preferredSubtitle?.let(::tvLanguageName) ?: "Automático"
                     }, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
