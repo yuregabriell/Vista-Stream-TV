@@ -896,4 +896,6 @@
     <string name="tv_st_storage">Armazenamento</string>
     <string name="tv_hold_to_remove">Segure OK para remover</string>
     <string name="tv_key_space">Espaço</string>
+    <string name="player_previous_sources_notice_title">Fontes anteriores — aguardando verificação</string>
+    <string name="player_previous_sources_notice_desc">%1$d fonte(s) de uma busca recente foram mantidas. Alguns links podem ter expirado; tente outra fonte se a reprodução falhar.</string>
 </resources>
