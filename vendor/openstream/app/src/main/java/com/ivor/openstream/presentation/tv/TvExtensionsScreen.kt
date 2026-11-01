@@ -174,20 +174,17 @@ fun TvExtensionsScreen(
                         }
                     }
                     if (!showInstalled) {
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            contentPadding = PaddingValues(bottom = 6.dp)
-                        ) {
-                            com.ivor.openstream.presentation.marketplace.MarketplaceDirectory.entries.forEach { directory ->
-                                item(key = directory.name) {
-                                    TvPill(
-                                        label = directory.label,
-                                        selected = state.directory == directory,
-                                        onClick = { viewModel.setDirectory(directory) }
-                                    )
-                                }
+                        // A single selector replaces the sprawling Todas/Vista/Stremio pills.
+                        val directories = com.ivor.openstream.presentation.marketplace.MarketplaceDirectory.entries
+                        TvFilterDropdown(
+                            label = "Catálogo de addons",
+                            selection = state.directory.label,
+                            options = directories.map { it.label },
+                            selectedIndex = directories.indexOf(state.directory),
+                            onSelect = { index ->
+                                directories.getOrNull(index)?.let(viewModel::setDirectory)
                             }
-                        }
+                        )
                         TvPill(
                             label = if (compatibleOnly) "Compatíveis" else "Todas as fontes",
                             selected = compatibleOnly,
