@@ -153,6 +153,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.mutableIntStateOf
 import com.ivor.openstream.data.streaming.BROWSER_USER_AGENT
+import com.ivor.openstream.domain.model.SkipType
 import com.ivor.openstream.domain.model.forDuration
 import com.ivor.openstream.data.subtitles.SavedSubtitleRepository
 import com.ivor.openstream.data.subtitles.SubtitleCue
@@ -1917,6 +1918,13 @@ fun ExoPlayerView(
         val offerManualSkip = skipSegments.isEmpty() && !manualSkipUsed && areControlsVisible &&
             totalTime > MANUAL_SKIP_MS * 4 && currentTime in 5_000L..MANUAL_SKIP_WINDOW_MS
         val skipLabel = activeSegment?.let { stringResource(it.type.labelRes) } ?: stringResource(R.string.player_skip_seconds, MANUAL_SKIP_MS / 1_000)
+        val skipFocusRequester = remember { FocusRequester() }
+        LaunchedEffect(dpadControls, activeSegment?.type, showSkipButton, showSettingsDialog) {
+            if (dpadControls && showSkipButton && activeSegment?.type == SkipType.CREDITS && !showSettingsDialog) {
+                delay(100)
+                runCatching { skipFocusRequester.requestFocus() }
+            }
+        }
         AnimatedVisibility(
             visible = showSkipButton && (activeSegment != null || offerManualSkip) && !isLocked &&
                 !isInPictureInPicture && !showSettingsDialog,
@@ -1928,11 +1936,19 @@ fun ExoPlayerView(
         ) {
             Button(
                 onClick = {
-                    val target = activeSegment?.endMs ?: (exoPlayer.currentPosition + MANUAL_SKIP_MS)
-                    exoPlayer.seekTo(target)
-                    currentTime = target
-                    if (activeSegment == null) manualSkipUsed = true
+                    if (activeSegment?.type == SkipType.CREDITS && onNextClick != null) {
+                        // A credit segment ending at the end of a file cannot seek past itself.
+                        // Go directly to the available next episode instead of seeking nowhere.
+                        onNextClick()
+                    } else {
+                        val target = activeSegment?.endMs ?: (exoPlayer.currentPosition + MANUAL_SKIP_MS)
+                        val boundedTarget = if (totalTime > 0L) target.coerceIn(0L, totalTime) else target
+                        exoPlayer.seekTo(boundedTarget)
+                        currentTime = boundedTarget
+                        if (activeSegment == null) manualSkipUsed = true
+                    }
                 },
+                modifier = Modifier.focusRequester(skipFocusRequester),
                 shape = ExpressiveShapes.medium,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
