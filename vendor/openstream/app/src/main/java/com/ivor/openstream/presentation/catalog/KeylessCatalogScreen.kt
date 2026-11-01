@@ -1069,13 +1069,24 @@ private fun KeylessTitleDetails(
                 Icon(Icons.Default.ArrowBack, contentDescription = null, tint = Color.White)
                 Text(" Biblioteca", color = Color.White)
             }
-            Text(
-                title.title,
-                modifier = Modifier.align(Alignment.BottomStart).padding(18.dp),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
+            // AniList/Cinemeta titles with a verified TMDB ID use the exact same
+            // official logo as movies and series. No guessing by similar names.
+            if (com.ivor.openstream.presentation.tv.rememberTvMode() && title.tmdbId != null) {
+                com.ivor.openstream.presentation.tv.TvOfficialTitleLogo(
+                    title = title.title,
+                    mediaType = if (title.type == "movie" || title.format == "MOVIE") "movie" else "tv",
+                    titleId = title.tmdbId,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(18.dp)
+                )
+            } else {
+                Text(
+                    title.title,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(18.dp),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
         }
         Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text(
