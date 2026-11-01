@@ -17,6 +17,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
@@ -31,7 +35,6 @@ import com.ivor.openstream.presentation.player.sourceSummary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.util.Locale
 
 /** TV episode detail: metadata and pre-resolved sources without starting an audio/video session. */
 @Composable
@@ -57,6 +60,9 @@ fun TvEpisodeDetailsScreen(
     val preferredSubtitle by playerViewModel.preferredSubtitleLanguage.collectAsState()
     val isSaved by detailsViewModel.isWatchLater.collectAsState()
     val rating by detailsViewModel.rating.collectAsState()
+    val episodeProgress by detailsViewModel.episodeProgress.collectAsState()
+    var activePanel by remember { mutableStateOf<TvEpisodePanel?>(null) }
+    var confirmRemove by remember { mutableStateOf(false) }
 
     LaunchedEffect(mediaType, animeId, season, episode) {
         playerViewModel.loadSeasonDetails(mediaType, animeId, season, episode, resolveStreams = true)
@@ -95,36 +101,62 @@ fun TvEpisodeDetailsScreen(
         delay(90)
         runCatching { focus.requestFocus() }
     }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val inContinueWatching = episodeProgress.values.any { !it.completed }
+    val subtitleSummary = when (preferredSubtitle) {
+        null -> "Automático"
+        SUBTITLES_OFF -> "Desligadas"
+        else -> preferredSubtitle?.let(::tvEpisodeLanguageName) ?: "Automático"
+    }
+    Box(Modifier.fillMaxSize()) {
         TvBackdrop((currentEpisode?.stillPath ?: title.backdropPath ?: title.posterPath)
             ?.let { "$TV_BACKDROP_BASE$it" })
         TvBackdropScrims()
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 48.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            item(key = "hero") {
-                Box(
-                    Modifier.fillMaxWidth().height(maxHeight - 28.dp)
-                        .padding(start = TvLayout.PageStart, end = TvLayout.ContentEnd),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    Column(Modifier.width(590.dp)) {
-                        Text("VISTASTREAM  ·  " + if (mediaType == "movie") "FILME" else "EPISÓDIO",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(8.dp))
-                        Text(title.name, style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.fillMaxSize()) {
+            // A fixed breadcrumb never scrolls off or gets clipped when focus returns
+            // to an earlier row after navigating lower in the page.
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.68f))
+                    .padding(start = TvLayout.PageStart, end = TvLayout.ContentEnd, top = 14.dp, bottom = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    title.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    if (mediaType == "movie") "Filme" else "T$season · E$episode",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(top = 14.dp, bottom = 70.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                item(key = "hero") {
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(start = TvLayout.PageStart, end = TvLayout.ContentEnd, bottom = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
                         Text(
-                            if (mediaType == "movie") title.name else currentEpisode?.name
-                                ?.takeIf { it.isNotBlank() } ?: "Temporada $season · Episódio $episode",
+                            if (mediaType == "movie") title.name
+                            else currentEpisode?.name?.takeIf { it.isNotBlank() }
+                                ?: "Temporada $season · Episódio $episode",
                             style = MaterialTheme.typography.displaySmall,
-                            fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.widthIn(max = 570.dp)
                         )
-                        Spacer(Modifier.height(8.dp))
                         Text(
                             listOfNotNull(
                                 if (mediaType == "movie") "Filme" else "T$season · E$episode",
@@ -138,146 +170,95 @@ fun TvEpisodeDetailsScreen(
                         )
                         val overview = currentEpisode?.overview?.takeIf { it.isNotBlank() } ?: title.overview
                         if (overview.isNotBlank()) {
-                            Spacer(Modifier.height(12.dp))
-                            Text(overview, style = MaterialTheme.typography.bodyLarge,
+                            Text(
+                                overview,
+                                style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 3, overflow = TextOverflow.Ellipsis)
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.widthIn(max = 600.dp)
+                            )
                         }
-                        Spacer(Modifier.height(14.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Button(onClick = onPlay, modifier = Modifier.focusRequester(focus),
-                                enabled = !isUpcomingEpisode(currentEpisode?.airDate),
-                                contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
-                                Icon(Icons.Default.PlayArrow, null, Modifier.size(ButtonDefaults.IconSize))
-                                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                                androidx.tv.material3.Text(
-                                    if (isUpcomingEpisode(currentEpisode?.airDate)) "Ainda não estreou"
-                                    else "Reproduzir"
+                        Spacer(Modifier.height(4.dp))
+                        Button(
+                            onClick = onPlay,
+                            modifier = Modifier.width(294.dp).focusRequester(focus),
+                            enabled = !isUpcomingEpisode(currentEpisode?.airDate),
+                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding
+                        ) {
+                            Icon(Icons.Default.PlayArrow, null, Modifier.size(22.dp))
+                            Spacer(Modifier.width(10.dp))
+                            androidx.tv.material3.Text(
+                                if (isUpcomingEpisode(currentEpisode?.airDate)) "Ainda não estreou"
+                                else "Reproduzir"
+                            )
+                        }
+
+                        // Netflix-style compact actions; focused TV icons still have a clear
+                        // visible ring and accessible descriptions for screen readers.
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            TvEpisodeIconAction(
+                                icon = if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                label = if (isSaved) "Remover da lista" else "Guardar na lista",
+                                active = isSaved,
+                                onClick = detailsViewModel::toggleWatchLater
+                            )
+                            TvEpisodeIconAction(
+                                icon = Icons.Default.ThumbUp,
+                                label = "Gostei",
+                                active = rating == TitleRatingEntity.LIKE,
+                                onClick = { detailsViewModel.rate(TitleRatingEntity.LIKE) }
+                            )
+                            TvEpisodeIconAction(
+                                icon = Icons.Default.ThumbDown,
+                                label = "Não gostei",
+                                active = rating == TitleRatingEntity.DISLIKE,
+                                onClick = { detailsViewModel.rate(TitleRatingEntity.DISLIKE) }
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Column(
+                            modifier = Modifier.widthIn(max = 380.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (mediaType != "movie") {
+                                TvEpisodeMenuAction(
+                                    icon = Icons.Default.VideoLibrary,
+                                    label = "Episódios e temporadas",
+                                    supporting = "Temporada $season",
+                                    onClick = {
+                                        scope.launch {
+                                            listState.animateScrollToItem(
+                                                if (otherSeasons.size > 1) 2 else 1
+                                            )
+                                        }
+                                    }
                                 )
                             }
-                            OutlinedButton(onClick = detailsViewModel::toggleWatchLater) {
-                                Icon(if (isSaved) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                    null, Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                androidx.tv.material3.Text(if (isSaved) "Guardado" else "Guardar")
-                            }
-                            OutlinedButton(onClick = { detailsViewModel.rate(TitleRatingEntity.LIKE) }) {
-                                Icon(Icons.Default.ThumbUp, null, Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                androidx.tv.material3.Text(if (rating == TitleRatingEntity.LIKE) "Gostei ✓" else "Gostei")
-                            }
-                            OutlinedButton(onClick = { detailsViewModel.rate(TitleRatingEntity.DISLIKE) }) {
-                                Icon(Icons.Default.ThumbDown, null, Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                androidx.tv.material3.Text(if (rating == TitleRatingEntity.DISLIKE) "Não gostei ✓" else "Não gostei")
-                            }
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            OutlinedButton(onClick = { scope.launch { listState.animateScrollToItem(1) } }) {
-                                Icon(Icons.Default.Dns, null, Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                androidx.tv.material3.Text("Fontes: " + servers.size +
-                                    if (serversState is ServersState.Resolving) " · a procurar" else "")
-                            }
-                            OutlinedButton(onClick = { scope.launch { listState.animateScrollToItem(3) } }) {
-                                Icon(Icons.Default.ClosedCaption, null, Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                androidx.tv.material3.Text("Legendas")
-                            }
-                            if (mediaType != "movie") {
-                                OutlinedButton(onClick = {
-                                    scope.launch { listState.animateScrollToItem(if (otherSeasons.size > 1) 7 else 5) }
-                                }) {
-                                    androidx.tv.material3.Text("Episódios")
-                                }
+                            TvEpisodeMenuAction(
+                                icon = Icons.Default.Dns,
+                                label = "Fontes",
+                                supporting = "${servers.size} disponíveis" +
+                                    if (serversState is ServersState.Resolving) " · A procurar" else "",
+                                onClick = { activePanel = TvEpisodePanel.SOURCES }
+                            )
+                            TvEpisodeMenuAction(
+                                icon = Icons.Default.ClosedCaption,
+                                label = "Áudio e legendas",
+                                supporting = subtitleSummary,
+                                onClick = { activePanel = TvEpisodePanel.SUBTITLES }
+                            )
+                            if (inContinueWatching) {
+                                TvEpisodeMenuAction(
+                                    icon = Icons.Default.Close,
+                                    label = "Remover de Continuar assistindo",
+                                    supporting = "Manter o histórico dos episódios concluídos",
+                                    onClick = { confirmRemove = true }
+                                )
                             }
                         }
                     }
                 }
-            }
-            item(key = "source-heading") {
-                Column(Modifier.padding(start = TvLayout.PageStart, end = TvLayout.ContentEnd)) {
-                    TvRowHeader("Fontes disponíveis (" + servers.size + ")", start = 0.dp)
-                    Text(
-                        when {
-                            serversState is ServersState.Resolving ->
-                                "A procurar mais fontes. As encontradas já podem ser selecionadas."
-                            servers.isEmpty() -> "Nenhuma fonte encontrada nesta pesquisa."
-                            else -> "Escolhe a fonte preferida antes de iniciar o episódio."
-                        },
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = playerViewModel::retryResolution) {
-                        Icon(Icons.Default.Refresh, null, Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        androidx.tv.material3.Text("Procurar mais")
-                    }
-                }
-            }
-            item(key = "sources") {
-                LazyRow(
-                    contentPadding = PaddingValues(start = TvLayout.PageStart, end = TvLayout.ContentEnd),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(servers, key = { it.id }) { server ->
-                        val label = server.name.take(30) + " · " + server.sourceSummary()
-                        if (server.id == selectedServer?.id) {
-                            Button(onClick = { playerViewModel.selectServer(server.id) }) {
-                                androidx.tv.material3.Text("✓ $label", maxLines = 1)
-                            }
-                        } else {
-                            OutlinedButton(onClick = { playerViewModel.selectServer(server.id) }) {
-                                androidx.tv.material3.Text(label, maxLines = 1)
-                            }
-                        }
-                    }
-                }
-            }
-            item(key = "subtitle-heading") {
-                Column(Modifier.padding(start = TvLayout.PageStart, end = TvLayout.ContentEnd)) {
-                    TvRowHeader("Áudio e legendas", start = 0.dp)
-                    Text("Preferência de legenda: " + when (preferredSubtitle) {
-                        null -> "Automático"
-                        SUBTITLES_OFF -> "Desligadas"
-                        else -> preferredSubtitle?.let(::tvLanguageName) ?: "Automático"
-                    }, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            item(key = "subtitle-options") {
-                LazyRow(
-                    contentPadding = PaddingValues(start = TvLayout.PageStart, end = TvLayout.ContentEnd),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    item(key = "automatic") {
-                        if (preferredSubtitle == null) {
-                            Button(onClick = playerViewModel::resetPreferredSubtitleLanguage) {
-                                androidx.tv.material3.Text("Automático ✓")
-                            }
-                        } else {
-                            OutlinedButton(onClick = playerViewModel::resetPreferredSubtitleLanguage) {
-                                androidx.tv.material3.Text("Automático")
-                            }
-                        }
-                    }
-                    item(key = "none") {
-                        OutlinedButton(onClick = { playerViewModel.setPreferredSubtitleLanguage(SUBTITLES_OFF) }) {
-                            androidx.tv.material3.Text("Desligadas" + if (preferredSubtitle == SUBTITLES_OFF) " ✓" else "")
-                        }
-                    }
-                    items(languages, key = { it }) { language ->
-                        OutlinedButton(onClick = { playerViewModel.setPreferredSubtitleLanguage(language) }) {
-                            androidx.tv.material3.Text(tvLanguageName(language) + if (preferredSubtitle == language) " ✓" else "")
-                        }
-                    }
-                    if (languages.isEmpty()) item(key = "no-results") {
-                        Text("A aguardar opções de legendas",
-                            modifier = Modifier.padding(12.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-            }
             if (mediaType != "movie" && otherSeasons.size > 1) {
                 item(key = "season-heading") {
                     TvRowHeader("Temporadas", start = TvLayout.PageStart)
@@ -335,6 +316,32 @@ fun TvEpisodeDetailsScreen(
                     }
                 }
             }
+            }
+        }
+        TvEpisodeOptionsPanel(
+            panel = activePanel,
+            sources = servers,
+            serversState = serversState,
+            selectedServerId = selectedServer?.id,
+            subtitleLanguages = languages,
+            preferredSubtitle = preferredSubtitle,
+            onChooseServer = playerViewModel::selectServer,
+            onRetry = playerViewModel::retryResolution,
+            onChooseLanguage = playerViewModel::setPreferredSubtitleLanguage,
+            onAutomaticLanguage = playerViewModel::resetPreferredSubtitleLanguage,
+            onDismiss = { activePanel = null }
+        )
+        if (confirmRemove) {
+            TvConfirmPanel(
+                title = "Remover de Continuar assistindo?",
+                message = "O título deixa a fila, mas os episódios já vistos continuam marcados.",
+                confirmLabel = "Remover",
+                onConfirm = {
+                    detailsViewModel.dismissFromContinueWatching()
+                    confirmRemove = false
+                },
+                onCancel = { confirmRemove = false }
+            )
         }
         if (upcomingDate != null) {
             TvConfirmPanel(
@@ -354,9 +361,54 @@ internal fun isUpcomingEpisode(airDate: String?, today: LocalDate = LocalDate.no
         runCatching { LocalDate.parse(value).isAfter(today) }.getOrDefault(false)
     } ?: false
 
-private fun tvLanguageName(code: String): String {
-    val locale = Locale.forLanguageTag(code.replace('_', '-'))
-    val name = locale.getDisplayLanguage(Locale.forLanguageTag("pt-PT"))
-    return if (name.isBlank() || name.equals(code, ignoreCase = true)) code.uppercase()
-        else name.replaceFirstChar { it.titlecase(Locale.forLanguageTag("pt-PT")) } + " ($code)"
+@Composable
+private fun TvEpisodeIconAction(
+    icon: ImageVector,
+    label: String,
+    active: Boolean,
+    onClick: () -> Unit
+) {
+    if (active) {
+        androidx.tv.material3.IconButton(onClick = onClick) {
+            Icon(icon, contentDescription = label, modifier = Modifier.size(23.dp))
+        }
+    } else {
+        androidx.tv.material3.OutlinedIconButton(onClick = onClick) {
+            Icon(icon, contentDescription = label, modifier = Modifier.size(23.dp))
+        }
+    }
+}
+
+@Composable
+private fun TvEpisodeMenuAction(
+    icon: ImageVector,
+    label: String,
+    supporting: String,
+    onClick: () -> Unit
+) {
+    TvOutlinedButton(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        shape = RoundedCornerShape(12.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            androidx.tv.material3.Text(
+                label,
+                style = androidx.tv.material3.MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            androidx.tv.material3.Text(
+                supporting,
+                style = androidx.tv.material3.MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp))
+    }
 }
