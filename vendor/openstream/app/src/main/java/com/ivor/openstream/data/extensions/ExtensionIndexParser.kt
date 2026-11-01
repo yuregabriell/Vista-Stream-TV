@@ -90,6 +90,10 @@ class ExtensionIndexParser @Inject constructor() {
             versionCode = entry.versionCode.coerceAtLeast(1),
             apiVersion = entry.apiVersion.coerceAtLeast(1),
             language = entry.language.trim().ifEmpty { "Multi" },
+            contentTypes = entry.contentTypes.map { it.trim().lowercase() }.filter { it.isNotBlank() }.distinct(),
+            titleExamples = entry.titleExamples.map { it.trim() }.filter { it.isNotBlank() }.distinct(),
+            manifestUrl = entry.manifestUrl?.takeIf { it.startsWith("https://") },
+
             iconUrl = entry.iconUrl?.trim()?.takeIf { it.isNotEmpty() },
             tags = entry.tags.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct(),
             status = ExtensionStatus.fromCode(entry.status),
@@ -111,6 +115,84 @@ class ExtensionIndexParser @Inject constructor() {
             ),
             isFallback = entry.fallback || engineType == ExtensionEngineType.VIDKING_WEBVIEW,
             installedByDefault = entry.installedByDefault
+        )
+    }
+
+
+    /**
+     * The official Stremio community directory is a JSON array of
+     * { transportUrl, transportName, manifest }. Manifests are metadata only:
+     * the Vista runtime never downloads or executes remote Kotlin/JS plugins.
+     * Incompatible addons remain discoverable but are not playable/installable.
+     */
+    fun parseStremioCollection(raw: String, strings: RepoParseStrings = RepoParseStrings()): ExtensionRepoDto {
+        val root = json.parseToJsonElement(raw) as? JsonArray
+            ?: throw IllegalArgumentException(strings.indexError)
+        val entries = root.mapNotNull { element ->
+            runCatching {
+                val record = element as? JsonObject ?: return@runCatching null
+                val manifest = record["manifest"] as? JsonObject ?: return@runCatching null
+                val manifestUrl = record.text("transportUrl")?.trim().orEmpty()
+                if (!manifestUrl.startsWith("https://") || !manifestUrl.substringBefore('?').endsWith("/manifest.json")) {
+                    return@runCatching null // legacy/IPFS/transports require another engine
+                }
+                val baseUrl = manifestUrl.substringBefore('?').removeSuffix("/manifest.json").trimEnd('/')
+                val id = manifest.text("id")?.trim().orEmpty()
+                val name = manifest.text("name")?.trim().orEmpty()
+                if (id.isBlank() || name.isBlank() || baseUrl.isBlank()) return@runCatching null
+                val resources = (manifest["resources"] as? JsonArray).orEmpty().mapNotNull { resource ->
+                    when (resource) {
+                        is JsonPrimitive -> resource.contentOrNull
+                        is JsonObject -> resource.text("name")
+                        else -> null
+                    }
+                }
+                val types = (manifest["types"] as? JsonArray).orEmpty().mapNotNull {
+                    (it as? JsonPrimitive)?.contentOrNull
+                }
+                val hints = manifest["behaviorHints"] as? JsonObject
+                val needsConfig = hints?.text("configurationRequired") == "true"
+                val canStream = "stream" in resources && !needsConfig
+                val text = (name + " " + manifest.text("description").orEmpty()).lowercase()
+                val adult = manifest.text("adult") == "true" || manifest.text("nsfw") == "true" ||
+                    listOf("porn", "xxx", "hentai").any { it in text }
+                val note = when {
+                    "stream" !in resources -> strings.noStreamsNote
+                    needsConfig -> strings.needsConfigNote
+                    else -> null
+                }
+                ExtensionEntryDto(
+                    id = "stremio-" + id.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-') +
+                        "-" + baseUrl.hashCode().toUInt().toString(16),
+                    name = name,
+                    description = listOfNotNull(manifest.text("description")?.takeIf { it.isNotBlank() }, note)
+                        .joinToString("\n\n"),
+                    version = manifest.text("version").orEmpty().ifBlank { "1.0.0" },
+                    versionCode = semverCode(manifest.text("version")),
+                    language = hints?.text("language").orEmpty().ifBlank { "Multi" },
+                    contentTypes = types,
+                    manifestUrl = manifestUrl,
+                    iconUrl = manifest.text("logo")?.takeIf { it.startsWith("https://") },
+                    tags = (listOf("stremio", "community") + types.map {
+                        if (it == "movie") "movies" else it
+                    }).distinct(),
+                    nsfw = adult,
+                    status = 1,
+                    installedByDefault = false,
+                    homepage = baseUrl.takeIf { hints?.text("configurable") == "true" }?.let { "$it/configure" },
+                    engine = ExtensionEngineDto(
+                        type = if (canStream) "stremio" else "unsupported",
+                        endpoint = baseUrl,
+                        priority = STREMIO_PRIORITY
+                    )
+                )
+            }.getOrNull()
+        }.distinctBy { it.id }
+        return ExtensionRepoDto(
+            name = "Stremio · Community Addons",
+            description = "Public Stremio community directory; only HTTPS stream addons can play in VistaStream.",
+            website = "https://addons.strem.io/",
+            extensions = entries
         )
     }
 
