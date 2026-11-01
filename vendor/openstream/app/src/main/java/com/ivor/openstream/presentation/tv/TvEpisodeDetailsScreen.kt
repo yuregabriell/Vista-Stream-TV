@@ -107,9 +107,11 @@ fun TvEpisodeDetailsScreen(
         return
     }
     val otherSeasons = title.seasons.orEmpty().filter { it.seasonNumber > 0 }
-    val allSeasonCount = title.numberOfSeasons?.takeIf { it > 0 } ?: otherSeasons.size
+    val allSeasonCount = title.numberOfSeasons?.takeIf { it > 0 }
+        ?: otherSeasons.size.takeIf { it > 0 } ?: 1
     val allEpisodeCount = title.numberOfEpisodes?.takeIf { it > 0 }
-        ?: otherSeasons.sumOf { it.episodeCount }
+        ?: otherSeasons.sumOf { it.episodeCount }.takeIf { it > 0 }
+        ?: episodes.size
     LaunchedEffect(otherSeasons, season) {
         val index = otherSeasons.indexOfFirst { it.seasonNumber == season }
         if (index >= 0) seasonRailState.scrollToItem(index)
