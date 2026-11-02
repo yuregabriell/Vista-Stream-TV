@@ -6,65 +6,86 @@ import com.ivor.openstream.data.remote.TmdbApi
 import com.ivor.openstream.data.remote.model.AnimeDto
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Reconciles AniList catalogue entries with the TMDB identity used by the
- * main VistaStream TV title, season, source, and playback routes.
- *
- * AniList IDs must never be passed to a TMDB detail route. Otherwise anime
- * opens a different detail/player implementation and existing sources vanish.
+ * Shared mapping used by both hero artwork and TV title navigation.
+ * AniList catalogue IDs must never be used as TMDB episode/source IDs.
  */
+data class TvAnimeCatalogMatch(
+    val mediaType: String,
+    val tmdbId: Int,
+    val backdropPath: String?
+)
+
+/** Removes sequel/season suffixes before comparing against TMDB's base TV series. */
+internal object TvAnimeNames {
+    private val seasonSuffix = Regex(
+        """(?i)(?:[\s:–\-]+)(?:season\s*\d+|\d+(?:st|nd|rd|th)\s+season|part\s*\d+|cour\s*\d+)\s*$"""
+    )
+    fun base(name: String): String = name.trim().replace(seasonSuffix, "").trim()
+    fun key(name: String): String =
+        name.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
+}
+
+@Singleton
+class TvAnimeCatalogMatcher @Inject constructor(
+    private val tmdb: TmdbApi
+) {
+    private val matches = mutableMapOf<String, TvAnimeCatalogMatch>()
+
+    suspend fun resolve(title: KeylessTitle): TvAnimeCatalogMatch? = withContext(Dispatchers.IO) {
+        val kind = if (title.format.equals("MOVIE", ignoreCase = true)) "movie" else "tv"
+        synchronized(matches) { matches[title.sourceId] }?.let { return@withContext it }
+        if (title.tmdbId != null && title.tmdbId > 0) {
+            return@withContext TvAnimeCatalogMatch(kind, title.tmdbId, null)
+        }
+
+        val aliases = listOfNotNull(title.title, title.alternateTitle)
+            .map(String::trim).filter(String::isNotBlank)
+        val names = (aliases + aliases.map(TvAnimeNames::base))
+            .filter(String::isNotBlank)
+            .distinctBy(TvAnimeNames::key)
+        val expected = names.map(TvAnimeNames::key).toSet()
+        // A sequel with a year of 2026 may belong to a TMDB show launched in
+        // 2022/2024. Only bypass the year check after a strict base-title match.
+        val isSeason = aliases.any { TvAnimeNames.base(it) != it.trim() }
+        for (name in names) {
+            val results: List<AnimeDto> = try {
+                if (kind == "movie") tmdb.searchMovieForArtwork(name).results
+                else tmdb.searchTvForArtwork(name).results
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // Keep trying alternate title and unsuffixed original name.
+                continue
+            }
+            val candidate = results.firstOrNull { item ->
+                val year = item.date.take(4).toIntOrNull()
+                item.id > 0 && TvAnimeNames.key(item.name) in expected &&
+                    (isSeason || title.year == null || year == null ||
+                        kotlin.math.abs(year - title.year) <= 2)
+            }
+            if (candidate != null) {
+                val match = TvAnimeCatalogMatch(kind, candidate.id, candidate.backdropPath)
+                synchronized(matches) {
+                    if (matches.size >= 150) matches.clear()
+                    matches[title.sourceId] = match
+                }
+                return@withContext match
+            }
+        }
+        null // Don't navigate to a different show based only on fuzzy similarity.
+    }
+}
+
 @HiltViewModel
 class TvAnimeTitleNavigationViewModel @Inject constructor(
-    private val tmdb: TmdbApi
+    private val matcher: TvAnimeCatalogMatcher
 ) : ViewModel() {
-    private val matches = LinkedHashMap<String, Pair<String, Int>>()
-
-    suspend fun resolve(title: KeylessTitle): Pair<String, Int>? = withContext(Dispatchers.IO) {
-        val mediaType = if (title.format.equals("MOVIE", ignoreCase = true)) "movie" else "tv"
-        title.tmdbId?.takeIf { it > 0 }?.let { return@withContext mediaType to it }
-        matches[title.sourceId]?.let { return@withContext it }
-
-        val names = listOfNotNull(title.title, title.alternateTitle)
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .distinctBy(::normalized)
-        val expected = names.map(::normalized).toSet()
-        try {
-            for (name in names) {
-                val candidates = if (mediaType == "movie") {
-                    tmdb.searchMovieForArtwork(name).results
-                } else {
-                    tmdb.searchTvForArtwork(name).results
-                }
-                val match = candidates.firstOrNull { candidate ->
-                    candidate.id > 0 &&
-                        normalized(candidate.name) in expected &&
-                        compatibleYear(title.year, candidate)
-                }
-                if (match != null) {
-                    val route = mediaType to match.id
-                    matches[title.sourceId] = route
-                    if (matches.size > 120) matches.remove(matches.keys.first())
-                    return@withContext route
-                }
-            }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            // A temporary catalogue/gateway error should remain retryable.
-        }
-        null
-    }
-
-    private fun compatibleYear(expected: Int?, candidate: AnimeDto): Boolean {
-        val actual = candidate.date.take(4).toIntOrNull()
-        return expected == null || actual == null || kotlin.math.abs(actual - expected) <= 2
-    }
-
-    private fun normalized(name: String): String =
-        name.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
+    suspend fun resolve(title: KeylessTitle): Pair<String, Int>? =
+        matcher.resolve(title)?.let { it.mediaType to it.tmdbId }
 }
