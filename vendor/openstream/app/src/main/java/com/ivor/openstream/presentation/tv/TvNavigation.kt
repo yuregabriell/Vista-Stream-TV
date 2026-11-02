@@ -140,14 +140,8 @@ private fun TvAppScaffold(
     // the screen, and the menu can never float over or steal its cards/episodes.
     Row(modifier = Modifier.fillMaxSize()) {
         if (showDrawer) {
-            // Selected-section halo physically glides along the fixed seven-item
-            // rail, while the glyph itself has an independent D-pad focus motion.
-            val selectedIndex = TvDestination.topLevel.indexOf(selected).coerceAtLeast(0)
-            val selectedOffset by animateDpAsState(
-                targetValue = ((selectedIndex - 3) * 58).dp,
-                animationSpec = spring(dampingRatio = 0.82f, stiffness = 430f),
-                label = "tvSidebarSlidingIndicator"
-            )
+            // Selection is drawn inside each icon's own surface so it shares
+            // exactly the same bounds as the icon (including different TV densities).
             Box(
                 modifier = Modifier
                     .width(TvSidebarWidth)
@@ -162,15 +156,6 @@ private fun TvAppScaffold(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .offset(y = selectedOffset)
-                        .size(52.dp)
-                        .background(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.82f),
-                            RoundedCornerShape(18.dp)
-                        )
-                )
                 Column(
                     modifier = Modifier
                         .fillMaxHeight()
