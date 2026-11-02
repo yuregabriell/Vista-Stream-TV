@@ -7,6 +7,8 @@ const COUNTRIES=[
   ["AO","🇦🇴","Angola"],["MZ","🇲🇿","Moçambique"]
 ];
 const countryKey="vista-live-country-v1",favoriteKey="vista-live-favorites-v1";
+const RICOS="https://zoreu.github.io/ricosstremio/manifest.json";
+let installedLiveAddons=[],openSources=null;
 function safeGet(k){try{return localStorage.getItem(k);}catch{return null;}}
 function safeSet(k,v){try{localStorage.setItem(k,v);}catch{}}
 const detected=(navigator.language||"pt-PT").split("-").at(-1).toUpperCase();
@@ -41,8 +43,74 @@ function parseM3U(text,code){
   }
   return out;
 }
+
+function safeManifest(s){
+  try{
+    const url=new URL(String(s));const host=url.hostname.toLowerCase();
+    return url.protocol==="https:"&&url.username===""&&url.password===""&&
+      url.href.length<2048&&url.pathname.endsWith("/manifest.json")&&
+      !["localhost","127.0.0.1"].includes(host)&&
+      !/^(10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
+  }catch{return false;}
+}
+function resource(manifest,kind,type,id){
+  const u=new URL(manifest);
+  const base=u.href.slice(0,u.href.lastIndexOf("manifest.json"));
+  return base+kind+"/"+encodeURIComponent(type)+"/"+encodeURIComponent(id)+".json";
+}
+async function addonJson(url){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),10500);
+  try{
+    const r=await fetch(url,{mode:"cors",credentials:"omit",signal:controller.signal,headers:{Accept:"application/json"}});
+    if(!r.ok)throw Error("HTTP "+r.status);
+    const text=await r.text();if(text.length>1500000)throw Error("Resposta extensa");
+    return JSON.parse(text);
+  }finally{clearTimeout(timer);}
+}
+async function loadStremioChannels(code){
+  const sources=[];
+  if(code==="BR")sources.push({url:RICOS,name:"Canal Ricos"});
+  for(const x of installedLiveAddons.filter(x=>x?.enabled&&x.types?.includes("tv")&&safeManifest(x.url))){
+    if(!sources.some(v=>v.url===x.url))sources.push({url:x.url,name:x.name||"Stremio TV"});
+  }
+  const out=[];
+  for(const addon of sources.slice(0,8)){
+    try{
+      const manifest=await addonJson(addon.url),catalogs=Array.isArray(manifest.catalogs)?manifest.catalogs:[];
+      const aliases=code==="BR"?["br","brazil","brasil"]:code==="PT"?["pt","portugal"]:[code.toLowerCase()];
+      for(const catalog of catalogs.slice(0,70)){
+        if(!["tv","channel"].includes(catalog.type)||!catalog.id)continue;
+        const match=addon.url===RICOS&&code==="BR"||
+          aliases.some(a=>a===String(catalog.id).toLowerCase()||a===String(catalog.name||"").toLowerCase().replace(/ tv$/,""));
+        if(!match)continue;
+        const data=await addonJson(resource(addon.url,"catalog",catalog.type,catalog.id));
+        for(const entry of (data.metas||[]).slice(0,800)){
+          if(!entry?.id||!entry?.name)continue;
+          out.push({id:code+"|stremio|"+addon.url+"|"+entry.id,
+            name:String(entry.name).slice(0,120),group:String(entry.genres?.[0]||"TV Brasileira").slice(0,60),
+            logo:String(entry.logo||entry.poster||"").startsWith("https://")?String(entry.logo||entry.poster):"",
+            url:"",source:addon.name,addon:{manifest:addon.url,type:catalog.type,ref:String(entry.id)}});
+        }
+      }
+    }catch(e){console.warn("Live TV addon:",addon.name,e.message);}
+  }
+  return out;
+}
+async function playChannel(channel,country,play){
+  if(!channel.addon){play(channel,country);return;}
+  try{
+    const data=await addonJson(resource(channel.addon.manifest,"stream",channel.addon.type,channel.addon.ref));
+    const video=(data.streams||[]).find(x=>{
+      try{const u=new URL(x.url);return u.protocol==="https:"&&!u.username&&!u.password&&u.href.length<4096;}catch{return false;}
+    });
+    if(!video)throw Error("O addon não devolveu uma transmissão HTTPS direta.");
+    play({...channel,url:video.url},country);
+  }catch(e){alert("Transmissão indisponível: "+e.message);}
+}
+
 async function load(code){
   state.loading=true;state.error="";state.channels=[];state.countryLoaded="";state.filter="Todos";
+  let publicChannels=[],error=null;
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
   try{
     const response=await fetch("https://iptv-org.github.io/iptv/countries/"+code.toLowerCase()+".m3u",
@@ -52,14 +120,16 @@ async function load(code){
     if(declared>5_000_000)throw Error("Lista demasiado grande");
     const txt=await response.text();
     if(txt.length>5_000_000)throw Error("Lista demasiado grande");
-    if(code!==state.country)return;
-    state.channels=parseM3U(txt,code);
-    state.countryLoaded=code;
-    if(!state.channels.length)state.error="Nenhum canal HTTPS compatível encontrado para este país.";
-  }catch{
-    if(code===state.country)state.error="Não foi possível carregar os canais. Verifica a ligação ou tenta novamente.";
-  }finally{clearTimeout(timer);if(code===state.country)state.loading=false;}
+    publicChannels=parseM3U(txt,code);
+  }catch{error="Não foi possível atualizar a lista pública.";}
+  finally{clearTimeout(timer);}
+  const extra=await loadStremioChannels(code);
+  if(code!==state.country)return;
+  state.channels=[...new Map([...publicChannels,...extra].map(x=>[x.id,x])).values()];
+  state.countryLoaded=code;state.loading=false;
+  if(!state.channels.length)state.error=error||"Nenhum canal disponível para este país.";
 }
+
 function favoriteIds(){return new Set(state.favorites[state.country]||[]);}
 function changeFavorite(item){
   const set=favoriteIds();
@@ -113,7 +183,8 @@ function paint(host,play){
   search.placeholder="⌕  Pesquisar canais";search.value=state.search;
   search.setAttribute("aria-label","Pesquisar canais");
   search.addEventListener("input",()=>{state.search=search.value;renderResults();});
-  toolbar.append(search,button("↻","live-reload",()=>{void refresh(true);}));
+  toolbar.append(search,button("Fontes TV","live-reload",()=>openSources?.()),
+    button("↻","live-reload",()=>{void refresh(true);}));
   page.append(toolbar);
   const chips=node("div","live-chips");
   page.append(chips);
@@ -150,10 +221,10 @@ function paint(host,play){
       const card=node("div","live-channel");
       card.setAttribute("role","button");card.setAttribute("tabindex","0");
       card.setAttribute("aria-label","Reproduzir "+ch.name);
-      card.addEventListener("click",()=>play(ch,country));
+      card.addEventListener("click",()=>void playChannel(ch,country,play));
       card.addEventListener("keydown",e=>{
         if(e.target===card&&(e.key==="Enter"||e.key===" ")){
-          e.preventDefault();play(ch,country);
+          e.preventDefault();void playChannel(ch,country,play);
         }
       });
       const art=node("span","live-channel-logo");
@@ -163,7 +234,7 @@ function paint(host,play){
         e.stopPropagation();changeFavorite(ch);renderResults();
       });
       fav.setAttribute("aria-label",favorites.has(ch.id)?"Remover favorito":"Adicionar favorito");
-      const name=node("strong","",ch.name),group=node("span","live-group",ch.group);
+      const name=node("strong","",ch.name),group=node("span","live-group",ch.group+(ch.source?" · "+ch.source:""));
       card.append(art,fav,name,group);results.append(card);
     }
   }
@@ -178,7 +249,8 @@ async function refresh(force=false){
   }
   if(currentHost&&state.country===code)paint(currentHost,currentPlay);
 }
-export function renderLiveTv(host,{play}){
-  currentHost=host;currentPlay=play;paint(host,play);
+export function renderLiveTv(host,{play,addons=[],onSources}){
+  currentHost=host;currentPlay=play;installedLiveAddons=addons;openSources=onSources;
+  paint(host,play);
   if(state.countryLoaded!==state.country&&!state.loading)void refresh();
 }
