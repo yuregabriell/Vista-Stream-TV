@@ -498,130 +498,139 @@ private fun ExtensionDetail(
     onRemove: () -> Unit
 ) {
     val manifest = extension.manifest
-    Column(Modifier.fillMaxWidth()) {
-        androidx.compose.material3.Text(
-            text = manifest.name,
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.semantics { heading() }
-        )
-        Spacer(Modifier.height(4.dp))
-        androidx.compose.material3.Text(
-            text = extensionSubtitle(extension) + "  ·  " + manifest.author,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Spacer(Modifier.height(12.dp))
+    var showTechnical by remember(extension.key) { mutableStateOf(false) }
+    val kind = when (manifest.engine.type) {
+        ExtensionEngineType.STREMIO -> "ADDON STREMIO"
+        ExtensionEngineType.UNSUPPORTED -> "INCOMPATÍVEL"
+        else -> "FONTE DE REPRODUÇÃO"
+    }
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         Text(
-            text = when (manifest.engine.type) {
-                ExtensionEngineType.STREMIO ->
-                    "Addon Stremio · apenas recursos que o motor VistaStream interpreta."
-                ExtensionEngineType.WEB_EMBED, ExtensionEngineType.VIDKING_WEBVIEW ->
-                    "Fonte Web · reprodução incorporada quando compatível."
-                ExtensionEngineType.UNSUPPORTED ->
-                    "Incompatível · não executável. Podes removê-la caso já esteja instalada."
-                else -> "Fonte de reprodução · utiliza o motor de extensões VistaStream."
-            },
-            style = MaterialTheme.typography.bodyMedium,
+            kind, style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary
         )
         Text(
-            "Addons externos não alteram o layout, os badges ou os menus. " +
-                "Essas modificações requerem funcionalidades nativas próprias.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            manifest.name,
+            style = MaterialTheme.typography.headlineMedium,
+            maxLines = 2, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.semantics { heading() }
         )
-        if (manifest.description.isNotBlank()) {
-            Spacer(Modifier.height(12.dp))
-            androidx.compose.material3.Text(
-                text = manifest.description,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 5,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-        if (manifest.contentTypes.isNotEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            androidx.compose.material3.Text(
-                text = "Conteúdos: " + manifest.contentTypes.joinToString(", "),
-                style = MaterialTheme.typography.bodySmall,
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                manifest.language,
+                style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-        if (manifest.titleExamples.isNotEmpty()) {
-            Spacer(Modifier.height(6.dp))
-            androidx.compose.material3.Text(
-                text = "Títulos indicativos: " + manifest.titleExamples.take(5).joinToString(", "),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+            Text(
+                if (extension.isInstalled) {
+                    if (extension.isEnabled) "● Ativa" else "○ Pausada"
+                } else "Disponível",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
             )
         }
-        Spacer(Modifier.height(20.dp))
-
+        Text(
+            manifest.description.ifBlank {
+                "Fonte externa compatível com o motor VistaStream."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 3, overflow = TextOverflow.Ellipsis
+        )
         Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            when {
-                !extension.isInstalled -> Button(
+            if (!extension.isInstalled) {
+                Button(
                     onClick = onInstall,
                     enabled = manifest.isSupported,
-                    modifier = Modifier.focusRequester(actionFocusRequester),
-                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding
+                    modifier = Modifier.focusRequester(actionFocusRequester)
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text(stringResource(R.string.action_install))
+                    Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Instalar")
                 }
-                extension.hasUpdate -> Button(
-                    onClick = onUpdate,
-                    modifier = Modifier.focusRequester(actionFocusRequester),
-                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding
+            } else {
+                if (extension.hasUpdate) {
+                    Button(
+                        onClick = onUpdate,
+                        modifier = Modifier.focusRequester(actionFocusRequester)
+                    ) { Text("Atualizar") }
+                }
+                if (manifest.isSupported) {
+                    TvPill(
+                        label = if (extension.isEnabled) "Desativar" else "Ativar",
+                        selected = extension.isEnabled,
+                        onClick = { onEnabledChange(!extension.isEnabled) },
+                        modifier = if (extension.hasUpdate) Modifier
+                        else Modifier.focusRequester(actionFocusRequester)
+                    )
+                }
+                OutlinedButton(
+                    onClick = onRemove,
+                    modifier = if (!manifest.isSupported) Modifier.focusRequester(actionFocusRequester)
+                    else Modifier
                 ) {
-                    Icon(Icons.Default.SystemUpdateAlt, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text(stringResource(R.string.action_update))
+                    Icon(Icons.Outlined.DeleteOutline, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Remover")
                 }
             }
-            if (extension.isInstalled) {
+        }
+        if (extension.isInstalled && (canMoveUp || canMoveDown)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Prioridade", style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 if (canMoveUp) {
                     IconButton(onClick = { onMove(-1) }) {
-                        Icon(Icons.Default.ArrowUpward, contentDescription = stringResource(R.string.cd_move_up, manifest.name))
+                        Icon(Icons.Default.ArrowUpward, contentDescription = "Mover para cima")
                     }
                 }
                 if (canMoveDown) {
                     IconButton(onClick = { onMove(1) }) {
-                        Icon(Icons.Default.ArrowDownward, contentDescription = stringResource(R.string.cd_move_down, manifest.name))
+                        Icon(Icons.Default.ArrowDownward, contentDescription = "Mover para baixo")
                     }
-                }
-                OutlinedButton(
-                    onClick = onRemove,
-                    modifier = if (extension.hasUpdate) Modifier else Modifier.focusRequester(actionFocusRequester),
-                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding
-                ) {
-                    Icon(Icons.Outlined.DeleteOutline, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text(stringResource(R.string.action_remove))
                 }
             }
         }
-
-        if (extension.isInstalled && manifest.isSupported) {
-            Spacer(Modifier.height(16.dp))
-            ListItem(
-                selected = false,
-                onClick = { onEnabledChange(!extension.isEnabled) },
-                headlineContent = { Text(stringResource(R.string.er_active_player)) },
-                trailingContent = { Switch(checked = extension.isEnabled, onCheckedChange = null) },
-                modifier = Modifier.width(420.dp)
-            )
+        OutlinedButton(onClick = { showTechnical = !showTechnical }) {
+            Text(if (showTechnical) "Ocultar informações" else "Informações técnicas")
+        }
+        if (showTechnical) {
+            Column(
+                Modifier.fillMaxWidth().background(
+                    MaterialTheme.colorScheme.surfaceContainerHigh,
+                    RoundedCornerShape(14.dp)
+                ).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    "Motor: ${manifest.engine.type.key} · Autor: ${manifest.author}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (manifest.contentTypes.isNotEmpty()) {
+                    Text(
+                        "Conteúdos: ${manifest.contentTypes.joinToString(", ")}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                Text(
+                    "Addons externos só fornecem os recursos que o VistaStream consegue interpretar; não modificam os menus nem o layout.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3
+                )
+            }
         }
     }
 }
