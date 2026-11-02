@@ -49,7 +49,6 @@ internal fun TvAnimeCinematicHome(
     val shown = highlighted ?: featured
     val artworkViewModel: TvAnimeHeroArtworkViewModel = hiltViewModel()
     val sharpBackdrop by artworkViewModel.artwork.collectAsState()
-    val officialMatch by artworkViewModel.match.collectAsState()
     LaunchedEffect(shown.sourceId) { artworkViewModel.show(shown) }
     val heroAction = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { heroAction.requestFocus() } }
@@ -71,7 +70,9 @@ internal fun TvAnimeCinematicHome(
     }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val featureHeight = maxHeight * 0.50f
+        // Reserve enough vertical space for the official title artwork, metadata
+        // and primary action on a 960x540dp TV canvas.
+        val featureHeight = maxHeight * 0.53f
         // Use the SAME full-bleed frame for every title: never switch to an
         // isolated small portrait when TMDB hasn't resolved the 16:9 artwork.
         // AniList's banner/cover remain only visual fallbacks, not separate layouts.
@@ -85,10 +86,13 @@ internal fun TvAnimeCinematicHome(
         Column(Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier.fillMaxWidth().height(featureHeight)
-                    .padding(start = TvLayout.ContentStart, end = TvLayout.ContentEnd, bottom = 14.dp),
-                contentAlignment = Alignment.BottomStart
+                    .padding(start = TvLayout.ContentStart, end = TvLayout.ContentEnd,
+                        top = 14.dp, bottom = 8.dp),
+                // Bottom anchoring pushed tall logos ABOVE the TV viewport.
+                // Keep the hero's title pinned visibly at the top on D-pad return.
+                contentAlignment = Alignment.TopStart
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         Text("ANIMES",
@@ -97,24 +101,16 @@ internal fun TvAnimeCinematicHome(
                             color = MaterialTheme.colorScheme.primary)
                         TvPill("FILMES & SÉRIES", onClick = onOpenMovies)
                     }
-                    if (officialMatch != null) {
-                        TvOfficialTitleLogo(
-                            title = shown.title,
-                            mediaType = officialMatch!!.mediaType,
-                            titleId = officialMatch!!.tmdbId,
-                            compact = true
-                        )
-                    } else {
-                        Text(
-                            shown.title,
-                            style = MaterialTheme.typography.displaySmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.widthIn(max = 570.dp)
-                        )
-                    }
+                    // The title must ALWAYS be in composition. Its official
+                    // TMDB logo can load asynchronously, with readable text as
+                    // a fallback, but may never vanish when focus moves upward.
+                    TvOfficialTitleLogo(
+                        title = shown.title,
+                        mediaType = if (shown.format.equals("MOVIE", ignoreCase = true))
+                            "movie" else "tv",
+                        titleId = shown.tmdbId ?: 0,
+                        compact = true
+                    )
                     Text(
                         listOfNotNull(
                             shown.year?.toString(),
@@ -131,7 +127,7 @@ internal fun TvAnimeCinematicHome(
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.widthIn(max = 600.dp)
+                            modifier = Modifier.widthIn(max = 590.dp)
                         )
                     }
                     // Match the Films & Series behavior: the featured action is
@@ -153,7 +149,7 @@ internal fun TvAnimeCinematicHome(
             }
             LazyColumn(
                 modifier = Modifier.fillMaxWidth().weight(1f).clipToBounds(),
-                contentPadding = PaddingValues(top = 12.dp, bottom = 54.dp),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 62.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 item(key = "anime-genres") {
@@ -186,6 +182,8 @@ internal fun TvAnimeCinematicHome(
                                         title = anime.title,
                                         posterPath = anime.poster ?: anime.background,
                                         caption = anime.year?.toString() ?: "Anime",
+                                        posterWidth = 94.dp,
+                                        posterHeight = 141.dp,
                                         onClick = { onOpenTitle(anime) },
                                         modifier = Modifier.onFocusChanged {
                                             if (it.hasFocus) highlighted = anime
