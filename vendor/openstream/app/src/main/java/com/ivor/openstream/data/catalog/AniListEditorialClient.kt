@@ -66,7 +66,7 @@ class AniListEditorialClient @Inject constructor(
             }
           }
           newReleases: Page(page: 1, perPage: 50) {
-            media(type: ANIME, isAdult: false, sort: [START_DATE_DESC]) {
+            media(type: ANIME, isAdult: false, status: RELEASING, sort: [START_DATE_DESC]) {
               id title { english romaji native } synonyms genres format
               startDate { year } trending popularity
             }
@@ -80,7 +80,7 @@ class AniListEditorialClient @Inject constructor(
         if (old != null && System.currentTimeMillis() - stamp < 3L * 60 * 60 * 1000) {
             parse(old)?.let { return@withContext it }
         }
-        val body = """{"query":${json.encodeToString(kotlinx.serialization.serializer<String>(), query)}}"""
+        val body = """{"query":${JsonPrimitive(query)}}"""
         val request = Request.Builder()
             .url("https://graphql.anilist.co")
             .header("Accept", "application/json")
@@ -112,11 +112,11 @@ class AniListEditorialClient @Inject constructor(
                 val names = buildList {
                     listOf("english", "romaji", "native").forEach { field ->
                         (titles?.get(field) as? JsonPrimitive)?.contentOrNull
-                            ?.takeIf(String::isNotBlank)?.let(::add)
+                            ?.takeIf { it.isNotBlank() }?.let { add(it) }
                     }
                     (row["synonyms"] as? JsonArray)?.take(8)?.forEach { name ->
                         (name as? JsonPrimitive)?.contentOrNull
-                            ?.takeIf(String::isNotBlank)?.let(::add)
+                            ?.takeIf { it.isNotBlank() }?.let { add(it) }
                     }
                 }.distinct()
                 if (names.isEmpty()) return@mapNotNull null
