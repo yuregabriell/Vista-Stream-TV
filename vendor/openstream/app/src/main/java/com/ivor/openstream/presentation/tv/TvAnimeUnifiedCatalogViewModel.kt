@@ -71,7 +71,8 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
                         async { "Fantasia e outros mundos" to discover("tv", 1, "Fantasy") },
                         async { "Romance e emoções" to discover("tv", 1, "Romance") },
                         async { "Filmes de anime" to discover("movie", 1) },
-                        async { "_mais_populares" to discover("tv", 1) }
+                        async { "_mais_populares" to discover("tv", 1) },
+                        async { "_mais_populares_2" to discover("tv", 2) }
                     ).mapNotNull { task -> runCatching { task.await() }.getOrNull() }
                         .toMap()
                 }
@@ -89,9 +90,19 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
                         rails[name] = if (found.isNotEmpty()) found
                             else _state.value.editorialRails[name].orEmpty()
                     }
-                    val popular = feeds["_mais_populares"].orEmpty()
-                    if (rails["Em alta no mundo dos animes"].isNullOrEmpty() && popular.isNotEmpty())
-                        rails["Em alta no mundo dos animes"] = popular
+                    // TMDB weekly trending is GLOBAL and often contains only
+                    // one or two Japanese animations after filtering. Backfill
+                    // with popularity-ranked Japanese animation, not with
+                    // unrelated trending live-action titles. Preserve true
+                    // weekly trending at the front of this rail.
+                    val popular = (feeds["_mais_populares"].orEmpty() +
+                        feeds["_mais_populares_2"].orEmpty())
+                        .distinctBy { it.sourceId }
+                    val trendingAnime = (feeds["Em alta no mundo dos animes"].orEmpty() +
+                        popular + feeds["Filmes de anime"].orEmpty())
+                        .distinctBy { it.sourceId }.take(36)
+                    if (trendingAnime.isNotEmpty())
+                        rails["Em alta no mundo dos animes"] = trendingAnime
                     _state.value = _state.value.copy(
                         sections = mapOf("anime" to (collection + popular).distinctBy { it.sourceId }),
                         editorialRails = rails,
