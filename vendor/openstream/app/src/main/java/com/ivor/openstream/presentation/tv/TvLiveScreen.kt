@@ -45,7 +45,7 @@ private val liveAccent = Color(0xFFDF9BFF)
 
 /** Remote control first: separate ten-foot TV layout, shared channel catalog with mobile. */
 @Composable
-fun TvLiveScreen(onPlayChannel: (Channel, List<Channel>, Country) -> Unit) {
+internal fun TvLiveScreen(onPlayChannel: (Channel, List<Channel>, Country) -> Unit) {
     val context = LocalContext.current
     val prefs = remember(context) { context.getSharedPreferences("vistastream_live_tv", Context.MODE_PRIVATE) }
     val initialCountry = remember {
@@ -202,7 +202,7 @@ fun TvLiveScreen(onPlayChannel: (Channel, List<Channel>, Country) -> Unit) {
                             TvLiveChannelCard(
                                 channel = channel,
                                 favorite = channel.id in favorites,
-                                onPlay = { onPlayChannel(channel, visible, country) }
+                                onPlay = { onPlayChannel(channel, visible, country) },
                                 onFavorite = { toggleFavorite(channel) },
                                 modifier = Modifier.weight(1f)
                             )
