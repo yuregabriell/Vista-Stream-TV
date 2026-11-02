@@ -22,6 +22,14 @@ class SourceFailureDiagnosticsTest {
     }
 
     @Test
+    fun missingTorrentEngineExplainsRequiredConfiguration() {
+        assertEquals(
+            "Motor P2P não configurado · ativa TorrServer em Definições > Fontes",
+            sourceFailureSummary(IllegalStateException("P2P_ENGINE_NOT_CONFIGURED"))
+        )
+    }
+
+    @Test
     fun otherErrorsDoNotEchoServerBodiesOrTokens() {
         assertEquals("Erro de comunicação ou resposta inválida", sourceFailureSummary(IOException("token=SECRET")))
     }
