@@ -306,6 +306,11 @@ fun TvEpisodeDetailsScreen(
                         }
                     }
                 }
+                // Native, optional official-platform metadata, separate from
+                // playable sources and visible only when the addon is enabled.
+                item(key = "official-platforms") {
+                    TvWhereToWatchSection(mediaType = mediaType, titleId = animeId)
+                }
             if (mediaType != "movie" && otherSeasons.size > 1) {
                 item(key = "season-heading") {
                     TvRowHeader("Temporadas", start = TvLayout.PageStart)
