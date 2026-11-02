@@ -37,6 +37,7 @@ internal fun TvAnimeCinematicHome(
     animeItems: List<KeylessTitle>,
     genres: List<Pair<String, String>>,
     editorialRails: Map<String, List<KeylessTitle>> = emptyMap(),
+    resetTopToken: Int = 0,
     lastFocusedId: String? = null,
     lastFocusedRail: String? = null,
     onCardFocused: (String, String) -> Unit = { _, _ -> },
@@ -83,6 +84,16 @@ internal fun TvAnimeCinematicHome(
     }
 
     val railColumnState = rememberLazyListState()
+    var lastResetAtHome by remember { mutableIntStateOf(resetTopToken) }
+    LaunchedEffect(resetTopToken) {
+        if (lastResetAtHome != resetTopToken) {
+            lastResetAtHome = resetTopToken
+            highlighted = null
+            railColumnState.scrollToItem(0)
+            withFrameNanos { }
+            runCatching { heroAction.requestFocus() }
+        }
+    }
     val restoreRailIndex = rails.indexOfFirst { (name, entries) ->
         name == requestedFocusRail && entries.any { it.sourceId == requestedFocusId }
     }
