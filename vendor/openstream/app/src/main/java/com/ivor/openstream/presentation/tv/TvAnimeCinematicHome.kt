@@ -7,6 +7,8 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.ui.layout.ContentScale
@@ -35,6 +37,9 @@ internal fun TvAnimeCinematicHome(
     animeItems: List<KeylessTitle>,
     genres: List<Pair<String, String>>,
     editorialRails: Map<String, List<KeylessTitle>> = emptyMap(),
+    lastFocusedId: String? = null,
+    lastFocusedRail: String? = null,
+    onCardFocused: (String, String) -> Unit = { _, _ -> },
     onOpenTitle: (KeylessTitle) -> Unit,
     onGenre: (String) -> Unit,
     onOpenMovies: () -> Unit,
@@ -45,13 +50,17 @@ internal fun TvAnimeCinematicHome(
         animeItems.firstOrNull { !it.background.isNullOrBlank() || !it.poster.isNullOrBlank() }
             ?: animeItems.firstOrNull()
     } ?: return
-    var highlighted by remember(animeItems) { mutableStateOf<KeylessTitle?>(null) }
+    var highlighted by remember(animeItems, lastFocusedId) {
+        mutableStateOf(animeItems.firstOrNull { it.sourceId == lastFocusedId })
+    }
     val shown = highlighted ?: featured
     val artworkViewModel: TvAnimeHeroArtworkViewModel = hiltViewModel()
     val sharpBackdrop by artworkViewModel.artwork.collectAsState()
     LaunchedEffect(shown.sourceId) { artworkViewModel.show(shown) }
     val heroAction = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { heroAction.requestFocus() } }
+    LaunchedEffect(Unit) {
+        if (lastFocusedId == null) runCatching { heroAction.requestFocus() }
+    }
 
     // The rails are server-ranked TMDB queries (weekly trends, premieres,
     // genre-specific popularity). Anime lists no longer depend on a different
@@ -69,6 +78,16 @@ internal fun TvAnimeCinematicHome(
             .ifEmpty { listOf("Animes em destaque" to animeItems.take(30)) }
     }
 
+    val railColumnState = rememberLazyListState()
+    val restoreRailIndex = rails.indexOfFirst { (name, entries) ->
+        name == lastFocusedRail && entries.any { it.sourceId == lastFocusedId }
+    }
+    LaunchedEffect(lastFocusedId, restoreRailIndex) {
+        if (lastFocusedId != null && restoreRailIndex >= 0) {
+            // Index 0 = genres, then one LazyColumn item per populated rail.
+            railColumnState.scrollToItem(restoreRailIndex + 1)
+        }
+    }
     BoxWithConstraints(modifier.fillMaxSize()) {
         // Reserve enough vertical space for the official title artwork, metadata
         // and primary action on a 960x540dp TV canvas.
@@ -148,6 +167,7 @@ internal fun TvAnimeCinematicHome(
                 }
             }
             LazyColumn(
+                state = railColumnState,
                 modifier = Modifier.fillMaxWidth().weight(1f).clipToBounds(),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 62.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -176,7 +196,24 @@ internal fun TvAnimeCinematicHome(
                 rails.forEach { (title, list) ->
                     if (list.isNotEmpty()) {
                         item(key = "rail-$title") {
-                            TvRail(title = title) {
+                            val returnToThisRail = title == lastFocusedRail &&
+                                list.any { it.sourceId == lastFocusedId }
+                            val returnIndex = if (returnToThisRail)
+                                list.indexOfFirst { it.sourceId == lastFocusedId }.coerceAtLeast(0)
+                                else 0
+                            val railScroll = rememberLazyListState(
+                                initialFirstVisibleItemIndex = returnIndex
+                            )
+                            val cardRestorer = remember { FocusRequester() }
+                            LaunchedEffect(returnToThisRail, lastFocusedId) {
+                                if (returnToThisRail) {
+                                    railScroll.scrollToItem(returnIndex)
+                                    withFrameNanos { }
+                                    withFrameNanos { }
+                                    runCatching { cardRestorer.requestFocus() }
+                                }
+                            }
+                            TvRail(title = title, state = railScroll) {
                                 items(list, key = { it.sourceId }) { anime ->
                                     TvCaptionedPoster(
                                         title = anime.title,
@@ -185,10 +222,18 @@ internal fun TvAnimeCinematicHome(
                                         posterWidth = 94.dp,
                                         posterHeight = 141.dp,
                                         onClick = { onOpenTitle(anime) },
-                                        modifier = Modifier.onFocusChanged {
-                                            if (it.hasFocus) highlighted = anime
-                                            else if (highlighted?.sourceId == anime.sourceId) highlighted = null
-                                        }
+                                        modifier = Modifier
+                                            .then(if (returnToThisRail &&
+                                                anime.sourceId == lastFocusedId)
+                                                Modifier.focusRequester(cardRestorer) else Modifier)
+                                            .onFocusChanged {
+                                                if (it.hasFocus) {
+                                                    highlighted = anime
+                                                    onCardFocused(anime.sourceId, title)
+                                                } else if (highlighted?.sourceId == anime.sourceId) {
+                                                    highlighted = null
+                                                }
+                                            }
                                     )
                                 }
                             }
