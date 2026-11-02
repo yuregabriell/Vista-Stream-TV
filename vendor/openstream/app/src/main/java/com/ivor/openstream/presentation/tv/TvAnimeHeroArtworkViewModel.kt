@@ -39,6 +39,14 @@ class TvAnimeHeroArtworkViewModel @Inject constructor(
         if (key == currentKey) return
         currentKey = key
         job?.cancel()
+        // TV anime and global search now use exactly the same TMDB ID and
+        // discover backdrop. Do not issue a second title lookup on each focus.
+        title.tmdbId?.takeIf { it > 0 }?.let { id ->
+            val mediaType = if (title.format.equals("MOVIE", true)) "movie" else "tv"
+            _match.value = TvAnimeCatalogMatch(mediaType, id, null)
+            _artwork.value = title.background
+            return
+        }
         _artwork.value = known[key]
         _match.value = null
         if (known.containsKey(key)) {
