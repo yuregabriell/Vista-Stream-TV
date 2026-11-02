@@ -3,12 +3,17 @@ package com.ivor.openstream.presentation.tv
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ivor.openstream.data.catalog.KeylessTitle
+import com.ivor.openstream.data.catalog.AniListEditorialClient
+import com.ivor.openstream.data.catalog.AnimeEditorialFeed
+import com.ivor.openstream.data.catalog.AnimeEditorialItem
 import com.ivor.openstream.data.remote.TmdbApi
 import com.ivor.openstream.data.remote.model.AnimeDto
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,7 +42,8 @@ data class TvAnimeUnifiedState(
 
 @HiltViewModel
 class TvAnimeUnifiedCatalogViewModel @Inject constructor(
-    private val tmdb: TmdbApi
+    private val tmdb: TmdbApi,
+    private val aniList: AniListEditorialClient
 ) : ViewModel() {
     private val _state = MutableStateFlow(TvAnimeUnifiedState())
     val state: StateFlow<TvAnimeUnifiedState> = _state
@@ -46,6 +52,8 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
     private var browseJob: Job? = null
     private var browsePage = 0
     private var browseHasMore = true
+    private var editorialGenres: Map<String, List<KeylessTitle>> = emptyMap()
+    private var resolvedEditorial: List<Pair<AnimeEditorialItem, KeylessTitle>> = emptyList()
 
     init { refresh() }
 
@@ -108,6 +116,9 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
                         editorialRails = rails,
                         loading = false, error = null
                     )
+                    // Display the canonical TMDB feed immediately. AniList
+                    // overlays only order/genre after identity-safe matching.
+                    runCatching { applyEditorial(collection + popular) }
                 } else {
                     _state.value = _state.value.copy(loading = false,
                         error = "Não foi possível carregar o catálogo de anime do TMDB.")
@@ -119,6 +130,142 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
                     error = "Falha ao carregar o catálogo de anime.")
             }
         }
+    }
+
+    /**
+     * AniList supplies editorial order and genuine anime genres, but never
+     * supplies artwork, episode details or a playback ID. Every card below is
+     * an existing or safely resolved canonical TMDB animation record.
+     */
+    private suspend fun applyEditorial(base: List<KeylessTitle>) {
+        val feed = aniList.get() ?: return
+        val index = base.distinctBy { it.sourceId }.toMutableList()
+        val ranked = (feed.trending + feed.popular + feed.newReleases)
+            .distinctBy { it.anilistId }
+        val resolved = linkedMapOf<Int, KeylessTitle>()
+        val aliases = linkedMapOf<String, KeylessTitle>()
+        fun indexTitle(title: KeylessTitle) {
+            aliases["${title.format}:${editorialKey(title.title)}"] = title
+            title.alternateTitle?.let {
+                aliases["${title.format}:${editorialKey(it)}"] = title
+            }
+        }
+        index.forEach(::indexTitle)
+
+        fun lookup(item: AnimeEditorialItem): KeylessTitle? {
+            val format = if (item.isMovie) "MOVIE" else "TV"
+            return item.names.firstNotNullOfOrNull { name ->
+                aliases["$format:${editorialKey(name)}"]
+            }
+        }
+
+        // Resolve only a modest number of missing top-ranked AniList records
+        // using the same TMDB search as general search. 3 concurrent max.
+        // Exact title + Japanese original language + animation genre required.
+        val targets = ranked.filter { lookup(it) == null }
+            .take(18)
+        val gate = Semaphore(3)
+        val discovered = coroutineScope {
+            targets.map { item ->
+                async {
+                    gate.withPermit { item to resolveEditorialTitle(item) }
+                }
+            }.mapNotNull { task ->
+                runCatching { task.await() }.getOrNull()
+            }
+        }
+        discovered.forEach { (_, title) ->
+            if (title != null) {
+                index.add(title)
+                indexTitle(title)
+            }
+        }
+        ranked.forEach { item -> lookup(item)?.let { resolved[item.anilistId] = it } }
+        if (resolved.isEmpty()) return
+
+        fun list(items: List<AnimeEditorialItem>): List<KeylessTitle> =
+            items.mapNotNull { resolved[it.anilistId] }
+                .distinctBy { it.sourceId }.take(36)
+        val ranking = (feed.trending + feed.popular).distinctBy { it.anilistId }
+        val trends = list(ranking)
+        val premieres = list(feed.newReleases)
+        val editorials = ranked.mapNotNull { item ->
+            resolved[item.anilistId]?.let { item to it }
+        }
+        resolvedEditorial = editorials
+        val genres = listOf(
+            "Action", "Adventure", "Comedy", "Drama", "Fantasy",
+            "Romance", "Sci-Fi", "Mystery", "Horror", "Slice of Life",
+            "Sports", "Supernatural", "Music"
+        )
+        editorialGenres = genres.associateWith { genre ->
+            editorials.filter { (source, _) ->
+                source.genres.any { it.equals(genre, ignoreCase = true) }
+            }.map { it.second }.distinctBy { it.sourceId }
+        }
+        val orderedRails = linkedMapOf<String, List<KeylessTitle>>()
+        if (trends.isNotEmpty()) orderedRails["Em alta no mundo dos animes"] = trends
+        if (premieres.isNotEmpty()) orderedRails["Novidades e estreias"] = premieres
+        fun genreRail(label: String, vararg names: String) {
+            val items = editorials.filter { (anime, _) ->
+                anime.genres.any { group -> names.any { it.equals(group, true) } }
+            }.map { it.second }.distinctBy { it.sourceId }.take(36)
+            if (items.isNotEmpty()) orderedRails[label] = items
+        }
+        genreRail("Ação e aventura", "Action", "Adventure")
+        genreRail("Fantasia e outros mundos", "Fantasy", "Supernatural")
+        genreRail("Romance e emoções", "Romance", "Drama", "Slice of Life")
+        genreRail("Comédia", "Comedy")
+        genreRail("Desporto", "Sports")
+        val movieOrder = list(ranked.filter { it.isMovie })
+        if (movieOrder.isNotEmpty()) orderedRails["Filmes de anime"] = movieOrder
+
+        val previous = _state.value
+        val combined = previous.editorialRails.toMutableMap()
+        combined.putAll(orderedRails)
+        val all = (index + previous.sections["anime"].orEmpty()).distinctBy { it.sourceId }
+        _state.value = previous.copy(
+            sections = previous.sections + ("anime" to all),
+            editorialRails = combined
+        )
+        // When a genre was already selected, refresh it in-place without
+        // replacing the route, focus owner or playback state.
+        val current = _state.value
+        if (current.browseQuery.isBlank() && current.browseGenre.isNotBlank()) {
+            editorialGenres[current.browseGenre]?.takeIf { it.isNotEmpty() }?.let { matches ->
+                _state.value = current.copy(
+                    browseItems = matches, browseLoading = false,
+                    browseHasMore = false
+                )
+            }
+        }
+    }
+
+    private fun editorialKey(name: String): String =
+        name.lowercase().replace(Regex("[^\\p{L}\\p{N}]"), "")
+
+    private suspend fun resolveEditorialTitle(anime: AnimeEditorialItem): KeylessTitle? {
+        val type = if (anime.isMovie) "movie" else "tv"
+        val names = anime.names.filter { it.isNotBlank() }.take(3)
+        val acceptable = anime.names.map(::editorialKey).toSet()
+        for (name in names) {
+            val results = try {
+                if (anime.isMovie) tmdb.searchMovieForArtwork(name).results
+                else tmdb.searchTvForArtwork(name).results
+            } catch (cancel: CancellationException) {
+                throw cancel
+            } catch (_: Exception) { continue }
+            for (candidate in results) {
+                if (editorialKey(candidate.name) !in acceptable) continue
+                if (candidate.originalLanguage != "ja" ||
+                    16 !in candidate.genreIds.orEmpty()) continue
+                val item = toTitle(candidate, type) ?: continue
+                // The same TMDB title is always routed as that title, not as a
+                // season or another show. Anime posters and streams remain TMDB.
+                return item
+            }
+        }
+        return null
     }
 
     private suspend fun trending(): List<KeylessTitle> = coroutineScope {
@@ -137,6 +284,18 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
     fun browse(type: String, query: String = "", genre: String = "") {
         if (type != "anime") return
         browseJob?.cancel()
+        if (query.isBlank() && genre.isNotBlank()) {
+            val ranked = editorialGenres[genre].orEmpty()
+            if (ranked.isNotEmpty()) {
+                browseHasMore = false
+                _state.value = _state.value.copy(
+                    browseType = "anime", browseGenre = genre, browseQuery = "",
+                    browseItems = ranked, browseHasMore = false, browseError = null,
+                    browseLoading = false
+                )
+                return
+            }
+        }
         browsePage = 0
         browseHasMore = true
         _state.value = _state.value.copy(
