@@ -156,7 +156,8 @@ fun TvEpisodeDetailsScreen(
         TvBackdropScrims()
         Column(Modifier.fillMaxSize()) {
             // Show the compact breadcrumb only after the user scrolls past the hero.
-            if (listState.firstVisibleItemIndex > 0) {
+            if (listState.firstVisibleItemIndex > 0 ||
+                listState.firstVisibleItemScrollOffset > 18) {
                 Row(
                     modifier = Modifier.fillMaxWidth()
                         .background(MaterialTheme.colorScheme.background.copy(alpha = 0.87f))
@@ -182,20 +183,22 @@ fun TvEpisodeDetailsScreen(
             LazyColumn(
                 state = listState,
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(top = 40.dp, bottom = 84.dp),
+                contentPadding = PaddingValues(top = 22.dp, bottom = 84.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 item(key = "hero") {
                     Column(
                         modifier = Modifier.fillMaxWidth()
-                            .padding(start = TvLayout.PageStart, end = TvLayout.ContentEnd, top = 12.dp, bottom = 18.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                            .padding(start = TvLayout.PageStart, end = TvLayout.ContentEnd,
+                                top = 10.dp, bottom = 18.dp),
+                        verticalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
                         // Official artwork when TMDB has a logo; plain text remains the fallback.
                         TvOfficialTitleLogo(
                             title = title.name,
                             mediaType = mediaType,
-                            titleId = title.id
+                            titleId = title.id,
+                            compact = true
                         )
                         if (mediaType != "movie") {
                             Text(
@@ -225,7 +228,7 @@ fun TvEpisodeDetailsScreen(
                                 overview,
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 3,
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.widthIn(max = 600.dp)
                             )
