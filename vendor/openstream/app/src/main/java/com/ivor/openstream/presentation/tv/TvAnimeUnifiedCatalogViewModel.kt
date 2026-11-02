@@ -265,8 +265,9 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
         if (current.browseQuery.isBlank() && current.browseGenre.isNotBlank()) {
             editorialGenres[current.browseGenre]?.takeIf { it.isNotEmpty() }?.let { matches ->
                 _state.value = current.copy(
-                    browseItems = matches, browseLoading = false,
-                    browseHasMore = false
+                    browseItems = (matches + current.browseItems).distinctBy { it.sourceId },
+                    // Do not disable the TMDB browse paginator on editorial updates.
+                    browseHasMore = browseHasMore
                 )
             }
         }
@@ -315,23 +316,16 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
     fun browse(type: String, query: String = "", genre: String = "") {
         if (type != "anime") return
         browseJob?.cancel()
-        if (query.isBlank() && genre.isNotBlank()) {
-            val ranked = editorialGenres[genre].orEmpty()
-            if (ranked.isNotEmpty()) {
-                browseHasMore = false
-                _state.value = _state.value.copy(
-                    browseType = "anime", browseGenre = genre, browseQuery = "",
-                    browseItems = ranked, browseHasMore = false, browseError = null,
-                    browseLoading = false
-                )
-                return
-            }
-        }
+        // AniList's cached editorial list is only a ranked starting set,
+        // never the full genre catalog. Continue paging canonical TMDB records
+        // rather than permanently ending discovery after ~20 entries.
+        val editorialSeed = if (query.isBlank() && genre.isNotBlank())
+            editorialGenres[genre].orEmpty() else emptyList()
         browsePage = 0
         browseHasMore = true
         _state.value = _state.value.copy(
             browseType = "anime", browseGenre = genre, browseQuery = query,
-            browseItems = emptyList(), browseHasMore = true,
+            browseItems = editorialSeed, browseHasMore = true,
             browseError = null, browseLoading = false
         )
         loadMore()
@@ -355,7 +349,7 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
                         }
                     }.flatMap { it.await() }
                 }
-                val old = if (next == 1) emptyList() else _state.value.browseItems
+                val old = _state.value.browseItems
                 browsePage = next
                 // Search pages can be sparse after filtering; keep a finite horizon.
                 browseHasMore = fetched.isNotEmpty() && next < 20
