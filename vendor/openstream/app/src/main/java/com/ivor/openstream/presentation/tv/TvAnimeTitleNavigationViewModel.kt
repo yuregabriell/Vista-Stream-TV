@@ -45,9 +45,9 @@ class TvAnimeCatalogMatcher @Inject constructor(
         }
 
         val aliases = listOfNotNull(title.title, title.alternateTitle)
-            .map(String::trim).filter(String::isNotBlank)
+            .map { it.trim() }.filter { it.isNotBlank() }
         val names = (aliases + aliases.map(TvAnimeNames::base))
-            .filter(String::isNotBlank)
+            .filter { it.isNotBlank() }
             .distinctBy(TvAnimeNames::key)
         val expected = names.map(TvAnimeNames::key).toSet()
         // A sequel with a year of 2026 may belong to a TMDB show launched in
