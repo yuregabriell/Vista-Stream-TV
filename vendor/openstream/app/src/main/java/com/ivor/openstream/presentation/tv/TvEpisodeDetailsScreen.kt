@@ -136,7 +136,8 @@ fun TvEpisodeDetailsScreen(
         val selected = suggestedEpisodeNumber
         val index = episodes.indexOfFirst { it.episodeNumber == selected }.coerceAtLeast(0)
         focusedEpisodeTarget = selected
-        val railIndex = if (otherSeasons.size > 1) 4 else 2
+        // The optional official-platform row occupies one LazyColumn item.
+        val railIndex = if (otherSeasons.size > 1) 5 else 3
         listState.animateScrollToItem(railIndex)
         episodeRailState.scrollToItem(index)
         withFrameNanos { }
