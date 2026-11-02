@@ -37,6 +37,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -63,6 +64,7 @@ import com.ivor.openstream.presentation.catalog.KeylessCatalogViewModel
 import com.ivor.openstream.data.remote.model.AnimeDto
 import com.ivor.openstream.domain.model.BrowseGenre
 import com.ivor.openstream.presentation.search.SearchViewModel
+import com.ivor.openstream.presentation.search.SearchFilter
 
 /** Letters, then digits: six to a row so the keyboard fits a narrow column. */
 private val KEYBOARD_KEYS: List<List<Char>> = ("ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890").toList().chunked(6)
@@ -101,7 +103,13 @@ fun TvSearchScreen(
     val firstKey = remember { FocusRequester() }
     val gridState = rememberLazyGridState()
 
-    LaunchedEffect(Unit) { runCatching { firstKey.requestFocus() } }
+    // After navigating back to Search, focus is requested only once the
+    // on-screen D-pad keyboard has actually been laid out.
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        withFrameNanos { }
+        runCatching { firstKey.requestFocus() }
+    }
 
     fun type(next: String) = viewModel.onQueryChange(next)
     val open: (AnimeDto) -> Unit = { item ->
@@ -134,11 +142,7 @@ fun TvSearchScreen(
         ) {
             QueryLine(query = query, genreLabel = state.genre?.let { stringResource(it.labelRes) })
             Spacer(Modifier.height(12.dp))
-            TvPill(
-                label = if (query.isBlank()) "Explorar animes" else "Pesquisar animes: ${query.take(18)}",
-                onClick = { onAnimeBrowse("", query.trim()) }
-            )
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(8.dp))
             Column(
                 verticalArrangement = Arrangement.spacedBy(KEY_GAP),
                 modifier = Modifier.focusRestorer(firstKey)
@@ -179,11 +183,79 @@ fun TvSearchScreen(
         }
 
         // Results, or something to browse before anything is typed.
-        Box(
+        Column(
             Modifier
                 .weight(1f)
                 .fillMaxHeight()
+                .padding(end = TvLayout.ContentEnd)
         ) {
+            val typeOptions = listOf("Todos", "Anime", "Filmes", "Séries")
+            val typeValues = listOf(SearchFilter.ALL, SearchFilter.ANIME,
+                SearchFilter.MOVIES, SearchFilter.SERIES)
+            val genreOptions = listOf("Todos os géneros") +
+                BrowseGenre.entries.filterNot { it.isAnime }.map { it.label }
+            val chosenGenre = state.genre
+            val platformOptions = listOf("Todas as plataformas") +
+                if (platformsEnabled) platforms.map { it.providerName } else emptyList()
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                TvFilterDropdown(
+                    label = "Plataforma",
+                    selection = "Todas",
+                    options = platformOptions,
+                    selectedIndex = 0,
+                    onSelect = { index ->
+                        if (index > 0) platforms.getOrNull(index - 1)?.let {
+                            onOpenPlatform(it.providerId)
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                TvFilterDropdown(
+                    label = "Tipo",
+                    selection = typeOptions[typeValues.indexOf(state.filter).coerceAtLeast(0)],
+                    options = typeOptions,
+                    selectedIndex = typeValues.indexOf(state.filter).coerceAtLeast(0),
+                    onSelect = { index ->
+                        typeValues.getOrNull(index)?.let(viewModel::onFilterSelected)
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                TvFilterDropdown(
+                    label = "Género",
+                    selection = chosenGenre?.label ?: "Todos",
+                    options = genreOptions,
+                    selectedIndex = (BrowseGenre.entries.filterNot { it.isAnime }
+                        .indexOf(chosenGenre) + 1).coerceAtLeast(0),
+                    onSelect = { index ->
+                        if (index == 0) {
+                            viewModel.clear()
+                            if (query.isNotBlank()) viewModel.submit(query)
+                        } else {
+                            BrowseGenre.entries.filterNot { it.isAnime }
+                                .getOrNull(index - 1)?.let { selectedGenre ->
+                                    if (state.filter == SearchFilter.ANIME) {
+                                        val mapped = when (selectedGenre) {
+                                            BrowseGenre.ACTION -> "Action"
+                                            BrowseGenre.SCI_FI -> "Sci-Fi"
+                                            BrowseGenre.COMEDY -> "Comedy"
+                                            BrowseGenre.DRAMA -> "Drama"
+                                            BrowseGenre.ROMANCE -> "Romance"
+                                            BrowseGenre.HORROR -> "Horror"
+                                            BrowseGenre.MYSTERY -> "Mystery"
+                                            else -> ""
+                                        }
+                                        onAnimeBrowse(mapped, query)
+                                    } else viewModel.selectGenre(selectedGenre)
+                                }
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Box(Modifier.fillMaxWidth().weight(1f)) {
             when {
                 state.isBrowsing -> BrowsePane(
                     recent = state.recent,
@@ -228,6 +300,7 @@ fun TvSearchScreen(
                         }
                     }
                 }
+            }
             }
         }
     }
@@ -324,36 +397,6 @@ private fun BrowsePane(
                     items(recent, key = { it }) { query ->
                         TvPill(label = query, icon = Icons.Default.History, onClick = { onSearchRecent(query) })
                     }
-                }
-            }
-        }
-        // Anime is a dedicated AniList catalog, not merely TMDB's animation
-        // genre: each choice must open the actual anime search with a filter.
-        item(key = "anime-genre-header") {
-            PillRow(title = "Animes por género") {
-                val animeGenres = listOf(
-                    "" to "Todos os animes",
-                    "Action" to "Ação",
-                    "Adventure" to "Aventura",
-                    "Fantasy" to "Fantasia",
-                    "Romance" to "Romance",
-                    "Comedy" to "Comédia",
-                    "Drama" to "Drama",
-                    "Sci-Fi" to "Ficção científica",
-                    "Mystery" to "Mistério",
-                    "Horror" to "Terror",
-                    "Sports" to "Desporto",
-                    "Supernatural" to "Sobrenatural"
-                )
-                items(animeGenres, key = { it.first }) { (genre, label) ->
-                    TvPill(label = label, onClick = { onAnimeBrowse(genre, "") })
-                }
-            }
-        }
-        item(key = "genres") {
-            PillRow(title = stringResource(R.string.search_browse_genre)) {
-                items(BrowseGenre.entries.filterNot { it.isAnime }, key = { it.name }) { genre ->
-                    TvPill(label = stringResource(genre.labelRes), onClick = { onGenre(genre) })
                 }
             }
         }
