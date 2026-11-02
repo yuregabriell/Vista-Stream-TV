@@ -113,13 +113,13 @@ internal fun TvLivePlayerOverlay(
                             }
                             Spacer(Modifier.width(8.dp))
                             val now = System.currentTimeMillis()
-                            val items = guide.schedule(channel).filter {
+                            val slots = guide.schedule(channel).filter {
                                 it.endMs > now && it.startMs < now + 4 * 3600_000L
                             }.take(7)
-                            if (items.isEmpty()) {
+                            if (slots.isEmpty()) {
                                 Text("Sem programação", color = soft, modifier = Modifier.padding(15.dp))
                             } else LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(items, key = { it.channelId + "-" + it.startMs }) { slot ->
+                                items(slots, key = { it.channelId + "-" + it.startMs }) { slot ->
                                     Surface(
                                         onClick = { onPlay(channel) },
                                         modifier = Modifier.width(210.dp).height(76.dp),
