@@ -165,9 +165,9 @@ private fun TvAppScaffold(
                 Box(
                     modifier = Modifier
                         .offset(y = selectedOffset)
-                        .size(56.dp)
+                        .size(52.dp)
                         .background(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.22f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.82f),
                             RoundedCornerShape(18.dp)
                         )
                 )
