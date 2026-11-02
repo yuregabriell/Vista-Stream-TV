@@ -42,21 +42,33 @@ class TvAnimeHeroArtworkViewModel @Inject constructor(
         job = viewModelScope.launch {
             try {
                 val isMovie = title.format.equals("MOVIE", ignoreCase = true)
-                val candidates = if (isMovie) {
-                    tmdb.searchMovieForArtwork(title.title).results
-                } else {
-                    tmdb.searchTvForArtwork(title.title).results
+                // Search both AniList English and romanized titles; a single
+                // English query often misses anime indexed under their romaji name.
+                // Match strictly by exact normalized title and release year so we
+                // never display an unrelated series' artwork.
+                val names = listOfNotNull(title.title, title.alternateTitle)
+                    .filter { it.isNotBlank() }
+                    .distinctBy(::normalize)
+                val expected = names.map(::normalize).toSet()
+                var backdropPath: String? = null
+                for (name in names) {
+                    val candidates = if (isMovie) {
+                        tmdb.searchMovieForArtwork(name).results
+                    } else {
+                        tmdb.searchTvForArtwork(name).results
+                    }
+                    backdropPath = candidates.firstOrNull { candidate ->
+                        normalize(candidate.name) in expected &&
+                            !candidate.backdropPath.isNullOrBlank() &&
+                            (title.year == null || candidate.date.take(4).toIntOrNull()?.let {
+                                year -> kotlin.math.abs(year - title.year) <= 2
+                            } != false)
+                    }?.backdropPath
+                    if (backdropPath != null) break
                 }
-                val expected = listOfNotNull(title.title, title.alternateTitle).map(::normalize)
-                val match = candidates.firstOrNull { candidate ->
-                    val name = normalize(candidate.name)
-                    expected.any { name == it } &&
-                        candidate.backdropPath != null &&
-                        (title.year == null || candidate.date.take(4).toIntOrNull()?.let {
-                            year -> kotlin.math.abs(year - title.year) <= 2
-                        } != false)
-                }
-                val url = match?.backdropPath?.let { "https://image.tmdb.org/t/p/w1280$it" }
+                // Original source resolution, cached by Coil; never upscale the
+                // narrow AniList banner into a full TV-screen hero.
+                val url = backdropPath?.let { "https://image.tmdb.org/t/p/original$it" }
                 known[key] = url
                 // Limit in-memory metadata; Coil owns the bitmap/disk caches.
                 if (known.size > 75) known.remove(known.keys.first())
