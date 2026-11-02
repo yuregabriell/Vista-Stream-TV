@@ -41,11 +41,14 @@ jobs:
         shell: bash
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-37" "build-tools;36.0.0"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-36" "build-tools;36.0.0"
       - name: Preserve local upstream and Vista identity
         run: |
           bash scripts/vendor.sh
           python3 scripts/customize.py vendor/openstream
+          # API 37 is not yet published in the stable runner SDK index.
+          # Verify the Kotlin/UI code against available API 36 without modifying repository sources.
+          sed -i 's/compileSdk = 37/compileSdk = 36/' vendor/openstream/app/build.gradle.kts
       - name: Compile mobile and TV Kotlin (without publishing an APK)
         working-directory: vendor/openstream
         run: |
