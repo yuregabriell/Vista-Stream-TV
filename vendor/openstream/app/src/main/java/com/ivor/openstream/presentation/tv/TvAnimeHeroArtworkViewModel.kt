@@ -27,6 +27,8 @@ class TvAnimeHeroArtworkViewModel @Inject constructor(
 ) : ViewModel() {
     private val _artwork = MutableStateFlow<String?>(null)
     val artwork: StateFlow<String?> = _artwork
+    private val _match = MutableStateFlow<TvAnimeCatalogMatch?>(null)
+    val match: StateFlow<TvAnimeCatalogMatch?> = _match
 
     private val known = LinkedHashMap<String, String?>()
     private var currentKey: String? = null
@@ -38,20 +40,30 @@ class TvAnimeHeroArtworkViewModel @Inject constructor(
         currentKey = key
         job?.cancel()
         _artwork.value = known[key]
-        if (known.containsKey(key)) return
+        _match.value = null
+        if (known.containsKey(key)) {
+            job = viewModelScope.launch {
+                val cachedMatch = matcher.resolve(title)
+                if (currentKey == key) _match.value = cachedMatch
+            }
+            return
+        }
 
         job = viewModelScope.launch {
             try {
                 // Artwork and title navigation must use the SAME canonical match.
                 // Season titles (e.g. Aoashi Season 2) resolve to their base TV show.
                 val match = matcher.resolve(title)
+                if (currentKey == key) _match.value = match
                 val path = match?.backdropPath ?: match?.let {
                     runCatching {
                         if (it.mediaType == "movie") tmdb.getMovieDetails(it.tmdbId).backdropPath
                         else tmdb.getAnimeDetails(it.tmdbId).backdropPath
                     }.getOrNull()
                 }
-                val url = path?.let { "https://image.tmdb.org/t/p/original$it" }
+                // 1280 pixels is enough for a 1080p TV Hero and much smaller
+                // than fetching the full original bitmap on every title change.
+                val url = path?.let { "https://image.tmdb.org/t/p/w1280$it" }
                 if (url != null) known[key] = url
                 // Limit in-memory metadata; Coil owns the bitmap/disk caches.
                 if (known.size > 75) known.remove(known.keys.first())
