@@ -65,22 +65,40 @@ internal data class TvLiveSelection(
  */
 internal object TvLiveRemoteKeys {
     private var channelListener: ((Int) -> Unit)? = null
+    private var overlayListener: ((String) -> Unit)? = null
+    private var backListener: (() -> Boolean)? = null
 
-    fun setListener(listener: ((Int) -> Unit)?) {
-        channelListener = listener
+    fun setListener(
+        channel: ((Int) -> Unit)?,
+        overlay: ((String) -> Unit)? = null,
+        back: (() -> Boolean)? = null
+    ) {
+        channelListener = channel
+        overlayListener = overlay
+        backListener = back
     }
 
     fun dispatch(event: KeyEvent): Boolean {
-        val listener = channelListener ?: return false
-        val change = when (event.keyCode) {
+        if (channelListener == null) return false
+        if (event.keyCode == KeyEvent.KEYCODE_BACK && backListener?.invoke() == true) return true
+        val channelDirection = when (event.keyCode) {
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> 1
             KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> -1
+            else -> 0
+        }
+        if (channelDirection != 0) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0)
+                channelListener?.invoke(channelDirection)
+            return true
+        }
+        val action = when (event.keyCode) {
+            KeyEvent.KEYCODE_GUIDE -> "guide"
+            KeyEvent.KEYCODE_MENU -> "channels"
+            KeyEvent.KEYCODE_INFO -> "info"
             else -> return false
         }
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-            listener(change)
-        }
-        // Consume key-up as well, preventing the channel rocker from scrolling a menu.
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0)
+            overlayListener?.invoke(action)
         return true
     }
 }
@@ -124,10 +142,24 @@ internal fun TvLivePlayerScreen(
         }
     }
     val latestOnChange by rememberUpdatedState(onChange)
+    var overlayMode by remember { mutableStateOf<String?>(null) }
+    var epg by remember(selection.country.code) { mutableStateOf(com.ivor.openstream.presentation.livetv.LiveTvGuide.empty()) }
+    LaunchedEffect(selection.country.code) {
+        epg = com.ivor.openstream.presentation.livetv.LiveTvGuideProvider.load(selection.country.code)
+    }
+    val latestOverlay by rememberUpdatedState<(String) -> Unit>({ mode -> overlayMode = mode })
+    val latestBack by rememberUpdatedState<() -> Boolean>({
+        if (overlayMode != null) { overlayMode = null; true } else false
+    })
 
-    // Keep key routing independent of focus inside the film-style player chrome.
+    // Physical channel/menu/guide/info rocker keys remain available even if the native
+    // Media3 video surface or a player control button owns focus.
     DisposableEffect(Unit) {
-        TvLiveRemoteKeys.setListener { direction -> latestOnChange(direction) }
+        TvLiveRemoteKeys.setListener(
+            channel = { direction -> latestOnChange(direction) },
+            overlay = { mode -> latestOverlay(mode) },
+            back = { latestBack() }
+        )
         onDispose { TvLiveRemoteKeys.setListener(null) }
     }
 
@@ -182,6 +214,10 @@ internal fun TvLivePlayerScreen(
                 onBackClick = onExit,
                 onMinimize = onExit,
                 dpadControls = true,
+                liveTvMode = true,
+                onLiveChannels = { overlayMode = "channels" },
+                onLiveGuide = { overlayMode = "guide" },
+                onLiveInfo = { overlayMode = "info" },
                 canChangeSource = false,
                 sourceLabel = "TV ao vivo",
                 showSkipButton = false,
@@ -252,6 +288,20 @@ internal fun TvLivePlayerScreen(
             }
         } else {
             Text("Canal indisponível", Modifier.align(Alignment.Center), color = Color.White)
+        }
+        if (overlayMode != null && channel != null) {
+            TvLivePlayerOverlay(
+                mode = overlayMode.orEmpty(),
+                channels = selection.channels,
+                activeChannel = channel,
+                guide = epg,
+                onPlay = { selected ->
+                    val next = selection.channels.indexOfFirst { it.id == selected.id }
+                    if (next >= 0) index = next
+                    overlayMode = null
+                },
+                onDismiss = { overlayMode = null }
+            )
         }
     }
 }
