@@ -87,7 +87,7 @@ fun TvOfficialTitleLogo(
     // Fixed 110dp reserved for the logo prevents lazy-scroll remeasurement
     // from clipping its top when the official artwork arrives asynchronously.
     Box(modifier.widthIn(max = if (compact) 470.dp else 570.dp)
-        .height(if (compact) 76.dp else 110.dp)) {
+        .height(if (compact) 64.dp else 110.dp)) {
         if (path == null || failed || !loaded) {
             Text(
                 title,
