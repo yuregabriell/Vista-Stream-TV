@@ -22,7 +22,8 @@ import kotlinx.coroutines.launch
  */
 @HiltViewModel
 class TvAnimeHeroArtworkViewModel @Inject constructor(
-    private val tmdb: TmdbApi
+    private val tmdb: TmdbApi,
+    private val matcher: TvAnimeCatalogMatcher
 ) : ViewModel() {
     private val _artwork = MutableStateFlow<String?>(null)
     val artwork: StateFlow<String?> = _artwork
@@ -41,35 +42,17 @@ class TvAnimeHeroArtworkViewModel @Inject constructor(
 
         job = viewModelScope.launch {
             try {
-                val isMovie = title.format.equals("MOVIE", ignoreCase = true)
-                // Search both AniList English and romanized titles; a single
-                // English query often misses anime indexed under their romaji name.
-                // Match strictly by exact normalized title and release year so we
-                // never display an unrelated series' artwork.
-                val names = listOfNotNull(title.title, title.alternateTitle)
-                    .filter { it.isNotBlank() }
-                    .distinctBy(::normalize)
-                val expected = names.map(::normalize).toSet()
-                var backdropPath: String? = null
-                for (name in names) {
-                    val candidates = if (isMovie) {
-                        tmdb.searchMovieForArtwork(name).results
-                    } else {
-                        tmdb.searchTvForArtwork(name).results
-                    }
-                    backdropPath = candidates.firstOrNull { candidate ->
-                        normalize(candidate.name) in expected &&
-                            !candidate.backdropPath.isNullOrBlank() &&
-                            (title.year == null || candidate.date.take(4).toIntOrNull()?.let {
-                                year -> kotlin.math.abs(year - title.year) <= 2
-                            } != false)
-                    }?.backdropPath
-                    if (backdropPath != null) break
+                // Artwork and title navigation must use the SAME canonical match.
+                // Season titles (e.g. Aoashi Season 2) resolve to their base TV show.
+                val match = matcher.resolve(title)
+                val path = match?.backdropPath ?: match?.let {
+                    runCatching {
+                        if (it.mediaType == "movie") tmdb.getMovieDetails(it.tmdbId).backdropPath
+                        else tmdb.getAnimeDetails(it.tmdbId).backdropPath
+                    }.getOrNull()
                 }
-                // Original source resolution, cached by Coil; never upscale the
-                // narrow AniList banner into a full TV-screen hero.
-                val url = backdropPath?.let { "https://image.tmdb.org/t/p/original$it" }
-                known[key] = url
+                val url = path?.let { "https://image.tmdb.org/t/p/original$it" }
+                if (url != null) known[key] = url
                 // Limit in-memory metadata; Coil owns the bitmap/disk caches.
                 if (known.size > 75) known.remove(known.keys.first())
                 if (currentKey == key) _artwork.value = url
