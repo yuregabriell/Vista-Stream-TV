@@ -278,11 +278,11 @@ private fun InfoPanel(shown: HomeFocus?) {
             when (target) {
                 is HomeFocus.Title -> {
                     val item = target.item
-                    Text(
-                        text = item.name,
-                        style = MaterialTheme.typography.displaySmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                    TvOfficialTitleLogo(
+                        title = item.name,
+                        mediaType = item.tvMediaType(),
+                        titleId = item.id,
+                        compact = true
                     )
                     Spacer(Modifier.height(8.dp))
                     MetaLine(
@@ -305,11 +305,11 @@ private fun InfoPanel(shown: HomeFocus?) {
                 }
                 is HomeFocus.Resume -> {
                     val progress = target.progress
-                    Text(
-                        text = progress.title,
-                        style = MaterialTheme.typography.displaySmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                    TvOfficialTitleLogo(
+                        title = progress.title,
+                        mediaType = progress.mediaType,
+                        titleId = progress.tmdbId,
+                        compact = true
                     )
                     Spacer(Modifier.height(8.dp))
                     MetaLine(
