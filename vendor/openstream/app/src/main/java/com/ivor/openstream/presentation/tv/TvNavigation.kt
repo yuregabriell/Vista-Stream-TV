@@ -1,5 +1,6 @@
 package com.ivor.openstream.presentation.tv
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +32,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.focusGroup
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Brush
@@ -133,6 +135,14 @@ private fun TvAppScaffold(
         route?.startsWith("tv_anime/browse") == true
     val requesters = remember { TvDestination.topLevel.associateWith { FocusRequester() } }
     var resetTopToken by remember { mutableIntStateOf(0) }
+    var sidebarHasFocus by remember { androidx.compose.runtime.mutableStateOf(false) }
+    // Back on a top-level screen deliberately opens the sidebar. Back inside
+    // episode details/player still belongs to the NavHost; a second Back from
+    // an already focused sidebar retains normal Android navigation.
+    BackHandler(enabled = showDrawer && !sidebarHasFocus &&
+        TvDestination.topLevel.any { it.route == route }) {
+        runCatching { requesters.getValue(selected).requestFocus() }
+    }
 
     fun go(destination: TvDestination) {
         if (destination == selected && route == destination.route) {
@@ -190,7 +200,9 @@ private fun TvAppScaffold(
                             destination = destination,
                             selected = destination == selected,
                             onClick = { go(destination) },
-                            modifier = Modifier.focusRequester(requesters.getValue(destination))
+                            modifier = Modifier
+                                .focusRequester(requesters.getValue(destination))
+                                .onFocusChanged { sidebarHasFocus = it.hasFocus }
                         )
                     }
                 }
