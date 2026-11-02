@@ -106,7 +106,14 @@ class VidkingDirectApi @Inject constructor(
                 .addPathSegment("seed")
                 .addQueryParameter("mediaId", mediaId.toString())
                 .build()
-            val request = Request.Builder().url(url).build()
+            // The seed handshake belongs to the same origin as the stream requests.
+            // Without the player Origin/Referer some upstream gateways return a misleading 404.
+            val request = Request.Builder()
+                .url(url)
+                .headers(okhttp3.Headers.Builder().apply {
+                    vidkingRequestHeaders().forEach { (name, value) -> add(name, value) }
+                }.add("Accept", "application/json").build())
+                .build()
             val payload = client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw IOException("Vidking seed returned HTTP ${response.code}")
                 json.decodeFromString<SeedResponse>(response.body?.string().orEmpty())
