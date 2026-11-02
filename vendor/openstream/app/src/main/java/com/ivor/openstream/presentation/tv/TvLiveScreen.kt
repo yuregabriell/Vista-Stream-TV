@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -259,7 +260,7 @@ private fun TvChannelRow(
 ) {
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.isFocused || it.hasFocus) onFocused() },
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(15.dp)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected) Color(0xFF3C3154) else Color(0xFF242435),
@@ -291,8 +292,6 @@ private fun TvChannelRow(
             }
         }
     }
-    // Update highlight on focus without interfering with the platform focus ring.
-    LaunchedEffect(selected) { if (selected) onFocused() }
 }
 
 @Composable
