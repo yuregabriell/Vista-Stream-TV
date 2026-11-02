@@ -1,5 +1,5 @@
 /* App shell only — never cache private sources, search responses or video bytes. */
-const VERSION="vistastream-web-shell-v3";
+const VERSION="vistastream-web-shell-v4";
 const SHELL=["./","./index.html","./styles.css","./native.css","./app.js","./stremio.js","./live-tv.js","./live-tv.css","./manifest.webmanifest","./icon.svg","./icons/icon-180.png","./icons/icon-192.png","./icons/icon-512.png"];
 self.addEventListener("install",event=>{event.waitUntil(caches.open(VERSION).then(cache=>cache.addAll(SHELL)));self.skipWaiting();});
 self.addEventListener("activate",event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(x=>x.startsWith("vistastream-web-shell-")&&x!==VERSION).map(x=>caches.delete(x)))));self.clients.claim();});
