@@ -300,7 +300,8 @@ internal fun TvLivePlayerScreen(
                     if (next >= 0) index = next
                     overlayMode = null
                 },
-                onDismiss = { overlayMode = null }
+                onDismiss = { overlayMode = null },
+                onModeChange = { overlayMode = it }
             )
         }
     }
