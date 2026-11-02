@@ -2,6 +2,7 @@ package com.ivor.openstream.presentation.home
 
 import com.ivor.openstream.ui.theme.onScrim
 import com.ivor.openstream.data.catalog.KeylessTitle
+import com.ivor.openstream.presentation.shorts.ShortsScreen
 import com.ivor.openstream.presentation.catalog.KeylessCatalogScreen
 import com.ivor.openstream.presentation.catalog.KeylessCatalogViewModel
 import com.ivor.openstream.presentation.components.SkeletonBox
@@ -81,6 +82,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -133,7 +135,12 @@ fun HomeScreen(
         )
         return
     }
+
     val homeMode by viewModel.mode.collectAsState()
+    val phoneUi = LocalConfiguration.current.screenWidthDp < 600
+    LaunchedEffect(phoneUi, homeMode) {
+        if (!phoneUi && homeMode == HomeMode.SHORTS) viewModel.setMode(HomeMode.FILMS_SERIES)
+    }
     // While the app stays open, check whether the last data refresh exceeded
     // the three-hour TTL. Returning to the Home screen also restarts this timer.
     LaunchedEffect(viewModel) {
@@ -203,7 +210,34 @@ fun HomeScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        when (val state = uiState) {
+        if (homeMode == HomeMode.SHORTS && phoneUi) {
+            Column(Modifier.fillMaxSize().statusBarsPadding()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(start = 24.dp, end = 8.dp, top = 8.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(Icons.Default.Settings, contentDescription = "Definições")
+                    }
+                    ProfileSwitchButton(
+                        profile = profile,
+                        onSwitch = onSwitchProfile,
+                        onKidsTap = { scope.launch {
+                            snackbarHostState.showSnackbar(context.getString(R.string.home_hold_avatar_kids))
+                        } }
+                    )
+                }
+                PremiumModeSwitch(mode = homeMode, onModeChange = viewModel::setMode)
+                ShortsScreen(modifier = Modifier.weight(1f))
+            }
+        } else when (val state = uiState) {
             HomeUiState.Loading -> HomeSkeleton()
 
             // If the public TMDB service is offline or rate-limited, keep the
@@ -380,7 +414,7 @@ private fun PremiumModeSwitch(mode: HomeMode, onModeChange: (HomeMode) -> Unit) 
     Row(
         modifier = Modifier.fillMaxWidth()
             .padding(start = 22.dp, end = 22.dp, bottom = 12.dp)
-            .height(42.dp)
+            .height(46.dp)
             .clip(ExpressiveShapes.medium)
             .background(MaterialTheme.colorScheme.surfaceContainer),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
@@ -388,8 +422,11 @@ private fun PremiumModeSwitch(mode: HomeMode, onModeChange: (HomeMode) -> Unit) 
     ) {
         listOf(
             HomeMode.FILMS_SERIES to "Filmes & Séries",
-            HomeMode.ANIME to "Animes"
-        ).forEach { (choice, label) ->
+            HomeMode.ANIME to "Animes",
+            HomeMode.SHORTS to "Shorts"
+        ).filter { (choice, _) ->
+            choice != HomeMode.SHORTS || LocalConfiguration.current.screenWidthDp < 600
+        }.forEach { (choice, label) ->
             val selected = mode == choice
             Surface(
                 onClick = { onModeChange(choice) },
@@ -403,7 +440,9 @@ private fun PremiumModeSwitch(mode: HomeMode, onModeChange: (HomeMode) -> Unit) 
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = label,
-                        style = MaterialTheme.typography.labelLarge,
+                        style = if (LocalConfiguration.current.screenWidthDp < 380)
+                            MaterialTheme.typography.labelMedium
+                        else MaterialTheme.typography.labelLarge,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                         maxLines = 1
                     )
