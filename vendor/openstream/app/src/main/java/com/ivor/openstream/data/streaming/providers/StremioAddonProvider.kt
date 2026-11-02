@@ -41,7 +41,7 @@ internal fun directMediaExternalUrl(raw: String?): String? {
         ?.toHttpUrlOrNull() ?: return null
     val path = url.encodedPath.lowercase(java.util.Locale.ROOT)
     val supported = listOf(".mp4", ".m4v", ".mkv", ".webm", ".m3u8", ".mpd", ".mov", ".ts")
-    return url.toString().takeIf { supported.any(path::endsWith) }
+    return url.toString().takeIf { supported.any { extension -> path.endsWith(extension) } }
 }
 
 /** Stremio fileIdx is zero-based; TorrServer file IDs are one-based. */
