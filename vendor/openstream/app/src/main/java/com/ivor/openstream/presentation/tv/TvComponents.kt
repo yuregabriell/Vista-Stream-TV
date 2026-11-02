@@ -195,13 +195,15 @@ fun TvPosterCard(
     modifier: Modifier = Modifier,
     onFocused: () -> Unit = {},
     /** Holding OK: the card's secondary action, such as delete. */
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
+    width: Dp = TvLayout.PosterWidth,
+    height: Dp = TvLayout.PosterHeight
 ) {
     Card(
         onClick = onClick,
         onLongClick = onLongClick,
         modifier = modifier
-            .size(TvLayout.PosterWidth, TvLayout.PosterHeight)
+            .size(width, height)
             .onFocusChanged { if (it.isFocused) onFocused() }
             .semantics { contentDescription = title },
         shape = CardDefaults.shape(TvLayout.CardShape),
@@ -511,18 +513,24 @@ fun TvCaptionedPoster(
     caption: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
+    posterWidth: Dp = TvLayout.PosterWidth,
+    posterHeight: Dp = TvLayout.PosterHeight
 ) {
-    Column(modifier) {
-        TvPosterCard(title = title, posterPath = posterPath, onClick = onClick, onLongClick = onLongClick)
-        Spacer(Modifier.height(8.dp))
+    // Local compact sizing lets Anime display the title AND the year on a
+    // 960x540 dp TV canvas without shrinking poster cards globally.
+    Column(modifier.width(posterWidth)) {
+        TvPosterCard(title = title, posterPath = posterPath, onClick = onClick,
+            onLongClick = onLongClick, width = posterWidth, height = posterHeight)
+        Spacer(Modifier.height(if (posterWidth < TvLayout.PosterWidth) 5.dp else 8.dp))
         Text(
             text = title,
-            style = MaterialTheme.typography.labelLarge,
+            style = if (posterWidth < TvLayout.PosterWidth)
+                MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onBackground,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.width(TvLayout.PosterWidth)
+            modifier = Modifier.fillMaxWidth()
         )
         if (!caption.isNullOrBlank()) {
             Text(
@@ -531,7 +539,7 @@ fun TvCaptionedPoster(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.width(TvLayout.PosterWidth)
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
