@@ -96,6 +96,14 @@ fun TvHomeScreen(
         KeylessCatalogScreen(modifier = modifier, onOpenSources = onOpenExtensions, viewModel = keylessViewModel)
         return
     }
+    // Refresh film/series recommendations in the background on the same three-hour
+    // TTL as the repository. No manual button and no flashing an existing rail.
+    LaunchedEffect(viewModel) {
+        while (true) {
+            viewModel.refreshIfStale()
+            kotlinx.coroutines.delay(15L * 60 * 1000)
+        }
+    }
     val uiState by viewModel.uiState.collectAsState()
     val continueWatching by viewModel.continueWatching.collectAsState()
 
