@@ -32,6 +32,22 @@ data class VidkingServerSpec(
     val qualityFilter: String? = null
 )
 
+/**
+ * Use the same player identity for the seed and source requests.
+ * A valid endpoint can reject the seed handshake if these headers are missing.
+ */
+internal fun vidkingSeedRequest(baseUrl: String, mediaId: Int): Request =
+    Request.Builder()
+        .url(baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("seed")
+            .addQueryParameter("mediaId", mediaId.toString())
+            .build())
+        .headers(okhttp3.Headers.Builder().apply {
+            vidkingRequestHeaders().forEach { (name, value) -> add(name, value) }
+            add("Accept", "application/json")
+        }.build())
+        .build()
+
 @Singleton
 class VidkingDirectApi @Inject constructor(
     @Named("StreamingClient") private val client: OkHttpClient,
@@ -102,11 +118,7 @@ class VidkingDirectApi @Inject constructor(
                 return@withLock cached
             }
 
-            val url = BuildConfig.VIDKING_API_BASE_URL.toHttpUrl().newBuilder()
-                .addPathSegment("seed")
-                .addQueryParameter("mediaId", mediaId.toString())
-                .build()
-            val request = Request.Builder().url(url).build()
+            val request = vidkingSeedRequest(BuildConfig.VIDKING_API_BASE_URL, mediaId)
             val payload = client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw IOException("Vidking seed returned HTTP ${response.code}")
                 json.decodeFromString<SeedResponse>(response.body?.string().orEmpty())

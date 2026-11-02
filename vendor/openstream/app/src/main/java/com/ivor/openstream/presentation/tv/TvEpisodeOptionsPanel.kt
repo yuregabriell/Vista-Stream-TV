@@ -53,6 +53,12 @@ internal fun TvEpisodeOptionsPanel(
         onDismiss = onDismiss
     ) { listModifier, onClose ->
         if (panel == TvEpisodePanel.SOURCES) {
+            val providerErrors = when (val state = serversState) {
+                is ServersState.Resolving -> state.failedProviders
+                is ServersState.Ready -> state.failedProviders
+                is ServersState.Empty -> state.failedProviders
+                ServersState.Idle -> emptyList()
+            }
             PanelHeader(
                 title = "Fontes",
                 subtitle = when (serversState) {
@@ -76,11 +82,35 @@ internal fun TvEpisodeOptionsPanel(
                 if (sources.isEmpty()) {
                     item(key = "none") {
                         Text(
-                            if (serversState is ServersState.Resolving) "A procurar fontes…"
-                            else "Nenhuma fonte encontrada nesta pesquisa.",
+                            when {
+                                serversState is ServersState.Resolving -> "A procurar fontes…"
+                                serversState is ServersState.Empty && serversState.totalProviders == 0 ->
+                                    "Nenhuma fonte de reprodução ativa. Verifica a secção Extensões > Instaladas."
+                                providerErrors.isNotEmpty() ->
+                                    "Algumas fontes falharam. Consulta os erros abaixo; o problema pode ser externo."
+                                else -> "As fontes consultadas não devolveram vídeos para este episódio."
+                            },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                }
+                if (providerErrors.isNotEmpty()) {
+                    item(key = "provider-errors") {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                "Diagnóstico · ${providerErrors.size} fonte(s) com erro",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            providerErrors.distinct().take(10).forEach { error ->
+                                Text(
+                                    error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
                 items(sources, key = { it.id }) { server ->

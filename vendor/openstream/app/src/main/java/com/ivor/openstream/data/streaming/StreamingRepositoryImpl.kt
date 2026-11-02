@@ -172,7 +172,9 @@ class StreamingRepositoryImpl @Inject constructor(
                     Log.w(TAG, "${outcome.provider.displayName} failed: ${error.message}")
                     recordFailure(outcome.provider.id)
                     providerRegistry.recordOutcome(outcome.provider, false)
-                    failedProviders += outcome.provider.displayName
+                    // Do not hide an upstream HTTP/DNS failure as “no title found”.
+                    // Only report a bounded, safe category; URLs and tokens must never reach UI.
+                    failedProviders += "${outcome.provider.displayName}: ${sourceFailureSummary(error)}"
                 }
             )
         }

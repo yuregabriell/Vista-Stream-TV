@@ -118,7 +118,7 @@ sealed interface ServersState {
         val previousCount: Int = 0
     ) : ServersState
 
-    data class Empty(val failedProviders: List<String>) : ServersState
+    data class Empty(val failedProviders: List<String>, val totalProviders: Int = 0) : ServersState
 }
 
 @HiltViewModel
@@ -903,7 +903,7 @@ class PlayerViewModel @Inject constructor(
                 }
                 _serversState.value = when {
                     progress.isComplete && healthyServers.isEmpty() ->
-                        ServersState.Empty(progress.failedProviders)
+                        ServersState.Empty(progress.failedProviders, totalProviders = progress.totalProviders)
                     progress.isComplete ->
                         ServersState.Ready(healthyServers, active?.id, progress.failedProviders, oldCount)
                     else ->

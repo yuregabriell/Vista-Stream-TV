@@ -922,7 +922,13 @@ fun PlayerScreen(
                                                     state.completedProviders,
                                                     state.totalProviders
                                                 )
-                                            is ServersState.Empty -> stringResource(R.string.player_no_servers)
+                                            is ServersState.Empty -> when {
+                                                state.totalProviders == 0 ->
+                                                    "Nenhuma fonte de reprodução ativa. Verifica Extensões > Instaladas."
+                                                state.failedProviders.isNotEmpty() ->
+                                                    "Fontes indisponíveis (${state.failedProviders.size} erros). Verifica Extensões e tenta novamente."
+                                                else -> stringResource(R.string.player_no_servers)
+                                            }
                                             is ServersState.Ready -> stringResource(R.string.player_choose_server)
                                             ServersState.Idle -> if (isResolvingLocalUri) {
                                                 stringResource(R.string.player_opening_offline)
