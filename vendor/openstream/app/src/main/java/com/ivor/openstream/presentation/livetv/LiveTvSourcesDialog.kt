@@ -19,55 +19,91 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
-/** Mobile and Android TV share add-on preferences, installed in the TV source library. */
+/** User-selectable live addons: only public streams or sources the viewer is entitled to use. */
 @Composable
-internal fun LiveTvSourcesDialog(onDismiss: () -> Unit, onSaved: () -> Unit) {
+internal fun LiveTvSourcesDialog(
+    countryCode: String = "BR",
+    onDismiss: () -> Unit,
+    onSaved: () -> Unit
+) {
     val context = LocalContext.current
     var ricos by remember { mutableStateOf(LiveTvAddons.ricosEnabled(context)) }
+    var iptvBrasil by remember { mutableStateOf(LiveTvAddons.iptvBrasilEnabled(context)) }
+    var brManifest by remember { mutableStateOf(LiveTvAddons.configured(context, "iptvbr")) }
     var nova by remember { mutableStateOf(LiveTvAddons.configured(context, "nova")) }
+    var aiolive by remember { mutableStateOf(LiveTvAddons.configured(context, "aiolive")) }
     var custom by remember { mutableStateOf(LiveTvAddons.configured(context, "custom")) }
+    var epg by remember(countryCode) { mutableStateOf(LiveTvGuide.guideUrl(context, countryCode)) }
     var invalid by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Fontes de TV ao vivo") },
+        title = { Text("Fontes e guia de TV") },
         text = {
             Column(
                 Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("IPTV-org · Canais públicos por país (já instalado).")
+                Text("IPTV-org · canais públicos por país · ativo")
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Canal Ricos (Brasil) · Stremio", modifier = Modifier.weight(1f))
+                    Text("Canal Ricos (Stremio Brasil)", modifier = Modifier.weight(1f))
                     Switch(checked = ricos, onCheckedChange = { ricos = it })
                 }
-                Text("Nova Channels · exige chave LiveDebrid. Configura em nova.livebx.net e cola o manifest personalizado.")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("IPTV Brasil (Stremio) · experimental", modifier = Modifier.weight(1f))
+                    Switch(checked = iptvBrasil, onCheckedChange = { iptvBrasil = it })
+                }
+                Text("O manifest público IPTV Brasil pode estar offline. A fonte só mostra canais se o serviço responder e oferecer streams compatíveis.")
+                OutlinedTextField(
+                    value = brManifest,
+                    onValueChange = { brManifest = it; invalid = false },
+                    label = { Text("IPTV Brasil · URL alternativa (opcional)") },
+                    placeholder = { Text(LiveTvAddons.IPTV_BR_PRESET) },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true
+                )
+                Text("Nova Channels · requer manifest personalizado gerado com conta/chave LiveDebrid em nova.livebx.net.")
                 OutlinedTextField(
                     value = nova,
                     onValueChange = { nova = it; invalid = false },
-                    label = { Text("Nova Channels · manifest.json") },
+                    label = { Text("Nova · manifest personalizado") },
                     modifier = Modifier.fillMaxWidth(), singleLine = true
                 )
-                Text("AIOLiveTV ou outro addon Stremio TV: configura no respetivo serviço e cola o manifest.")
+                Text("AIOLiveTV · requer uma instância configurada. Não existe servidor público oficial.")
+                OutlinedTextField(
+                    value = aiolive,
+                    onValueChange = { aiolive = it; invalid = false },
+                    label = { Text("AIOLiveTV · manifest da tua instância") },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true
+                )
                 OutlinedTextField(
                     value = custom,
                     onValueChange = { custom = it; invalid = false },
-                    label = { Text("Outro addon Live TV · manifest.json") },
+                    label = { Text("Outro addon Stremio Live TV") },
                     modifier = Modifier.fillMaxWidth(), singleLine = true
                 )
-                Text("IPTV Brasil: o manifest antigo está offline (Not Found). Não é ativado automaticamente.")
-                Text("As fontes são consultadas quando abres TV ao vivo. Algumas exigem conta ou direitos de transmissão.")
-                if (invalid) Text("Usa endereços HTTPS válidos terminados em /manifest.json.")
+                Text("Programação (EPG) · " + countryCode + ": para ver horários reais no guia, cola uma fonte XMLTV autorizada. O guia não inventa programas.")
+                OutlinedTextField(
+                    value = epg,
+                    onValueChange = { epg = it; invalid = false },
+                    label = { Text("Guia XMLTV HTTPS (.xml ou .xml.gz)") },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true
+                )
+                if (invalid) Text("Confere as URLs. Manifests devem usar HTTPS e terminar em /manifest.json; o guia XMLTV deve usar HTTPS.")
+                Text("Estas fontes não contornam assinaturas, restrições regionais ou DRM. A instalação de um manifest não garante canais reproduzíveis.")
             }
         },
         confirmButton = {
             Button(onClick = {
-                if (!LiveTvAddons.configure(context, "nova", nova) ||
-                    !LiveTvAddons.configure(context, "custom", custom)) {
-                    invalid = true
-                } else {
+                val ok =
+                    LiveTvAddons.configure(context, "iptvbr", brManifest) &&
+                    LiveTvAddons.configure(context, "nova", nova) &&
+                    LiveTvAddons.configure(context, "aiolive", aiolive) &&
+                    LiveTvAddons.configure(context, "custom", custom) &&
+                    LiveTvGuide.saveGuideUrl(context, countryCode, epg)
+                if (ok) {
                     LiveTvAddons.setRicosEnabled(context, ricos)
+                    LiveTvAddons.setIptvBrasilEnabled(context, iptvBrasil)
                     onSaved()
-                }
+                } else invalid = true
             }) { Text("Guardar fontes") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }

@@ -5,6 +5,9 @@ import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -15,9 +18,18 @@ internal object LiveTvAddons {
     const val RICOS = "https://zoreu.github.io/ricosstremio/manifest.json"
     const val NOVA_CONFIG = "https://nova.livebx.net/"
     const val IPTV_BR_REFERENCE = "https://github.com/WillAcris/IPTV-BR"
+    const val IPTV_BR_PRESET = "https://iptv-br-two.vercel.app/manifest.json"
     const val AIOLIVE_CONFIG = "https://mrcanelas.github.io/aiolivetv/"
     private const val PREFS = "vistastream_live_tv"
     private const val MAX_BYTES = 1_500_000
+
+    fun iptvBrasilEnabled(context: Context) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("iptv_brasil_enabled", true)
+
+    fun setIptvBrasilEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean("iptv_brasil_enabled", enabled).apply()
+    }
 
     fun ricosEnabled(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("ricos_enabled", true)
@@ -33,7 +45,7 @@ internal object LiveTvAddons {
 
     /** Blank removes the source; tokens, when required, stay local in SharedPreferences. */
     fun configure(context: Context, provider: String, raw: String): Boolean {
-        if (provider !in listOf("nova", "custom")) return false
+        if (provider !in listOf("nova", "custom", "aiolive", "iptvbr")) return false
         val url = raw.trim().replaceFirst(Regex("^stremio://", RegexOption.IGNORE_CASE), "https://")
         if (url.isNotEmpty() && safeManifest(url) == null) return false
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -65,8 +77,8 @@ internal object LiveTvAddons {
 
     private fun fetchJson(url: URL): JSONObject {
         val conn = (url.openConnection() as HttpURLConnection).apply {
-            connectTimeout = 8_000
-            readTimeout = 10_000
+            connectTimeout = 6_000
+            readTimeout = 8_000
             instanceFollowRedirects = false
             setRequestProperty("Accept", "application/json")
             setRequestProperty("User-Agent", "VistaStream/LiveTV")
@@ -88,19 +100,27 @@ internal object LiveTvAddons {
         } finally { conn.disconnect() }
     }
 
-    /** Keep IPTV-org plus enabled add-ons. A single offline server must not blank all channels. */
+    /** Installed presets are optional and isolated: an offline server never hides other channels. */
     suspend fun channels(context: Context, country: String): List<Channel> = withContext(Dispatchers.IO) {
         val addons = buildList {
             if (country == "BR" && ricosEnabled(context)) add("Canal Ricos" to RICOS)
+            if (country == "BR" && iptvBrasilEnabled(context)) {
+                add("IPTV Brasil" to
+                    configured(context, "iptvbr").ifBlank { IPTV_BR_PRESET })
+            }
             configured(context, "nova").takeIf { it.isNotBlank() }?.let { add("Nova Channels" to it) }
+            configured(context, "aiolive").takeIf { it.isNotBlank() }?.let { add("AIOLiveTV" to it) }
             configured(context, "custom").takeIf { it.isNotBlank() }?.let { add("Stremio TV" to it) }
         }
-        val output = mutableListOf<Channel>()
-        for ((label, manifest) in addons.distinctBy { it.second }) {
-            runCatching { output += catalog(manifest, label, country) }
-                .onFailure { Log.w("VistaLiveAddons", label + ": " + it.message) }
+        coroutineScope {
+            addons.distinctBy { it.second }.map { (label, manifest) ->
+                async(Dispatchers.IO) {
+                    runCatching { catalog(manifest, label, country) }
+                        .onFailure { Log.w("VistaLiveAddons", label + ": " + it.javaClass.simpleName) }
+                        .getOrDefault(emptyList())
+                }
+            }.awaitAll().flatten().distinctBy { it.id }.take(1300)
         }
-        output.distinctBy { it.id }.take(1000)
     }
 
     private fun catalog(manifest: String, label: String, country: String): List<Channel> {
@@ -129,7 +149,7 @@ internal object LiveTvAddons {
                 alias -> id.equals(alias, true) || name.equals(alias + " TV", true) ||
                     name.equals(alias, true)
             }
-            if (!(manifest == RICOS && country == "BR") && !countryMatch) continue
+            if (!(country == "BR" && (manifest == RICOS || label == "IPTV Brasil")) && !countryMatch) continue
             val metas = fetchJson(endpoint(manifest, "catalog", type, id)).optJSONArray("metas") ?: continue
             for (k in 0 until minOf(metas.length(), 800)) {
                 val meta = metas.optJSONObject(k) ?: continue
@@ -139,12 +159,12 @@ internal object LiveTvAddons {
                 val logo = meta.optString("logo").ifBlank { meta.optString("poster") }
                     .takeIf { it.startsWith("https://") }.orEmpty()
                 val group = meta.optJSONArray("genres")?.optString(0).orEmpty()
-                    .ifBlank { if (manifest == RICOS) "Variedades" else "TV Brasileira" }
+                    .ifBlank { if (manifest == RICOS) "Variedades" else name }
                 out += Channel(
                     id = country + "|stremio|" + manifest.hashCode().toString(16) + "|" + ref,
                     name = title.take(120), group = group.take(50),
                     logo = logo, url = "", sourceLabel = label,
-                    addonManifest = manifest, addonRef = ref, addonType = type
+                    addonManifest = manifest, addonRef = ref, addonType = type, tvgId = ref
                 )
             }
         }

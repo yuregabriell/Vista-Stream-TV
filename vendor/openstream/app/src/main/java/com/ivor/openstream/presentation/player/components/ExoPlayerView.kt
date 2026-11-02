@@ -237,6 +237,8 @@ fun ExoPlayerView(
     smoothMotion: SmoothMotion? = null,
     /** D-pad and remote-key handling, for the Android TV player surface. */
     dpadControls: Boolean = false,
+    /** TV broadcasts: same Media3 engine and quality/track handling, without film timeline, seeking or episode chrome. */
+    liveTvMode: Boolean = false,
     volumeBoostPercent: Int = 100,
     onVolumeBoostChange: (Int) -> Unit = {},
     onOpenExternalPlayer: (() -> Unit)? = null,
@@ -1110,7 +1112,7 @@ fun ExoPlayerView(
     val videoIsFocused = remember { mutableStateOf(false) }
     val videoFocusRequester = remember { FocusRequester() }
     val controlsFocusRequester = remember { FocusRequester() }
-    val dpadModifier = if (dpadControls) {
+    val dpadModifier = if (dpadControls && !liveTvMode) {
         Modifier
             .focusRequester(videoFocusRequester)
             .onFocusChanged {
@@ -1128,7 +1130,7 @@ fun ExoPlayerView(
     }
     // The video surface takes the focus when a new stream starts (a TV never leaves it orphaned).
     LaunchedEffect(dpadControls, videoUrl) {
-        if (dpadControls) {
+        if (dpadControls && !liveTvMode) {
             runCatching { videoFocusRequester.requestFocus() }
             areControlsVisible = true
         }
@@ -1136,7 +1138,7 @@ fun ExoPlayerView(
     // Controls showing on a TV hands the focus to the control bar so D-pad navigates it.
     // Hidden again, the focus returns to the video so the next key press still reaches the player.
     LaunchedEffect(areControlsVisible, dpadControls, showSettingsDialog) {
-        if (!dpadControls || showSettingsDialog) return@LaunchedEffect
+        if (!dpadControls || liveTvMode || showSettingsDialog) return@LaunchedEffect
         runCatching {
             if (areControlsVisible) controlsFocusRequester.requestFocus() else videoFocusRequester.requestFocus()
         }
@@ -1596,7 +1598,10 @@ fun ExoPlayerView(
             }
         }
 
-        if (dpadControls) TvPlayerControls(
+        if (liveTvMode) {
+            // Dedicated TV overlay owns guide, channel info and zapping controls.
+            // Do not draw VOD seek timeline, 10s skips, up-next or movie toolbars.
+        } else if (dpadControls) TvPlayerControls(
             isVisible = areControlsVisible && !isInPictureInPicture,
             isPlaying = isPlaying,
             isBuffering = isBuffering,

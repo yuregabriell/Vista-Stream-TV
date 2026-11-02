@@ -47,6 +47,8 @@ import coil3.compose.AsyncImage
 import com.ivor.openstream.presentation.livetv.Channel
 import com.ivor.openstream.presentation.livetv.Country
 import com.ivor.openstream.presentation.livetv.LiveTvAddons
+import com.ivor.openstream.presentation.livetv.LiveTvGuide
+import com.ivor.openstream.presentation.livetv.LiveProgramme
 import com.ivor.openstream.presentation.player.components.ExoPlayerView
 import com.ivor.openstream.presentation.player.session.MiniPlayerViewModel
 import kotlinx.coroutines.delay
@@ -63,28 +65,38 @@ internal data class TvLiveSelection(
  * Media3 PlayerView owns focus. Consume only real channel/page rocker keys while
  * the live player is on screen; leave VOLUME_UP/DOWN to Android (and Cast).
  */
-internal object TvLiveRemoteKeys {
-    private var channelListener: ((Int) -> Unit)? = null
+internal enum class TvLiveCommand { NEXT, PREVIOUS, CHANNELS, GUIDE, INFO }
 
-    fun setListener(listener: ((Int) -> Unit)?) {
-        channelListener = listener
+internal object TvLiveRemoteKeys {
+    private var listener: ((TvLiveCommand) -> Unit)? = null
+    private var panelOpen: (() -> Boolean)? = null
+
+    fun setListener(onCommand: ((TvLiveCommand) -> Unit)?, isPanelOpen: (() -> Boolean)? = null) {
+        listener = onCommand
+        panelOpen = isPanelOpen
     }
 
     fun dispatch(event: KeyEvent): Boolean {
-        val listener = channelListener ?: return false
-        val change = when (event.keyCode) {
-            KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> 1
-            KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> -1
+        val handler = listener ?: return false
+        val code = event.keyCode
+        val channelKey = code in listOf(
+            KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_CHANNEL_DOWN,
+            KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_PAGE_DOWN
+        )
+        if (!channelKey && panelOpen?.invoke() == true) return false
+        val command = when (code) {
+            KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> TvLiveCommand.NEXT
+            KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> TvLiveCommand.PREVIOUS
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+            KeyEvent.KEYCODE_DPAD_LEFT -> TvLiveCommand.CHANNELS
+            KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_MENU -> TvLiveCommand.GUIDE
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> TvLiveCommand.INFO
             else -> return false
         }
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-            listener(change)
-        }
-        // Consume key-up as well, preventing the channel rocker from scrolling a menu.
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) handler(command)
         return true
     }
 }
-
 /**
  * Same Media3 engine, playback controls, track selector and subtitle UI used by
  * VistaStream's movie/series player — presented as a genuine fullscreen TV route.
@@ -116,6 +128,28 @@ internal fun TvLivePlayerScreen(
         resolving = false
     }
     var showChannelBanner by remember { mutableStateOf(true) }
+    var panel by remember { mutableStateOf(TvLivePanel.NONE) }
+    val prefs = remember(context) {
+        context.getSharedPreferences("vistastream_live_tv", Context.MODE_PRIVATE)
+    }
+    var favorites by remember(selection.country.code) {
+        mutableStateOf(prefs.getStringSet("favorites_" + selection.country.code, emptySet())?.toSet() ?: emptySet())
+    }
+    var programmes by remember(selection.country.code) {
+        mutableStateOf<Map<String, List<LiveProgramme>>>(emptyMap())
+    }
+    LaunchedEffect(selection.country.code) {
+        programmes = LiveTvGuide.programmes(context, selection.country.code)
+    }
+    fun tune(ch: Channel) {
+        val nextIndex = selection.channels.indexOfFirst { it.id == ch.id }
+        if (nextIndex >= 0) index = nextIndex
+        panel = TvLivePanel.NONE
+    }
+    fun toggleFavorite(ch: Channel) {
+        favorites = if (ch.id in favorites) favorites - ch.id else favorites + ch.id
+        prefs.edit().putStringSet("favorites_" + selection.country.code, favorites).apply()
+    }
     val onChange = remember(selection) {
         { direction: Int ->
             if (selection.channels.isNotEmpty()) {
@@ -123,11 +157,19 @@ internal fun TvLivePlayerScreen(
             }
         }
     }
-    val latestOnChange by rememberUpdatedState(onChange)
-
-    // Keep key routing independent of focus inside the film-style player chrome.
+    val latestPanel by rememberUpdatedState(panel)
+    val latestCommands by rememberUpdatedState<(TvLiveCommand) -> Unit>({ cmd ->
+        when (cmd) {
+            TvLiveCommand.NEXT -> onChange(1)
+            TvLiveCommand.PREVIOUS -> onChange(-1)
+            TvLiveCommand.CHANNELS -> panel = TvLivePanel.CHANNELS
+            TvLiveCommand.GUIDE -> panel = TvLivePanel.GUIDE
+            TvLiveCommand.INFO -> panel = TvLivePanel.INFO
+        }
+    })
+    // Activity receives physical channel buttons even when Media3 owns focus.
     DisposableEffect(Unit) {
-        TvLiveRemoteKeys.setListener { direction -> latestOnChange(direction) }
+        TvLiveRemoteKeys.setListener({ cmd -> latestCommands(cmd) }, { latestPanel != TvLivePanel.NONE })
         onDispose { TvLiveRemoteKeys.setListener(null) }
     }
 
@@ -162,7 +204,7 @@ internal fun TvLivePlayerScreen(
         showChannelBanner = false
     }
 
-    BackHandler(onBack = onExit)
+    BackHandler { if (panel != TvLivePanel.NONE) panel = TvLivePanel.NONE else onExit() }
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (channel != null) {
@@ -179,9 +221,10 @@ internal fun TvLivePlayerScreen(
                 smoothMotion = session.smoothMotion,
                 isFullscreen = true,
                 onFullscreenToggle = {},
-                onBackClick = onExit,
+                onBackClick = { if (panel != TvLivePanel.NONE) panel = TvLivePanel.NONE else onExit() },
                 onMinimize = onExit,
                 dpadControls = true,
+                liveTvMode = true,
                 canChangeSource = false,
                 sourceLabel = "TV ao vivo",
                 showSkipButton = false,
@@ -200,7 +243,7 @@ internal fun TvLivePlayerScreen(
             // NOS-style non-interactive zapping identity: the physical rocker
             // changes streams, then this compact banner fades on its own.
             AnimatedVisibility(
-                visible = showChannelBanner,
+                visible = showChannelBanner && panel == TvLivePanel.NONE,
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier.align(Alignment.TopStart).padding(start = 34.dp, top = 26.dp)
@@ -248,6 +291,28 @@ internal fun TvLivePlayerScreen(
                             style = MaterialTheme.typography.labelMedium
                         )
                     }
+                }
+            }
+            when (panel) {
+                TvLivePanel.NONE -> Unit
+                TvLivePanel.CHANNELS -> TvLiveChannelOverlay(
+                    channels = selection.channels, current = channel, favorites = favorites,
+                    onTune = ::tune, onFavorite = ::toggleFavorite,
+                    onGuide = { panel = TvLivePanel.GUIDE },
+                    onClose = { panel = TvLivePanel.NONE }
+                )
+                TvLivePanel.GUIDE -> TvLiveEpgOverlay(
+                    channels = selection.channels, current = channel, programmes = programmes,
+                    onTune = ::tune, onClose = { panel = TvLivePanel.NONE }
+                )
+                TvLivePanel.INFO -> Box(Modifier.align(Alignment.BottomCenter)) {
+                    TvLiveInfoOverlay(
+                        channel = channel, number = index + 1,
+                        programmes = LiveTvGuide.forChannel(channel, programmes),
+                        onGuide = { panel = TvLivePanel.GUIDE },
+                        onChannels = { panel = TvLivePanel.CHANNELS },
+                        onClose = { panel = TvLivePanel.NONE }
+                    )
                 }
             }
         } else {
