@@ -157,6 +157,7 @@ fun TvAnimeScreen(
         TvAnimeCinematicHome(
             animeItems = homeAnimes,
             genres = TV_ANIME_GENRES,
+            editorialRails = state.editorialRails,
             onOpenTitle = ::openAnime,
             onGenre = ::browseGenre,
             onOpenMovies = onOpenMovies,
