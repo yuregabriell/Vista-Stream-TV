@@ -4,6 +4,7 @@ import android.app.Activity
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.activity.compose.BackHandler
+import com.ivor.openstream.presentation.tv.TvLivePlayerControls
 import com.ivor.openstream.presentation.player.session.SleepTimer
 import com.ivor.openstream.domain.model.SkipSegment
 import com.ivor.openstream.data.remote.model.EpisodeDto
@@ -237,6 +238,11 @@ fun ExoPlayerView(
     smoothMotion: SmoothMotion? = null,
     /** D-pad and remote-key handling, for the Android TV player surface. */
     dpadControls: Boolean = false,
+    /** Channel player UI: no seek/episode/intro controls, only TV actions. */
+    liveTvMode: Boolean = false,
+    onLiveChannels: () -> Unit = {},
+    onLiveGuide: () -> Unit = {},
+    onLiveInfo: () -> Unit = {},
     volumeBoostPercent: Int = 100,
     onVolumeBoostChange: (Int) -> Unit = {},
     onOpenExternalPlayer: (() -> Unit)? = null,
@@ -1596,7 +1602,25 @@ fun ExoPlayerView(
             }
         }
 
-        if (dpadControls) TvPlayerControls(
+        if (dpadControls && liveTvMode) TvLivePlayerControls(
+            visible = areControlsVisible && !isInPictureInPicture,
+            title = title,
+            subtitle = subtitle,
+            playing = isPlaying,
+            onPause = {
+                if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+            },
+            onChannels = onLiveChannels,
+            onGuide = onLiveGuide,
+            onInfo = onLiveInfo,
+            onSettings = {
+                settingsInitialPage = PlayerSettingsPage.MAIN
+                showSettingsDialog = true
+                areControlsVisible = false
+            },
+            focusRequester = controlsFocusRequester,
+            onInteraction = { controlsInteraction++ }
+        ) else if (dpadControls) TvPlayerControls(
             isVisible = areControlsVisible && !isInPictureInPicture,
             isPlaying = isPlaying,
             isBuffering = isBuffering,
