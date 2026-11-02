@@ -1,6 +1,9 @@
 package com.ivor.openstream.presentation.tv
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -69,25 +72,14 @@ internal fun TvAnimeCinematicHome(
 
     BoxWithConstraints(modifier.fillMaxSize()) {
         val featureHeight = maxHeight * 0.50f
-        if (sharpBackdrop != null) {
-            // Proper 16:9 1280px+ backdrop from TMDB, never a thin AniList banner.
-            TvBackdrop(
-                url = sharpBackdrop,
-                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.78f)
-                    .align(Alignment.TopEnd)
-            )
-        } else if (shown.poster != null) {
-            // AniList banners are narrow and often blurred when scaled to a TV.
-            // Never upscale them as a full-screen backdrop: use the portrait cover
-            // at a modest size until a verified landscape TMDB image is available.
-            AsyncImage(
-                model = shown.poster,
-                contentDescription = null,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.align(Alignment.TopEnd).fillMaxHeight(0.72f)
-                    .widthIn(max = 320.dp)
-            )
-        }
+        // Use the SAME full-bleed frame for every title: never switch to an
+        // isolated small portrait when TMDB hasn't resolved the 16:9 artwork.
+        // AniList's banner/cover remain only visual fallbacks, not separate layouts.
+        TvBackdrop(
+            url = sharpBackdrop ?: shown.background ?: shown.poster,
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.78f)
+                .align(Alignment.TopEnd)
+        )
         TvBackdropScrims()
 
         Column(Modifier.fillMaxSize()) {
@@ -128,24 +120,31 @@ internal fun TvAnimeCinematicHome(
                             shown.description,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 3,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.widthIn(max = 600.dp)
                         )
                     }
-                    // One clear primary action, matching the film/series hero.
-                    // This opens the title/episode page, never starts video unexpectedly.
+                    // Match the Films & Series behavior: the featured action is
+                    // visible only before a card takes focus. Focused cards update
+                    // the hero details but don't retain a misleading featured CTA.
+                    val actionAlpha by animateFloatAsState(
+                        targetValue = if (highlighted == null) 1f else 0f,
+                        label = "tvAnimeFeaturedAction"
+                    )
                     TvPill(
                         label = "Ver anime e episódios",
                         icon = Icons.Rounded.Info,
-                        onClick = { onOpenTitle(shown) },
-                        modifier = Modifier.focusRequester(heroAction)
+                        onClick = { onOpenTitle(featured) },
+                        modifier = Modifier.alpha(actionAlpha)
+                            .focusRequester(heroAction)
+                            .onFocusChanged { if (it.hasFocus) highlighted = null }
                     )
                 }
             }
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentPadding = PaddingValues(bottom = 54.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f).clipToBounds(),
+                contentPadding = PaddingValues(top = 12.dp, bottom = 54.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 item(key = "anime-genres") {
@@ -161,7 +160,10 @@ internal fun TvAnimeCinematicHome(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             items(genres, key = { it.first }) { (code, name) ->
-                                TvPill(name, onClick = { onGenre(code) })
+                                TvPill(name, onClick = { onGenre(code) },
+                                    modifier = Modifier.onFocusChanged {
+                                        if (it.hasFocus) highlighted = null
+                                    })
                             }
                         }
                     }
@@ -178,6 +180,7 @@ internal fun TvAnimeCinematicHome(
                                         onClick = { onOpenTitle(anime) },
                                         modifier = Modifier.onFocusChanged {
                                             if (it.hasFocus) highlighted = anime
+                                            else if (highlighted?.sourceId == anime.sourceId) highlighted = null
                                         }
                                     )
                                 }
@@ -193,7 +196,10 @@ internal fun TvAnimeCinematicHome(
                     ) {
                         Text("À procura de mais animes?",
                             style = MaterialTheme.typography.titleLarge)
-                        TvPill("EXPLORAR TODO O CATÁLOGO DE ANIMES", onClick = onBrowseAll)
+                        TvPill("EXPLORAR TODO O CATÁLOGO DE ANIMES", onClick = onBrowseAll,
+                            modifier = Modifier.onFocusChanged {
+                                if (it.hasFocus) highlighted = null
+                            })
                     }
                 }
             }
