@@ -410,6 +410,7 @@ fun HomeScreen(
 
 @Composable
 private fun PremiumModeSwitch(mode: HomeMode, onModeChange: (HomeMode) -> Unit) {
+    val screenWidth = LocalConfiguration.current.screenWidthDp
     // Deliberately compact: this is navigation, not another full-height banner.
     Row(
         modifier = Modifier.fillMaxWidth()
@@ -425,7 +426,7 @@ private fun PremiumModeSwitch(mode: HomeMode, onModeChange: (HomeMode) -> Unit) 
             HomeMode.ANIME to "Animes",
             HomeMode.SHORTS to "Shorts"
         ).filter { (choice, _) ->
-            choice != HomeMode.SHORTS || LocalConfiguration.current.screenWidthDp < 600
+            choice != HomeMode.SHORTS || screenWidth < 600
         }.forEach { (choice, label) ->
             val selected = mode == choice
             Surface(
@@ -440,7 +441,7 @@ private fun PremiumModeSwitch(mode: HomeMode, onModeChange: (HomeMode) -> Unit) 
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         text = label,
-                        style = if (LocalConfiguration.current.screenWidthDp < 380)
+                        style = if (screenWidth < 380)
                             MaterialTheme.typography.labelMedium
                         else MaterialTheme.typography.labelLarge,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
