@@ -56,6 +56,8 @@ import androidx.compose.runtime.collectAsState
 
 private object TvRoutes {
     const val CATALOG = "tv_catalog"
+    const val CATALOG_PLATFORM = "tv_catalog/platform/{providerId}"
+    fun catalogPlatform(providerId: Int) = "tv_catalog/platform/$providerId"
     const val ANIME_BROWSE = "tv_anime/browse?genre={genre}&query={query}"
     fun animeBrowse(genre: String = "", query: String = "") =
         "tv_anime/browse?genre=${android.net.Uri.encode(genre)}&query=${android.net.Uri.encode(query)}"
@@ -208,6 +210,18 @@ private fun TvAppScaffold(
                 )
             }
 
+            composable(
+                TvRoutes.CATALOG_PLATFORM,
+                arguments = listOf(navArgument("providerId") { type = NavType.IntType })
+            ) { entry ->
+                TvCatalogScreen(
+                    initialProviderId = entry.arguments?.getInt("providerId"),
+                    onOpenTitle = { mediaType, id ->
+                        navController.navigate(TvRoutes.details(mediaType, id))
+                    }
+                )
+            }
+
             composable(TvDestination.ANIME.route) {
                 TvAnimeScreen(
                     onOpenSources = { go(TvDestination.EXTENSIONS) },
@@ -240,6 +254,9 @@ private fun TvAppScaffold(
                 TvSearchScreen(
                     onAnimeBrowse = { genre, query ->
                         navController.navigate(TvRoutes.animeBrowse(genre = genre, query = query))
+                    },
+                    onOpenPlatform = { providerId ->
+                        navController.navigate(TvRoutes.catalogPlatform(providerId))
                     },
                     onOpenSources = { go(TvDestination.EXTENSIONS) },
                     onTitleClick = { animeId, mediaType -> navController.navigate(TvRoutes.details(mediaType, animeId)) }
