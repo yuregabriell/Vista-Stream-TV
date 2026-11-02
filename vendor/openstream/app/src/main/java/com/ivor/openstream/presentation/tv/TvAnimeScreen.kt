@@ -240,6 +240,23 @@ fun TvAnimeScreen(
                 state.browseGenre != genre || state.browseQuery != submittedQuery
             val gridState = rememberLazyGridState()
             LaunchedEffect(genre, submittedQuery) { gridState.scrollToItem(0) }
+            // Fetch the next TMDB page as the viewer scrolls through a genre.
+            // AniList ranks the first entries, but does not cap the catalog.
+            val nearEnd by remember(gridState) {
+                androidx.compose.runtime.derivedStateOf {
+                    val info = gridState.layoutInfo
+                    val last = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+                    info.totalItemsCount > 0 && last >= info.totalItemsCount - 7
+                }
+            }
+            LaunchedEffect(
+                nearEnd, state.browseItems.size, state.browseHasMore,
+                state.browseLoading, genre, submittedQuery
+            ) {
+                if (nearEnd && state.browseHasMore && !state.browseLoading &&
+                    !waiting && filtered.isNotEmpty()
+                ) viewModel.loadMore()
+            }
 
             if (state.browseLoading && filtered.isEmpty() || waiting) {
                 TvLoading(Modifier.weight(1f))
