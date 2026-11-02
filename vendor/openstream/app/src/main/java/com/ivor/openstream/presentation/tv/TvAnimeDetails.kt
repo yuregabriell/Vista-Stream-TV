@@ -1,48 +1,35 @@
 package com.ivor.openstream.presentation.tv
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
-import coil3.compose.AsyncImage
+import androidx.tv.material3.Icon
 import com.ivor.openstream.data.catalog.KeylessEpisode
 import com.ivor.openstream.data.catalog.KeylessTitle
 import com.ivor.openstream.domain.model.VideoServer
 
 /**
- * Remote-first, full-width anime details. Uses the SAME actual keyless
- * episode/source/playback callbacks as the phone; no duplicated player state.
+ * AniList fallback detail screen: same premium TV visual language as the main
+ * TMDB route. Uses the real keyless source resolver (never invents a TMDB ID).
+ * This is a graceful detail experience, not a dead-end matching error screen.
  */
 @Composable
 fun TvAnimeDetails(
@@ -62,149 +49,176 @@ fun TvAnimeDetails(
     onPlay: (VideoServer) -> Unit
 ) {
     BackHandler(onBack = onBack)
-    val detailFocus = remember(title.sourceId) { FocusRequester() }
-    LaunchedEffect(title.sourceId) {
-        runCatching { detailFocus.requestFocus() }
+    val initialFocus = remember(title.sourceId) { FocusRequester() }
+    val seasons = remember(episodes) { episodes.map { it.season }.distinct().sorted() }
+    val episodeChoices = remember(episodes, season, episode) {
+        episodes.filter { it.season == season }.ifEmpty {
+            listOf(KeylessEpisode(season, episode, "Episódio $episode"))
+        }
     }
-    val seasons = episodes.map { it.season }.distinct().sorted()
-    val episodeChoices = episodes.filter { it.season == season }.ifEmpty {
-        listOf(KeylessEpisode(season, episode, "Episódio $episode"))
+    LaunchedEffect(title.sourceId) {
+        // Back always remains available even if a provider returns no streams.
+        runCatching { initialFocus.requestFocus() }
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(bottom = 72.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
-    ) {
-        item(key = "anime-title") {
-            Box(
-                Modifier.fillMaxWidth()
-                    .padding(start = TvLayout.ContentStart, end = TvLayout.ContentEnd, top = 20.dp)
-                    .height(250.dp)
-                    .clip(RoundedCornerShape(18.dp))
-            ) {
-                AsyncImage(
-                    model = title.background ?: title.poster,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-                Box(Modifier.fillMaxSize().background(
-                    Brush.horizontalGradient(
-                        0f to MaterialTheme.colorScheme.background.copy(alpha = 0.99f),
-                        0.55f to MaterialTheme.colorScheme.background.copy(alpha = 0.6f),
-                        1f to Color.Transparent
-                    )
-                ))
+    Box(Modifier.fillMaxSize()) {
+        // Cover the same TV canvas as the main episode detail page. Prefer a
+        // landscape image; an AniList cover is still usable as a visual fallback.
+        TvBackdrop(
+            url = title.background ?: title.poster,
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.82f)
+        )
+        TvBackdropScrims()
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 84.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            item(key = "anime-premium-header") {
                 Column(
-                    modifier = Modifier.align(Alignment.CenterStart).padding(28.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(start = TvLayout.PageStart, end = TvLayout.ContentEnd,
+                            top = 54.dp, bottom = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("ANIME  /  VISTASTREAM", color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                    Text(title.title, style = MaterialTheme.typography.headlineLarge,
-                        color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.width(520.dp))
+                    Text(
+                        "ANIME · VISTASTREAM",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        title.title,
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 600.dp)
+                    )
                     Text(
                         listOfNotNull(
                             title.year?.toString(),
-                            title.format?.replace('_',' '),
+                            title.format?.replace('_', ' '),
+                            "T$season · E$episode",
                             title.genres.take(2).joinToString(" · ").takeIf { it.isNotBlank() }
                         ).joinToString("  ·  "),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White.copy(alpha = 0.82f)
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Button(onClick = onWatch, enabled = servers.isNotEmpty()) {
+                    if (title.description.isNotBlank()) {
+                        Text(
+                            title.description,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.widthIn(max = 600.dp)
+                        )
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Button(
+                            onClick = onWatch,
+                            enabled = servers.isNotEmpty(),
+                            modifier = Modifier.width(270.dp)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
                             androidx.tv.material3.Text(
-                                when {
-                                    resumePositionMs > 15_000L -> "▶  Continuar a assistir"
-                                    servers.isNotEmpty() -> "▶  Assistir"
-                                    resolving -> "A procurar fontes..."
-                                    else -> "Sem fonte disponível"
+                                if (resumePositionMs > 15_000L) "Continuar"
+                                else if (resolving) "A procurar fontes"
+                                else "Reproduzir"
+                            )
+                        }
+                        TvPill(
+                            label = "Voltar aos animes",
+                            onClick = onBack,
+                            modifier = Modifier.focusRequester(initialFocus)
+                        )
+                    }
+                    Column(
+                        modifier = Modifier.widthIn(max = 470.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.VideoLibrary, contentDescription = null)
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                "Episódios e temporadas · ${seasons.size.coerceAtLeast(1)} temporadas",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Dns, contentDescription = null)
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                if (resolving) "Fontes · A procurar $providersChecked/$providersTotal"
+                                else "Fontes · ${servers.size} disponíveis",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                        }
+                    }
+                    if (resolving) {
+                        LinearProgressIndicator(Modifier.widthIn(max = 470.dp).fillMaxWidth())
+                    } else if (resolved && servers.isEmpty()) {
+                        Text(
+                            "Ainda sem fontes compatíveis. Podes consultar episódios e voltar a procurar mais tarde.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+
+            if (seasons.size > 1) {
+                item(key = "anime-premium-seasons") {
+                    TvRail(title = "Temporadas", start = TvLayout.PageStart) {
+                        items(seasons, key = { it }) { number ->
+                            TvPill(
+                                label = "Temporada $number",
+                                selected = season == number,
+                                onClick = {
+                                    val first = episodes.firstOrNull { it.season == number }
+                                    onEpisode(number, first?.number ?: 1)
                                 }
                             )
                         }
-                        TvPill("Voltar aos animes", onClick = onBack, modifier = Modifier.focusRequester(detailFocus))
                     }
                 }
             }
-        }
 
-        item(key = "anime-description") {
-            Column(Modifier.fillMaxWidth().padding(
-                start = TvLayout.ContentStart, end = TvLayout.ContentEnd),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    title.description.ifBlank { "Sinopse não disponível." },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 5,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    when {
-                        resolving -> "A verificar fontes: $providersChecked/$providersTotal"
-                        servers.isEmpty() && resolved ->
-                            "Nenhuma fonte compatível disponível neste momento. O catálogo não garante reprodução."
-                        servers.isNotEmpty() -> "${servers.size} fontes disponíveis para este episódio."
-                        else -> "A carregar episódios e fontes de reprodução…"
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                if (resolving) LinearProgressIndicator(Modifier.fillMaxWidth())
-            }
-        }
-
-        if (seasons.size > 1) {
-            item(key = "anime-seasons") {
-                TvRail(title = "Temporadas") {
-                    items(seasons, key = { it }) { n ->
-                        TvPill(
-                            "Temporada $n",
-                            selected = season == n,
-                            onClick = {
-                                episodes.firstOrNull { it.season == n }?.let { first ->
-                                    onEpisode(n, first.number)
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-        }
-
-        item(key = "anime-episodes") {
-            TvRail("Episódios") {
-                items(episodeChoices, key = { "${it.season}:${it.number}" }) { ep ->
-                    TvLandscapeCard(
-                        title = "E${ep.number} · ${ep.title}",
-                        imageUrl = title.background ?: title.poster,
-                        subtitle = if (ep.season == season && ep.number == episode)
-                            "Selecionado" else "Temporada ${ep.season}",
-                        width = 210.dp,
-                        onClick = { onEpisode(ep.season, ep.number) }
-                    )
-                }
-            }
-        }
-
-        if (servers.isNotEmpty()) {
-            item(key = "anime-sources") {
-                TvRail("Fontes disponíveis") {
-                    itemsIndexed(servers, key = { index, _ -> "source-$index" }) { _, server ->
+            item(key = "anime-premium-episodes") {
+                TvRail("Episódios · Temporada $season", start = TvLayout.PageStart) {
+                    items(episodeChoices, key = { "${it.season}:${it.number}" }) { item ->
                         TvLandscapeCard(
-                            title = server.providerName,
+                            title = "E${item.number} · ${item.title}",
                             imageUrl = title.background ?: title.poster,
-                            subtitle = listOfNotNull(
-                                server.name, server.streamType, server.audioLanguage
-                            ).joinToString(" · "),
-                            width = 240.dp,
-                            onClick = { onPlay(server) }
+                            subtitle = if (item.number == episode) "Selecionado" else "Temporada ${item.season}",
+                            width = 210.dp,
+                            onClick = { onEpisode(item.season, item.number) }
                         )
+                    }
+                }
+            }
+
+            if (servers.isNotEmpty()) {
+                item(key = "anime-premium-sources") {
+                    TvRail("Fontes disponíveis", start = TvLayout.PageStart) {
+                        itemsIndexed(servers, key = { index, _ -> "source-$index" }) { _, server ->
+                            TvLandscapeCard(
+                                title = server.providerName,
+                                imageUrl = title.background ?: title.poster,
+                                subtitle = listOfNotNull(
+                                    server.name, server.streamType, server.audioLanguage
+                                ).joinToString(" · "),
+                                width = 240.dp,
+                                onClick = { onPlay(server) }
+                            )
+                        }
                     }
                 }
             }
