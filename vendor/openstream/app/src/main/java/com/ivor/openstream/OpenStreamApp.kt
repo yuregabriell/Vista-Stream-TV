@@ -57,7 +57,13 @@ class OpenStreamApp : Application(), SingletonImageLoader.Factory {
      * sized by the Cache size setting.
      */
     override fun newImageLoader(context: PlatformContext): ImageLoader {
-        val client = OkHttpClient.Builder().dns(appDns).build()
+        // Share connections for visible artwork, but avoid flooding the
+        // metadata gateway on low-memory TV sticks.
+        val dispatcher = okhttp3.Dispatcher().apply {
+            maxRequests = 8
+            maxRequestsPerHost = 4
+        }
+        val client = OkHttpClient.Builder().dns(appDns).dispatcher(dispatcher).build()
         val directory = File(cacheDir, CacheBudget.IMAGE_DIR)
         // Hilt injects in onCreate; nothing should ask for images before that, but never crash on it.
         val wanted = (if (::appSettingsStore.isInitialized) appSettingsStore.current.cacheSize else CacheSize.STANDARD).imageBytes
@@ -67,14 +73,17 @@ class OpenStreamApp : Application(), SingletonImageLoader.Factory {
             // Keep its decoded-bitmaps LRU modest: evicted images still reload from disk.
             .memoryCache {
                 MemoryCache.Builder()
-                    .maxSizePercent(context, if (tvDevice) 0.10 else 0.25)
+                    .maxSizePercent(context, if (tvDevice) 0.08 else 0.25)
                     .build()
             }
             .components { add(OkHttpNetworkFetcherFactory(client)) }
             .diskCache {
                 DiskCache.Builder()
                     .directory(directory.toOkioPath())
-                    .maxSizeBytes(CacheBudget.bytesFor(directory, wanted))
+                    // Bound TV artwork to 48 MB regardless of the phone preset;
+                    // Android can evict it safely when storage is under pressure.
+                    .maxSizeBytes(CacheBudget.bytesFor(directory,
+                        if (tvDevice) wanted.coerceAtMost(48L * 1024L * 1024L) else wanted))
                     .build()
             }
             .build()
