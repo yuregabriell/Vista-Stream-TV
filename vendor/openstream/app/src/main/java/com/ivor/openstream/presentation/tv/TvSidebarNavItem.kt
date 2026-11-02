@@ -65,8 +65,9 @@ internal fun TvSidebarNavItem(
     val scheme = MaterialTheme.colorScheme
     val surfaceColor by animateColorAsState(
         targetValue = when {
-            selected -> Color.Transparent
-            focused -> scheme.primary.copy(alpha = 0.22f)
+            selected && focused -> scheme.primary.copy(alpha = 0.95f)
+            selected -> scheme.primary.copy(alpha = 0.84f)
+            focused -> scheme.primary.copy(alpha = 0.20f)
             else -> Color.Transparent
         },
         animationSpec = tween(durationMillis = 220),
@@ -89,8 +90,8 @@ internal fun TvSidebarNavItem(
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
     ) {
-        // Fill the complete 52dp button; a wrap-content Box was anchored by the
-        // TV Surface's internal layout, causing visual left/top drift.
+        // The selected pill and icon belong to the SAME 52dp surface.
+        // This prevents the highlight from drifting away from the icon on TV densities.
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Icon(
                 imageVector = destination.roundedGlyph(),
