@@ -59,6 +59,7 @@ import coil3.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import com.ivor.openstream.data.catalog.KeylessTitle
 import com.ivor.openstream.presentation.catalog.KeylessCatalogViewModel
+import com.ivor.openstream.presentation.catalog.KeylessCatalogScreen
 
 /**
  * Dedicated anime experience for Android TV, backed by the same AniList / public
@@ -108,7 +109,7 @@ fun TvAnimeScreen(
     var searchText by rememberSaveable(initialGenre, initialQuery) { mutableStateOf(initialQuery) }
     var submittedQuery by rememberSaveable(initialGenre, initialQuery) { mutableStateOf(initialQuery) }
     var resolvingTitle by remember { mutableStateOf<String?>(null) }
-    var unresolvedTitle by remember { mutableStateOf<KeylessTitle?>(null) }
+    var fallbackTitle by remember { mutableStateOf<KeylessTitle?>(null) }
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
     val firstAction = remember { FocusRequester() }
@@ -117,13 +118,13 @@ fun TvAnimeScreen(
     // player as global search. AniList IDs are never passed as TMDB IDs.
     fun openAnime(item: KeylessTitle) {
         if (resolvingTitle != null) return
-        unresolvedTitle = null
+        fallbackTitle = null
         resolvingTitle = item.title
         scope.launch {
             val route = titleNavigation.resolve(item)
             resolvingTitle = null
             if (route != null) onOpenUnifiedTitle(route.first, route.second)
-            else unresolvedTitle = item
+            else fallbackTitle = item
         }
     }
 
@@ -161,20 +162,21 @@ fun TvAnimeScreen(
         if (browsing) runCatching { firstAction.requestFocus() }
     }
 
-    BackHandler(enabled = browsing || unresolvedTitle != null) {
-        if (unresolvedTitle != null) unresolvedTitle = null else browseGenre("")
-    }
+    BackHandler(enabled = browsing) { browseGenre("") }
     if (resolvingTitle != null) {
         TvLoading(modifier.fillMaxSize())
         return
     }
-    if (unresolvedTitle != null) {
-        val missing = unresolvedTitle ?: return
-        TvAnimeMessage(
-            message = "Não foi possível associar \"${missing.title}\" ao catálogo principal. Verifica a ligação ou tenta novamente.",
-            action = "Tentar novamente",
-            onAction = { openAnime(missing) },
-            modifier = modifier.fillMaxSize()
+    if (fallbackTitle != null) {
+        // A missing TMDB match must NOT block an AniList title. Keep the
+        // existing keyless source resolver and episode information available.
+        // This fallback uses the same TV-native player instead of an error page.
+        KeylessCatalogScreen(
+            modifier = modifier,
+            initialTitle = fallbackTitle,
+            onInitialDismiss = { fallbackTitle = null },
+            onOpenSources = onOpenSources,
+            viewModel = viewModel
         )
         return
     }
