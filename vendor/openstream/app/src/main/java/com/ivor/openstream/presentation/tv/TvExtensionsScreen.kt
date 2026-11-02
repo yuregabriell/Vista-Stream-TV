@@ -118,16 +118,6 @@ fun TvExtensionsScreen(
                 supporting = state.message?.let { "$counts  ·  $it" } ?: counts,
                 actions = {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(
-                            onClick = { providersViewModel.setEnabled(!officialProvidersEnabled) },
-                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding
-                        ) {
-                            Icon(Icons.Default.Extension, contentDescription = null,
-                                modifier = Modifier.size(ButtonDefaults.IconSize))
-                            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                            Text(if (officialProvidersEnabled) "Plataformas · Ativo"
-                                else "Ativar plataformas")
-                        }
                         Button(onClick = { showAddRepo = true },
                             contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
@@ -157,6 +147,25 @@ fun TvExtensionsScreen(
                 }
             )
 
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(
+                    start = TvLayout.ContentStart, end = TvLayout.ContentEnd, top = 6.dp, bottom = 8.dp
+                ),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TvPill(
+                    label = if (officialProvidersEnabled) "Plataformas oficiais · Ativado"
+                        else "Plataformas oficiais · Desativado",
+                    selected = officialProvidersEnabled,
+                    onClick = { providersViewModel.setEnabled(!officialProvidersEnabled) }
+                )
+                androidx.compose.material3.Text(
+                    "Extensão nativa • dados TMDB/JustWatch · Portugal",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             androidx.compose.material3.Text(
                 "Extensão nativa · Onde assistir: Netflix, Prime Video, Disney+ e outras plataformas " +
                     "conforme disponibilidade oficial em Portugal. Quando ativada, adiciona filtros " +
