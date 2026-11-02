@@ -12,7 +12,7 @@ import javax.net.ssl.SSLException
 internal fun sourceFailureSummary(error: Throwable): String {
     val chain = generateSequence(error) { it.cause }.take(8).toList()
     val httpCode = chain.asSequence().mapNotNull { cause ->
-        Regex("""\bHTTP\s+(\d{3})\\b""").find(cause.message.orEmpty())
+        Regex("""\bHTTP\s+(\d{3})\b""").find(cause.message.orEmpty())
             ?.groupValues?.getOrNull(1)?.toIntOrNull()
     }.firstOrNull()
     return when {
