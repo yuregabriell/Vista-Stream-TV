@@ -545,6 +545,18 @@ private fun settingRows(
                 onChange = setProvidersEnabled
             ),
             SettingRow.Action(
+                key = "torrent-p2p",
+                title = "Streaming P2P · TorrServer",
+                subtitle = "Configurar motor local ou da rede para ficheiros torrent dos addons Stremio.",
+                opensPage = true,
+                onClick = {
+                    context.startActivity(Intent(
+                        context,
+                        com.ivor.openstream.presentation.settings.TorrentSettingsActivity::class.java
+                    ))
+                }
+            ),
+            SettingRow.Action(
                 key = "extensions",
                 title = stringResource(R.string.mk_title),
                 subtitle = stringResource(
