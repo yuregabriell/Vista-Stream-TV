@@ -606,14 +606,43 @@ private fun Hero(
             // The parallax shifts the artwork down; without clipping its bottom edge shows below the hero.
             .clipToBounds()
     ) {
+        // A landscape TMDB backdrop cropped into a portrait phone hides much
+        // of the ensemble (e.g. Dragon Ball). Keep a full-bleed cover behind
+        // everything, then blend a width-fitted composition above it so the
+        // original artwork's characters can actually be seen without bars.
+        val heroArtwork = "https://image.tmdb.org/t/p/w1280${details.backdropPath ?: details.posterPath}"
         AsyncImage(
-            model = "https://image.tmdb.org/t/p/w1280${details.backdropPath ?: details.posterPath}",
+            model = heroArtwork,
             contentDescription = null,
             contentScale = ContentScale.Crop,
+            alignment = Alignment.Center,
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer { translationY = parallax() }
         )
+        if (details.backdropPath != null) {
+            AsyncImage(
+                model = heroArtwork,
+                contentDescription = null,
+                contentScale = ContentScale.FillWidth,
+                alignment = Alignment.TopCenter,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .height(320.dp)
+                    .graphicsLayer { translationY = parallax() * 0.4f }
+            )
+            Box(
+                Modifier.align(Alignment.TopCenter).fillMaxWidth().height(370.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            0.65f to Color.Transparent,
+                            1f to MaterialTheme.colorScheme.background.copy(alpha = 0.32f)
+                        )
+                    )
+            )
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
