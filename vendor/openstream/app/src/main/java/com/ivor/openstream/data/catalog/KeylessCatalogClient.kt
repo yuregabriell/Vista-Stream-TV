@@ -225,7 +225,7 @@ class KeylessCatalogClient @Inject constructor(
           query {
             Page(page: $page, perPage: 24) {
               media($arguments) {
-                id title { english romaji native } coverImage { large } bannerImage
+                id title { english romaji native } coverImage { extraLarge large } bannerImage
                 description(asHtml: false) startDate { year } episodes format genres
               }
             }
@@ -266,7 +266,9 @@ class KeylessCatalogClient @Inject constructor(
                 sourceId = "anilist:$id", title = name, alternateTitle = title.str("romaji"),
                 type = "anime",
                 year = (obj["startDate"] as? JsonObject)?.int("year"),
-                poster = (obj["coverImage"] as? JsonObject)?.str("large"),
+                poster = (obj["coverImage"] as? JsonObject)?.let {
+                    it.str("extraLarge") ?: it.str("large")
+                },
                 background = obj.str("bannerImage"),
                 description = obj.str("description").orEmpty().replace(Regex("<[^>]+>"), ""),
                 anilistId = id, episodes = obj.int("episodes"),
