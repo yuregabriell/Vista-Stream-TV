@@ -8,7 +8,7 @@ const COUNTRIES=[
 ];
 const countryKey="vista-live-country-v1",favoriteKey="vista-live-favorites-v1";
 const RICOS="https://zoreu.github.io/ricosstremio/manifest.json";
-let installedLiveAddons=[],openSources=null;
+let installedLiveAddons=[],openSources=null,addonSignature="";
 function safeGet(k){try{return localStorage.getItem(k);}catch{return null;}}
 function safeSet(k,v){try{localStorage.setItem(k,v);}catch{}}
 const detected=(navigator.language||"pt-PT").split("-").at(-1).toUpperCase();
@@ -250,6 +250,8 @@ async function refresh(force=false){
   if(currentHost&&state.country===code)paint(currentHost,currentPlay);
 }
 export function renderLiveTv(host,{play,addons=[],onSources}){
+  const nextSignature=addons.map(a=>a.url+":"+(a.enabled!==false)).join("|");
+  if(addonSignature!==nextSignature){addonSignature=nextSignature;state.countryLoaded="";}
   currentHost=host;currentPlay=play;installedLiveAddons=addons;openSources=onSources;
   paint(host,play);
   if(state.countryLoaded!==state.country&&!state.loading)void refresh();
