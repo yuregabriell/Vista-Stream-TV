@@ -1046,6 +1046,8 @@ private fun KeylessTitleDetails(
     BackHandler(onBack = onBack)
     val seasons = remember(episodes) { episodes.map { it.season }.distinct().sorted() }
     val currentSeasonEpisodes = remember(episodes, season) { episodes.filter { it.season == season } }
+    val context = LocalContext.current
+    val artwork = title.background ?: title.poster
     Column(
         Modifier.fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
@@ -1053,71 +1055,189 @@ private fun KeylessTitleDetails(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Box(Modifier.fillMaxWidth().height(208.dp)) {
+        // Every keyless/AniList title uses the same cinematic layout language
+        // as the premium TMDB DetailsScreen. The metadata and streaming
+        // resolver remain owned by the selected KeylessTitle (no ID guessing).
+        Box(
+            Modifier.fillMaxWidth()
+                .height(520.dp)
+        ) {
             AsyncImage(
-                model = title.background ?: title.poster,
+                model = artwork,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
+                alignment = Alignment.Center,
                 modifier = Modifier.fillMaxSize()
             )
+            if (title.background != null) {
+                // The width-fitted layer reveals the whole ensemble above the
+                // full-bleed cover instead of chopping away half the characters.
+                AsyncImage(
+                    model = title.background,
+                    contentDescription = null,
+                    contentScale = ContentScale.FillWidth,
+                    alignment = Alignment.TopCenter,
+                    modifier = Modifier.fillMaxWidth().height(300.dp)
+                        .align(Alignment.TopCenter)
+                )
+            }
             Box(
                 Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.2f), Color.Black.copy(alpha = 0.96f)))
+                    Brush.verticalGradient(
+                        0f to Color.Black.copy(alpha = 0.23f),
+                        0.34f to Color.Transparent,
+                        0.58f to MaterialTheme.colorScheme.background.copy(alpha = 0.34f),
+                        0.93f to MaterialTheme.colorScheme.background,
+                        1f to MaterialTheme.colorScheme.background
+                    )
                 )
             )
-            TextButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(12.dp)) {
-                Icon(Icons.Default.ArrowBack, contentDescription = null, tint = Color.White)
-                Text(" Biblioteca", color = Color.White)
+            TextButton(
+                onClick = onBack,
+                modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                        RoundedCornerShape(48.dp)
+                    )
+            ) {
+                Icon(Icons.Default.ArrowBack, null, tint = Color.White)
+                Text(" Voltar", color = Color.White)
             }
-            // AniList/Cinemeta titles with a verified TMDB ID use the exact same
-            // official logo as movies and series. No guessing by similar names.
-            if (com.ivor.openstream.presentation.tv.rememberTvMode() && title.tmdbId != null) {
-                com.ivor.openstream.presentation.tv.TvOfficialTitleLogo(
-                    title = title.title,
-                    mediaType = if (title.type == "movie" || title.format == "MOVIE") "movie" else "tv",
-                    titleId = title.tmdbId,
-                    modifier = Modifier.align(Alignment.BottomStart).padding(18.dp)
-                )
-            } else {
-                Text(
-                    title.title,
-                    modifier = Modifier.align(Alignment.BottomStart).padding(18.dp),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+            Row(
+                modifier = Modifier.align(Alignment.BottomStart)
+                    .padding(start = 18.dp, end = 18.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Box(
+                    Modifier.width(115.dp).height(172.dp)
+                        .background(
+                            MaterialTheme.colorScheme.surfaceContainerHigh,
+                            RoundedCornerShape(20.dp)
+                        )
+                ) {
+                    AsyncImage(
+                        model = title.poster ?: artwork,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(30.dp)
+                    ) {
+                        Text(
+                            if (title.format == "MOVIE" || title.type == "movie") "FILME"
+                            else if (title.type == "anime") "ANIME" else "SÉRIE",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    Text(
+                        title.title,
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Black,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
+                        color = Color.White
+                    )
+                    Text(
+                        listOfNotNull(
+                            title.year?.toString(),
+                            if (title.format != "MOVIE" && title.type != "movie")
+                                "T$season · E$episode" else null
+                        ).joinToString(" · "),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.83f)
+                    )
+                }
             }
         }
-        Column(Modifier.fillMaxWidth().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(
-                listOfNotNull(
-                    title.year?.toString(),
-                    when (title.type) { "movie" -> "Filme"; "anime" -> "Anime"; else -> "Série" },
-                    if (title.type != "movie") "Temporada $season · Episódio $episode" else null
-                ).joinToString("  •  "),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                title.description.ifBlank { "Sinopse não disponível." },
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 7,
-                overflow = TextOverflow.Ellipsis
-            )
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            if (title.genres.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    title.genres.take(3).forEach { name ->
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(24.dp)
+                        ) {
+                            Text(
+                                name,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                    }
+                }
+            }
+            if (title.description.isNotBlank()) {
+                Text(
+                    title.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 5,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Button(
                 onClick = onWatch,
                 enabled = servers.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(9.dp)
+                modifier = Modifier.fillMaxWidth().height(68.dp),
+                shape = RoundedCornerShape(26.dp)
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(when {
-                    servers.isNotEmpty() && resumePositionMs > 15_000L -> "Continuar"
-                    servers.isNotEmpty() -> "Assistir"
-                    resolving -> "A procurar reprodução..."
-                    else -> "Sem fonte disponível"
-                }, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    when {
+                        servers.isNotEmpty() && resumePositionMs > 15_000L -> "Continuar"
+                        servers.isNotEmpty() -> "Reproduzir"
+                        resolving -> "A procurar fontes…"
+                        else -> "Sem fonte disponível"
+                    },
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Column(Modifier.padding(15.dp)) {
+                        Text("Fontes", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "${servers.size} disponíveis",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                if (title.format != "MOVIE" && title.type != "movie") {
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Column(Modifier.padding(15.dp)) {
+                            Text("Episódios", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "${episodes.size} listados",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
             if (resolving) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
