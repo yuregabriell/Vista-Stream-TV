@@ -38,6 +38,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -121,7 +122,9 @@ fun TvAnimeScreen(
         fallbackTitle = null
         resolvingTitle = item.title
         scope.launch {
-            val route = titleNavigation.resolve(item)
+            // Don't leave the user on a spinner while trying many aliases
+            // against a slow metadata gateway. AniList details remain available.
+            val route = withTimeoutOrNull(6_000L) { titleNavigation.resolve(item) }
             resolvingTitle = null
             if (route != null) onOpenUnifiedTitle(route.first, route.second)
             else fallbackTitle = item
