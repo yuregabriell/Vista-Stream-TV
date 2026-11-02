@@ -28,8 +28,17 @@ internal object LiveTvGuide {
     private var cacheTime = 0L
     private var cache: Map<String, List<LiveProgramme>> = emptyMap()
 
-    fun guideUrl(context: Context, country: String) =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("xmltv_" + country, "").orEmpty()
+    /** Public EPG defaults for Brazil/Portugal; user override or empty value disables. */
+    fun guideUrl(context: Context, country: String): String {
+        val pref = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val saved = pref.getString("xmltv_" + country, null)
+        if (saved != null) return saved
+        return when (country) {
+            "BR" -> "https://iptv-epg.org/files/epg-br.xml.gz"
+            "PT" -> "https://iptv-epg.org/files/epg-pt.xml.gz"
+            else -> ""
+        }
+    }
 
     fun saveGuideUrl(context: Context, country: String, raw: String): Boolean {
         val url = raw.trim()
