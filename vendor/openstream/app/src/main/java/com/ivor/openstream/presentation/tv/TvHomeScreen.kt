@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
@@ -38,6 +39,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,6 +84,7 @@ private fun AnimeDto.tvMediaType(): String = mediaType ?: if (isMovie) "movie" e
 @OptIn(ExperimentalFoundationApi::class, kotlinx.coroutines.FlowPreview::class)
 @Composable
 fun TvHomeScreen(
+    resetTopToken: Int = 0,
     onOpenTitle: (mediaType: String, id: Int) -> Unit,
     onPlay: (mediaType: String, id: Int, season: Int, episode: Int) -> Unit,
     /** Opening a continue-watching card is not the same as pressing Play. */
@@ -122,7 +126,18 @@ fun TvHomeScreen(
             val featuredProgress = featured?.let { hero -> continueWatching.firstOrNull { it.tmdbId == hero.id } }
 
             val playRequester = remember { FocusRequester() }
+            val homeScrollState = rememberLazyListState()
+            var lastResetAtHome by remember { mutableIntStateOf(resetTopToken) }
             LaunchedEffect(Unit) { runCatching { playRequester.requestFocus() } }
+            LaunchedEffect(resetTopToken) {
+                if (lastResetAtHome != resetTopToken) {
+                    lastResetAtHome = resetTopToken
+                    homeScrollState.scrollToItem(0)
+                    focus = null
+                    withFrameNanos { }
+                    runCatching { playRequester.requestFocus() }
+                }
+            }
 
             BoxWithConstraints(modifier.fillMaxSize()) {
                 val panelHeight = maxHeight * 0.5f
@@ -189,6 +204,7 @@ fun TvHomeScreen(
                     val defaultSpec = LocalBringIntoViewSpec.current
                     CompositionLocalProvider(LocalBringIntoViewSpec provides rowPivot) {
                         LazyColumn(
+                            state = homeScrollState,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .weight(1f),
