@@ -162,7 +162,7 @@ fun TvAnimeScreen(
         if (browsing) runCatching { firstAction.requestFocus() }
     }
 
-    BackHandler(enabled = browsing) { browseGenre("") }
+    BackHandler(enabled = browsing && fallbackTitle == null && resolvingTitle == null) { browseGenre("") }
     if (resolvingTitle != null) {
         TvLoading(modifier.fillMaxSize())
         return
