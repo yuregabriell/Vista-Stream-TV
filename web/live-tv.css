@@ -1,0 +1,62 @@
+/* Live TV premium design — adaptive phone, tablet and desktop. */
+.toplink[data-tab="tv"].selected{color:#eee2ff;background:#5636a6;box-shadow:inset 0 0 0 1px #9281d537}
+.live-page{padding:10px 0 110px;color:#f7f3fc;max-width:1280px;margin:0 auto}
+.live-page-head{padding:12px 0 24px}
+.live-eyebrow{color:#eba1ec;font-size:10px;font-weight:900;letter-spacing:2px}
+.live-page-head h1{font-size:clamp(28px,5vw,46px);letter-spacing:-1.3px;margin:8px 0 7px;font-weight:850}
+.live-page-head p{color:#bdb6cc;margin:0;line-height:1.55}
+.live-hero{position:relative;overflow:hidden;border-radius:26px;min-height:174px;padding:25px 27px;display:flex;align-items:center;justify-content:space-between;gap:20px;background:radial-gradient(circle at 88% 8%,#ac59d655,transparent 42%),linear-gradient(125deg,#3b2458,#1b1830 56%,#151827);border:1px solid #a77bb755;box-shadow:0 13px 34px #0003}
+.live-hero:before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(95deg,#2a1b3a44,transparent)}
+.live-hero-info,.live-country-trigger{position:relative;z-index:1}
+.live-hero h2{font-size:clamp(26px,5vw,39px);margin:8px 0 6px;letter-spacing:-1px}
+.live-hero p{font-size:12px;color:#cfc4db;margin:0;line-height:1.5}
+.live-country-trigger{background:#f1e6ff;color:#392252;border:0;border-radius:18px;padding:14px 19px;font-weight:850;white-space:nowrap;box-shadow:0 8px 20px #0004}
+.live-toolbar{display:flex;gap:10px;margin-top:22px}
+.live-search{height:51px;min-width:0;flex:1;border:1px solid #5d506d;border-radius:17px;background:#1a1824;padding:0 17px;color:#f8f5ff;outline:0}
+.live-search:focus{border-color:#c8a0ff;box-shadow:0 0 0 3px #885cd927}
+.live-reload{background:#292139;border:1px solid #665472;color:white;border-radius:15px;min-width:51px;padding:10px 13px;font-size:21px}
+.live-chips{display:flex;gap:8px;overflow:auto;padding:17px 0 9px;scrollbar-width:none}
+.live-chip{background:#201b2e;border:1px solid #5f4b70;color:#dfd1e8;border-radius:15px;padding:10px 15px;white-space:nowrap;font-size:12px;font-weight:750}
+.live-chip.active{background:#7647ac;color:#fff;border-color:#bf95ec;box-shadow:0 3px 14px #854ddd44}
+.live-results-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:13px 0 15px}
+.live-results-heading h2{font-size:21px;margin:0;letter-spacing:-.4px}
+.live-results-heading span{font-size:11px;color:#bcb4cc}
+.live-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:13px}
+.live-channel{position:relative;min-width:0;text-align:left;display:flex;flex-direction:column;gap:6px;padding:15px;background:linear-gradient(145deg,#252033,#161720);border:1px solid #52435d;border-radius:20px;color:#f8f3ff;transition:transform .15s,background .15s,box-shadow .15s;min-height:160px}
+.live-channel:hover{transform:translateY(-3px);background:#322644;box-shadow:0 10px 28px #0005}
+.live-channel-logo{display:flex;align-items:center;justify-content:center;min-height:66px;max-height:66px;margin:0 25px 7px 0;overflow:hidden}
+.live-channel-logo img{width:100%;height:59px;object-fit:contain;filter:drop-shadow(0 3px 7px #0008)}
+.live-placeholder{font-size:37px;color:#d3acee}
+.live-channel strong{font-size:13px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.live-group{font-size:10px;color:#b9adcb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:auto}
+.live-fav{position:absolute;right:9px;top:8px;min-width:37px;height:37px;padding:0;background:#0c0a17a0;border:1px solid #ffffff24;border-radius:13px;color:#ff9cc5;font-size:22px;z-index:2}
+.live-message{grid-column:1/-1;text-align:center;padding:42px 15px;background:#1e1b2a;border:1px solid #3b3448;border-radius:20px;color:#d1c8e0}
+.live-disclaimer{color:#a198b1;font-size:11px;line-height:1.65;margin:23px 2px 0}
+.live-modal{position:fixed;inset:0;z-index:1000;background:#04030ad9;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(8px)}
+.live-country-sheet{width:min(100%,540px);max-height:min(83svh,750px);display:flex;flex-direction:column;background:linear-gradient(180deg,#281c38,#14121d);border:1px solid #8b73a44f;border-radius:28px 28px 0 0;padding:22px 20px max(22px,env(safe-area-inset-bottom))}
+.live-modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.live-modal-head h2{font-size:23px;letter-spacing:-.6px;margin:0}
+.live-close{border:0;background:#493654;color:white;border-radius:12px;width:36px;height:36px;font-size:18px}
+.live-country-search{background:#100f18;border:1px solid #7c688e;border-radius:15px;min-height:49px;padding:12px;color:white;outline:0}
+.live-country-results{overflow-y:auto;padding:10px 0}
+.live-country-option{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #ffffff15;background:transparent;color:white;padding:15px 10px;font-size:14px;border-radius:10px}
+.live-country-option:hover{background:#6750824a}
+@media(max-width:720px){
+ .live-page{padding-top:0}
+ .live-page-head{padding:8px 0 17px}
+ .live-page-head h1{font-size:30px}
+ .live-hero{border-radius:22px;min-height:180px;align-items:flex-start;flex-direction:column;gap:14px;padding:20px}
+ .live-hero h2{font-size:31px}
+ .live-country-trigger{width:100%;padding:12px}
+ .live-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ .live-channel{min-height:148px;padding:12px;border-radius:17px}
+ .live-channel-logo{min-height:59px;max-height:59px}
+ .live-results-heading h2{font-size:17px}
+ .live-page{padding-bottom:124px}
+}
+@media(max-width:365px){
+ .live-page-head h1{font-size:26px}
+ .live-channel{padding:10px}
+ .live-channel strong{font-size:12px}
+ .live-hero h2{font-size:27px}
+}

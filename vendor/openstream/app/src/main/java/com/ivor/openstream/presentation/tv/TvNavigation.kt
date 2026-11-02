@@ -297,6 +297,10 @@ private fun TvAppScaffold(
                 )
             }
 
+            composable(TvDestination.LIVE.route) {
+                TvLiveScreen()
+            }
+
             composable(TvDestination.SEARCH.route) {
                 TvSearchScreen(
                     onAnimeBrowse = { genre, query ->

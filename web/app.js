@@ -1,5 +1,6 @@
 /* VistaStream Web 0.2 — visual parity + user-installed Stremio add-ons */
 import {StremioHub,normalizeManifest} from "./stremio.js";
+import {renderLiveTv} from "./live-tv.js";
 const CINE="https://v3-cinemeta.strem.io", ANI="https://graphql.anilist.co", TV="https://api.tvmaze.com";
 const KEY="vista-web-local-v1",$=id=>document.getElementById(id);
 const emptyStore=()=>({favorites:[],history:[],progress:{},sources:[],localTitles:[],addons:[]});
@@ -196,8 +197,8 @@ function settings(){const wrap=$("content");append(wrap,heading("PREFERÊNCIAS",
  ["◎ Vista ID e sincronização","Esta primeira versão funciona em modo local. A sincronização automática Android/TV/iPhone precisa de um serviço Vista ID autenticado; não está ainda ativa.","Modo local"],
  ["Sobre","Metadados: Cinemeta, AniList e TVmaze. O VistaStream não fornece streams não autorizados. Algumas fontes não funcionam no Safari.","Versão Web 0.1.0"]];
  blocks.forEach(([name,text,caption],i)=>{const block=el("section","setting-block");append(block,el("h3","",name),el("p","",text));const actions=el("div","action-row");if(i===1)append(actions,btn("Importar manifest.json","primary-btn accent",()=>$("source-file").click()),btn("Adicionar URL","outline-btn",manual));else if(i===2)append(actions,btn("Exportar backup","outline-btn",exportBackup),btn("Importar backup","outline-btn",()=>$("backup-file").click()));else if(i===3)append(actions,btn("Gerir fontes","primary-btn accent",()=>navigate("sources")),el("span","status-pill",caption));else append(actions,el("span","status-pill",caption));append(block,actions);wrap.append(block);});}
-function render(){document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("selected",b.dataset.tab===S.page));document.querySelectorAll("[data-segment]").forEach(b=>b.classList.toggle("current",b.dataset.segment===S.segment));$("content").replaceChildren();if(S.loading){append($("content"),el("div","loading-splash","A carregar o VistaStream…"));return;}if(S.page==="home")home();else if(S.page==="discover")discover();else if(S.page==="anime")discover(true);else if(S.page==="search")searchPage();else if(S.page==="library")library();else if(S.page==="sources")addonsPage();else settings();}
-function navigate(page){S.page=["home","discover","anime","search","library","sources","settings"].includes(page)?page:"home";history.replaceState(null,"","#"+S.page);render();scrollTo({top:0,behavior:"instant"});if(S.page==="search")$("search-input")?.focus();}
+function render(){document.querySelectorAll("[data-tab]").forEach(b=>b.classList.toggle("selected",b.dataset.tab===S.page));document.querySelectorAll("[data-segment]").forEach(b=>b.classList.toggle("current",S.page!=="tv"&&b.dataset.segment===S.segment));$("content").replaceChildren();if(S.loading&&S.page!=="tv"){append($("content"),el("div","loading-splash","A carregar o VistaStream…"));return;}if(S.page==="home")home();else if(S.page==="discover")discover();else if(S.page==="anime")discover(true);else if(S.page==="search")searchPage();else if(S.page==="library")library();else if(S.page==="sources")addonsPage();else if(S.page==="tv")renderLiveTv($("content"),{play:playLiveChannel});else settings();}
+function navigate(page){S.page=["home","discover","anime","tv","search","library","sources","settings"].includes(page)?page:"home";history.replaceState(null,"","#"+S.page);render();scrollTo({top:0,behavior:"instant"});if(S.page==="search")$("search-input")?.focus();}
 async function episodeList(item){if(item.type==="movie")return[];if(item._eps)return item._eps;let out=[];if(item.provider==="Cinemeta"){try{const d=await json(CINE+"/meta/series/"+encodeURIComponent(item.ref)+".json");out=(d.meta?.videos||[]).filter(x=>x.season>0&&x.episode>0).map(x=>({s:Number(x.season),e:Number(x.episode),name:x.title||"Episódio "+x.episode}));}catch{}}if(item.provider==="TVmaze"){try{const d=await json(TV+"/shows/"+item.ref+"/episodes");out=d.filter(x=>x.season>0&&x.number>0).map(x=>({s:x.season,e:x.number,name:x.name||"Episódio "+x.number}));}catch{}}if(!out.length){const matching=S.store.sources.filter(x=>slug(x.title)===slug(item.name));if(matching.length)out=matching.map(x=>({s:x.season,e:x.episode,name:"Episódio "+x.episode}));else out=Array.from({length:Math.min(item.episodes||12,60)},(_,i)=>({s:1,e:i+1,name:"Episódio "+(i+1)}));}item._eps=out;return out;}
 function details(item){S.selected=item;S.season=1;S.episode=1;$("details-overlay").hidden=false;renderDetails();}
 function renderDetails(){const item=S.selected;if(!item)return;const host=$("details-panel");host.replaceChildren();const cover=el("div","detail-cover");if(item.background)cover.style.backgroundImage="url("+JSON.stringify(item.background)+")";append(cover,btn("×","detail-close",closeDetails));const body=el("div","detail-body"),header=el("span","detail-info",item.type.toUpperCase()+" · "+(item.year||"")+" "+(item.rating?" · ★ "+Number(item.rating).toFixed(1):""));append(body,header,el("h2","",item.name),el("p","detail-desc",item.description||"Sem sinopse disponível."));const actions=el("div","action-row");append(actions,btn("▶ "+(sources(item,S.season,S.episode).length?"Reproduzir":hub.list().some(x=>x.enabled)?"Escolher fonte":"Adicionar fonte"),"primary-btn accent",playSelected),btn(fav(item)?"♥ Na minha lista":"♡ Minha lista","outline-btn",()=>favorite(item)));append(body,actions);
@@ -264,6 +265,25 @@ function exportBackup(){download(JSON.stringify({type:"vistastream-web-backup",v
 async function importBackup(file){if(!file||file.size>2*1024*1024)return;try{const m=JSON.parse(await file.text());if(m.type!=="vistastream-web-backup"||m.version!==1||!Array.isArray(m.store?.sources))throw Error("Backup inválido");if(!confirm("Substituir a biblioteca guardada no iPhone?"))return;S.store=emptyStore();S.store.favorites=Array.isArray(m.store.favorites)?m.store.favorites.slice(0,500):[];S.store.progress=m.store.progress||{};S.store.history=Array.isArray(m.store.history)?m.store.history.slice(0,150):[];S.store.addons=Array.isArray(m.store.addons)?m.store.addons.slice(0,18).filter(x=>{try{return normalizeManifest(x.url)&&typeof x.id==="string"&&Array.isArray(x.resources)&&Array.isArray(x.catalogs);}catch{return false;}}):[];addSources(m.store.sources);save();refreshAddonCatalog();notify("Backup restaurado");navigate("library");}catch(e){notify(e.message);}}
 function playSelected(){const item=S.selected;if(!item)return;const xs=sources(item,S.season,S.episode);if(xs.length){play(xs[0],item,S.season,S.episode);return;}if(hub.list().some(x=>x.enabled)){$("addon-source-panel")?.scrollIntoView({behavior:"smooth",block:"center"});return;}sourceForm(item);}
 function savePlayback(){if(!S.playback||!Number.isFinite($("video-player").currentTime)||$("video-player").currentTime<1)return;const p=S.playback,v=$("video-player"),key=p.item.id+":"+p.s+":"+p.e;S.store.progress[key]={itemId:p.item.id,time:v.currentTime,duration:Number.isFinite(v.duration)?v.duration:0,updated:Date.now()};save();}
+function playLiveChannel(channel,country){
+  let ok=false;
+  try{const url=new URL(channel.url);ok=url.protocol==="https:"&&url.href.length<4096;}catch{}
+  if(!ok){notify("Este canal não tem uma fonte HTTPS compatível.");return;}
+  closeDetails();
+  S.playback=null;
+  $("player-overlay").hidden=false;
+  $("player-error").hidden=true;
+  $("player-title").textContent=channel.name;
+  $("player-subtitle").textContent="AO VIVO · "+country[2];
+  const video=$("video-player");
+  video.removeAttribute("crossorigin");
+  video.src=channel.url;
+  video.load();
+  video.play().catch(()=>{
+    $("player-error").hidden=false;
+    $("player-error").textContent="Toca em ▶ para iniciar. Este canal pode estar indisponível ou ser incompatível com o Safari.";
+  });
+}
 function play(src,item,s,e){
   let dynamic=false;
   try{const u=new URL(String(src.url));dynamic=Boolean(src.addonId)&&u.protocol==="https:"&&

@@ -3,6 +3,7 @@
     <string name="app_name">VistaStream</string>
     <string name="download_channel_name">Downloads</string>
     <string name="nav_home">Início</string>
+    <string name="nav_live_tv">TV ao vivo</string>
     <string name="nav_search">Buscar</string>
     <string name="nav_saved">Salvos</string>
     <string name="nav_downloads">Downloads</string>

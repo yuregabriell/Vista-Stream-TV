@@ -115,6 +115,7 @@ fun HomeScreen(
     onOpenDetails: (mediaType: String, id: Int) -> Unit,
     onSettingsClick: () -> Unit,
     onOpenSources: () -> Unit = {},
+    onOpenLiveTv: () -> Unit = {},
     onUpdateClick: () -> Unit = {},
     reselectTrigger: Long = 0L,
     profile: Profile? = null,
@@ -234,7 +235,7 @@ fun HomeScreen(
                         } }
                     )
                 }
-                PremiumModeSwitch(mode = homeMode, onModeChange = viewModel::setMode)
+                PremiumModeSwitch(mode = homeMode, onModeChange = viewModel::setMode, onOpenLiveTv = onOpenLiveTv)
                 ShortsScreen(modifier = Modifier.weight(1f))
             }
         } else when (val state = uiState) {
@@ -268,6 +269,7 @@ fun HomeScreen(
                             onModeChange = viewModel::setMode,
                             onOpen = open,
                             onSettingsClick = onSettingsClick,
+                            onOpenLiveTv = onOpenLiveTv,
                             onUpdateClick = onUpdateClick,
                             castConnected = castStatus.isCasting,
                             onCastClick = { if (castStatus.isCasting) castViewModel.stopCasting() else showCastPicker = true },
@@ -409,7 +411,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun PremiumModeSwitch(mode: HomeMode, onModeChange: (HomeMode) -> Unit) {
+private fun PremiumModeSwitch(mode: HomeMode, onModeChange: (HomeMode) -> Unit, onOpenLiveTv: () -> Unit) {
     val screenWidth = LocalConfiguration.current.screenWidthDp
     // Deliberately compact: this is navigation, not another full-height banner.
     Row(
@@ -422,7 +424,7 @@ private fun PremiumModeSwitch(mode: HomeMode, onModeChange: (HomeMode) -> Unit) 
         verticalAlignment = Alignment.CenterVertically
     ) {
         listOf(
-            HomeMode.FILMS_SERIES to "Filmes & Séries",
+            HomeMode.FILMS_SERIES to (if (screenWidth < 440) "Filmes" else "Filmes & Séries"),
             HomeMode.ANIME to "Animes",
             HomeMode.SHORTS to "Shorts"
         ).filter { (choice, _) ->
@@ -448,6 +450,21 @@ private fun PremiumModeSwitch(mode: HomeMode, onModeChange: (HomeMode) -> Unit) 
                         maxLines = 1
                     )
                 }
+            }
+        }
+        Surface(
+            onClick = onOpenLiveTv,
+            modifier = Modifier.weight(1f).fillMaxSize().padding(3.dp),
+            shape = ExpressiveShapes.small,
+            color = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    if (screenWidth < 430) "TV" else "TV ao vivo",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold, maxLines = 1
+                )
             }
         }
     }
@@ -498,6 +515,7 @@ private fun HeroSection(
     onModeChange: (HomeMode) -> Unit,
     onOpen: (AnimeDto) -> Unit,
     onSettingsClick: () -> Unit,
+    onOpenLiveTv: () -> Unit,
     onUpdateClick: () -> Unit,
     castConnected: Boolean,
     onCastClick: () -> Unit,
@@ -543,7 +561,7 @@ private fun HeroSection(
             ProfileSwitchButton(profile = profile, onSwitch = onSwitchProfile, onKidsTap = onKidsTap)
         }
 
-        PremiumModeSwitch(mode = mode, onModeChange = onModeChange)
+        PremiumModeSwitch(mode = mode, onModeChange = onModeChange, onOpenLiveTv = onOpenLiveTv)
 
         if (items.isNotEmpty()) {
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
