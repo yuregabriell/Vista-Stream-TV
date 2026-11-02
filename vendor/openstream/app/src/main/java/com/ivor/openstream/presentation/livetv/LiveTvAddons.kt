@@ -141,7 +141,7 @@ internal object LiveTvAddons {
                 val group = meta.optJSONArray("genres")?.optString(0).orEmpty()
                     .ifBlank { if (manifest == RICOS) "Variedades" else "TV Brasileira" }
                 out += Channel(
-                    id = country + "|stremio|" + Uri.encode(manifest) + "|" + ref,
+                    id = country + "|stremio|" + manifest.hashCode().toString(16) + "|" + ref,
                     name = title.take(120), group = group.take(50),
                     logo = logo, url = "", sourceLabel = label,
                     addonManifest = manifest, addonRef = ref, addonType = type
