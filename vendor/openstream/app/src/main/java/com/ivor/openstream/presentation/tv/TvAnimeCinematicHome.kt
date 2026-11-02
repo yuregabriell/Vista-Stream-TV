@@ -50,8 +50,12 @@ internal fun TvAnimeCinematicHome(
         animeItems.firstOrNull { !it.background.isNullOrBlank() || !it.poster.isNullOrBlank() }
             ?: animeItems.firstOrNull()
     } ?: return
-    var highlighted by remember(animeItems, lastFocusedId) {
-        mutableStateOf(animeItems.firstOrNull { it.sourceId == lastFocusedId })
+    // Snapshot only when the route is first composed. Focusing other cards
+    // must NOT re-run restoration and snap back to the previous poster.
+    val requestedFocusId = remember { lastFocusedId }
+    val requestedFocusRail = remember { lastFocusedRail }
+    var highlighted by remember(animeItems) {
+        mutableStateOf(animeItems.firstOrNull { it.sourceId == requestedFocusId })
     }
     val shown = highlighted ?: featured
     val artworkViewModel: TvAnimeHeroArtworkViewModel = hiltViewModel()
@@ -59,7 +63,7 @@ internal fun TvAnimeCinematicHome(
     LaunchedEffect(shown.sourceId) { artworkViewModel.show(shown) }
     val heroAction = remember { FocusRequester() }
     LaunchedEffect(Unit) {
-        if (lastFocusedId == null) runCatching { heroAction.requestFocus() }
+        if (requestedFocusId == null) runCatching { heroAction.requestFocus() }
     }
 
     // The rails are server-ranked TMDB queries (weekly trends, premieres,
@@ -80,10 +84,10 @@ internal fun TvAnimeCinematicHome(
 
     val railColumnState = rememberLazyListState()
     val restoreRailIndex = rails.indexOfFirst { (name, entries) ->
-        name == lastFocusedRail && entries.any { it.sourceId == lastFocusedId }
+        name == requestedFocusRail && entries.any { it.sourceId == requestedFocusId }
     }
-    LaunchedEffect(lastFocusedId, restoreRailIndex) {
-        if (lastFocusedId != null && restoreRailIndex >= 0) {
+    LaunchedEffect(requestedFocusId, restoreRailIndex) {
+        if (requestedFocusId != null && restoreRailIndex >= 0) {
             // Index 0 = genres, then one LazyColumn item per populated rail.
             railColumnState.scrollToItem(restoreRailIndex + 1)
         }
@@ -196,16 +200,16 @@ internal fun TvAnimeCinematicHome(
                 rails.forEach { (title, list) ->
                     if (list.isNotEmpty()) {
                         item(key = "rail-$title") {
-                            val returnToThisRail = title == lastFocusedRail &&
-                                list.any { it.sourceId == lastFocusedId }
+                            val returnToThisRail = title == requestedFocusRail &&
+                                list.any { it.sourceId == requestedFocusId }
                             val returnIndex = if (returnToThisRail)
-                                list.indexOfFirst { it.sourceId == lastFocusedId }.coerceAtLeast(0)
+                                list.indexOfFirst { it.sourceId == requestedFocusId }.coerceAtLeast(0)
                                 else 0
                             val railScroll = rememberLazyListState(
                                 initialFirstVisibleItemIndex = returnIndex
                             )
                             val cardRestorer = remember { FocusRequester() }
-                            LaunchedEffect(returnToThisRail, lastFocusedId) {
+                            LaunchedEffect(returnToThisRail, requestedFocusId) {
                                 if (returnToThisRail) {
                                     railScroll.scrollToItem(returnIndex)
                                     withFrameNanos { }
@@ -224,7 +228,7 @@ internal fun TvAnimeCinematicHome(
                                         onClick = { onOpenTitle(anime) },
                                         modifier = Modifier
                                             .then(if (returnToThisRail &&
-                                                anime.sourceId == lastFocusedId)
+                                                anime.sourceId == requestedFocusId)
                                                 Modifier.focusRequester(cardRestorer) else Modifier)
                                             .onFocusChanged {
                                                 if (it.hasFocus) {
