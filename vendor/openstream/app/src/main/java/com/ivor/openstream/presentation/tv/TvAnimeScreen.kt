@@ -36,6 +36,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,7 +58,6 @@ import androidx.tv.material3.ButtonDefaults
 import coil3.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import com.ivor.openstream.data.catalog.KeylessTitle
-import com.ivor.openstream.presentation.catalog.KeylessCatalogScreen
 import com.ivor.openstream.presentation.catalog.KeylessCatalogViewModel
 
 /**
@@ -95,7 +96,9 @@ fun TvAnimeScreen(
     initialQuery: String = "",
     initialBrowse: Boolean = false,
     modifier: Modifier = Modifier,
-    viewModel: KeylessCatalogViewModel = hiltViewModel()
+    onOpenUnifiedTitle: (String, Int) -> Unit,
+    viewModel: KeylessCatalogViewModel = hiltViewModel(),
+    titleNavigation: TvAnimeTitleNavigationViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
     var genre by rememberSaveable(initialGenre, initialQuery) { mutableStateOf(initialGenre) }
@@ -104,9 +107,25 @@ fun TvAnimeScreen(
     }
     var searchText by rememberSaveable(initialGenre, initialQuery) { mutableStateOf(initialQuery) }
     var submittedQuery by rememberSaveable(initialGenre, initialQuery) { mutableStateOf(initialQuery) }
-    var selectedTitle by remember { mutableStateOf<KeylessTitle?>(null) }
+    var resolvingTitle by remember { mutableStateOf<String?>(null) }
+    var unresolvedTitle by remember { mutableStateOf<KeylessTitle?>(null) }
+    val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
     val firstAction = remember { FocusRequester() }
+
+    // Anime cards now use the same TMDB-backed details, seasons, sources and
+    // player as global search. AniList IDs are never passed as TMDB IDs.
+    fun openAnime(item: KeylessTitle) {
+        if (resolvingTitle != null) return
+        unresolvedTitle = null
+        resolvingTitle = item.title
+        scope.launch {
+            val route = titleNavigation.resolve(item)
+            resolvingTitle = null
+            if (route != null) onOpenUnifiedTitle(route.first, route.second)
+            else unresolvedTitle = item
+        }
+    }
 
     fun browseGenre(value: String) {
         showingAll = false
@@ -142,21 +161,22 @@ fun TvAnimeScreen(
         if (browsing) runCatching { firstAction.requestFocus() }
     }
 
-    if (selectedTitle != null) {
-        // Use the existing actual anime source resolver, subtitle selection,
-        // episode progression and playback rather than a disconnected TV demo.
-        KeylessCatalogScreen(
-            modifier = modifier,
-            onOpenSources = onOpenSources,
-            initialTitle = selectedTitle,
-            onInitialDismiss = { selectedTitle = null },
-            viewModel = viewModel
-        )
+    BackHandler(enabled = browsing || unresolvedTitle != null) {
+        if (unresolvedTitle != null) unresolvedTitle = null else browseGenre("")
+    }
+    if (resolvingTitle != null) {
+        TvLoading(modifier.fillMaxSize())
         return
     }
-
-    BackHandler(enabled = browsing) {
-        browseGenre("")
+    if (unresolvedTitle != null) {
+        val missing = unresolvedTitle ?: return
+        TvAnimeMessage(
+            message = "Não foi possível associar \"${missing.title}\" ao catálogo principal. Verifica a ligação ou tenta novamente.",
+            action = "Tentar novamente",
+            onAction = { openAnime(missing) },
+            modifier = modifier.fillMaxSize()
+        )
+        return
     }
 
     // The TV anime Home shares the exact same cinematic structure as Movies:
@@ -166,7 +186,7 @@ fun TvAnimeScreen(
         TvAnimeCinematicHome(
             animeItems = homeAnimes,
             genres = TV_ANIME_GENRES,
-            onOpenTitle = { selectedTitle = it },
+            onOpenTitle = ::openAnime,
             onGenre = ::browseGenre,
             onOpenMovies = onOpenMovies,
             onBrowseAll = {
@@ -268,7 +288,7 @@ fun TvAnimeScreen(
                             posterPath = anime.poster ?: anime.background,
                             caption = listOfNotNull(anime.year?.toString(), anime.format)
                                 .joinToString(" · ").ifBlank { "Anime" },
-                            onClick = { selectedTitle = anime }
+                            onClick = { openAnime(anime) }
                         )
                     }
                     if (state.browseLoading || state.browseHasMore) {
@@ -327,7 +347,7 @@ fun TvAnimeScreen(
             ) {
                 if (featured != null) {
                     item(key = "anime-featured") {
-                        TvAnimeHero(featured) { selectedTitle = featured }
+                        TvAnimeHero(featured) { openAnime(featured) }
                     }
                 }
                 railData.forEach { (title, titles) ->
@@ -339,7 +359,7 @@ fun TvAnimeScreen(
                                         title = anime.title,
                                         posterPath = anime.poster ?: anime.background,
                                         caption = anime.year?.toString() ?: "Anime",
-                                        onClick = { selectedTitle = anime }
+                                        onClick = { openAnime(anime) }
                                     )
                                 }
                             }
