@@ -37,7 +37,7 @@ internal fun largestTorrServerVideoIndex(response: String): Int? = runCatching {
         val size = (file["length"] as? JsonPrimitive)?.longOrNull ?: return@mapNotNull null
         if (id !in 1..10_000 || size <= 0 ||
             listOf(".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4v", ".ts")
-                .none(path::endsWith)) return@mapNotNull null
+                .none { extension -> path.endsWith(extension) }) return@mapNotNull null
         id to size
     }.maxByOrNull { it.second }?.first
 }.getOrNull()
