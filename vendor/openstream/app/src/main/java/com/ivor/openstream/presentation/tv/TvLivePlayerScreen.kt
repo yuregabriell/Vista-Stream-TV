@@ -95,7 +95,13 @@ internal fun TvLivePlayerScreen(
     viewModel: MiniPlayerViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val activity = remember(context) { context as? Activity }
+    val activity = remember(context) {
+        var current: Context = context
+        while (current is android.content.ContextWrapper && current !is Activity) {
+            current = current.baseContext
+        }
+        current as? Activity
+    }
     val session = viewModel.session
     var index by remember(selection) {
         mutableStateOf(selection.channels.indexOfFirst { it.id == selection.selectedId }.coerceAtLeast(0))
