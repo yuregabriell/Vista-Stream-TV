@@ -46,6 +46,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
 import com.ivor.openstream.presentation.livetv.Channel
 import com.ivor.openstream.presentation.livetv.Country
+import com.ivor.openstream.presentation.livetv.LiveTvAddons
 import com.ivor.openstream.presentation.player.components.ExoPlayerView
 import com.ivor.openstream.presentation.player.session.MiniPlayerViewModel
 import kotlinx.coroutines.delay
@@ -107,6 +108,13 @@ internal fun TvLivePlayerScreen(
         mutableStateOf(selection.channels.indexOfFirst { it.id == selection.selectedId }.coerceAtLeast(0))
     }
     val channel = selection.channels.getOrNull(index)
+    var resolvedUrl by remember(channel?.id) { mutableStateOf<String?>(null) }
+    var resolving by remember(channel?.id) { mutableStateOf(channel != null) }
+    LaunchedEffect(channel?.id) {
+        resolving = true
+        resolvedUrl = channel?.let { LiveTvAddons.resolve(it) }
+        resolving = false
+    }
     var showChannelBanner by remember { mutableStateOf(true) }
     val onChange = remember(selection) {
         { direction: Int ->
@@ -160,8 +168,9 @@ internal fun TvLivePlayerScreen(
         if (channel != null) {
             // ExoPlayerView prepares the URI using the app's own Media3 session,
             // including HLS/DASH detection and existing quality/audio controls.
+            if (resolvedUrl != null) {
             ExoPlayerView(
-                videoUrl = channel.url,
+                videoUrl = resolvedUrl.orEmpty(),
                 title = channel.name,
                 subtitle = selection.country.label + " · Ao vivo",
                 requestHeaders = emptyMap(),
@@ -179,6 +188,14 @@ internal fun TvLivePlayerScreen(
                 keepPlayingInBackground = false,
                 modifier = Modifier.fillMaxSize()
             )
+            } else {
+                Text(
+                    if (resolving) "A obter transmissão de " + channel.sourceLabel + "..."
+                    else "Nenhuma transmissão direta disponível nesta fonte.",
+                    modifier = Modifier.align(Alignment.Center),
+                    color = Color.White
+                )
+            }
 
             // NOS-style non-interactive zapping identity: the physical rocker
             // changes streams, then this compact banner fades on its own.
