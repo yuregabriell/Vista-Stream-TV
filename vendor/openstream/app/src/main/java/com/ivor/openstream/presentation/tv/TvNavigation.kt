@@ -72,6 +72,7 @@ private object TvRoutes {
     const val DETAILS = "tv_details/{mediaType}/{animeId}"
     const val EPISODE = "tv_episode/{mediaType}/{animeId}/{season}/{episode}"
     const val PLAYER = "tv_player/{mediaType}/{animeId}/{season}/{episode}?downloadId={downloadId}"
+    const val LIVE_PLAYER = "tv_live_player"
 
     fun details(mediaType: String, animeId: Int) = "tv_details/$mediaType/$animeId"
     fun episode(mediaType: String, animeId: Int, season: Int, episode: Int) =
@@ -135,6 +136,7 @@ private fun TvAppScaffold(
     val showDrawer = TvDestination.topLevel.any { it.route == route } ||
         route?.startsWith("tv_anime/browse") == true
     val requesters = remember { TvDestination.topLevel.associateWith { FocusRequester() } }
+    var liveSelection by remember { androidx.compose.runtime.mutableStateOf<TvLiveSelection?>(null) }
     var resetTopToken by remember { mutableIntStateOf(0) }
     var sidebarHasFocus by remember { androidx.compose.runtime.mutableStateOf(false) }
     // Back on a top-level screen deliberately opens the sidebar. Back inside
@@ -298,7 +300,22 @@ private fun TvAppScaffold(
             }
 
             composable(TvDestination.LIVE.route) {
-                TvLiveScreen()
+                TvLiveScreen(onPlayChannel = { channel, channels, country ->
+                    liveSelection = TvLiveSelection(country, channels, channel.id)
+                    navController.navigate(TvRoutes.LIVE_PLAYER) { launchSingleTop = true }
+                })
+            }
+
+            // Separate immersive destination: no sidebar, Dialog, or inset-constrained
+            // preview. Same ExoPlayerView as the movie/series player.
+            composable(TvRoutes.LIVE_PLAYER) {
+                val selection = liveSelection
+                if (selection != null) {
+                    TvLivePlayerScreen(
+                        selection = selection,
+                        onExit = { navController.popBackStack() }
+                    )
+                }
             }
 
             composable(TvDestination.SEARCH.route) {

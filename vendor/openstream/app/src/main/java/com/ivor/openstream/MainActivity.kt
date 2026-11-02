@@ -22,6 +22,7 @@ import com.ivor.openstream.presentation.navigation.AppNavigation
 import com.ivor.openstream.presentation.navigation.DeepLinkRequest
 import com.ivor.openstream.presentation.navigation.DeepLinks
 import com.ivor.openstream.presentation.tv.TvNavigation
+import com.ivor.openstream.presentation.tv.TvLiveRemoteKeys
 import com.ivor.openstream.presentation.tv.DeviceKind
 import com.ivor.openstream.presentation.tv.TvDetect
 import com.ivor.openstream.presentation.tv.rememberDeviceKind
@@ -173,6 +174,9 @@ class MainActivity : ComponentActivity() {
 
     /** While casting, the volume keys change the TV's volume rather than the phone's. */
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        // CH+/CH- belong to live TV only while its fullscreen player is active.
+        // VOLUME_UP/DOWN remain system/Chromecast volume keys.
+        if (TvLiveRemoteKeys.dispatch(event)) return true
         val up = when (event.keyCode) {
             android.view.KeyEvent.KEYCODE_VOLUME_UP -> true
             android.view.KeyEvent.KEYCODE_VOLUME_DOWN -> false
