@@ -67,6 +67,7 @@ internal object TvLiveRemoteKeys {
     private var channelListener: ((Int) -> Unit)? = null
     private var overlayListener: ((String) -> Unit)? = null
     private var backListener: (() -> Boolean)? = null
+    private var consumingBackUp = false
 
     fun setListener(
         channel: ((Int) -> Unit)?,
@@ -80,7 +81,18 @@ internal object TvLiveRemoteKeys {
 
     fun dispatch(event: KeyEvent): Boolean {
         if (channelListener == null) return false
-        if (event.keyCode == KeyEvent.KEYCODE_BACK && backListener?.invoke() == true) return true
+        if (event.keyCode == KeyEvent.KEYCODE_BACK) {
+            if (event.action == KeyEvent.ACTION_UP && consumingBackUp) {
+                consumingBackUp = false
+                return true
+            }
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0 &&
+                backListener?.invoke() == true) {
+                consumingBackUp = true
+                return true
+            }
+            return false
+        }
         val channelDirection = when (event.keyCode) {
             KeyEvent.KEYCODE_CHANNEL_UP, KeyEvent.KEYCODE_PAGE_UP -> 1
             KeyEvent.KEYCODE_CHANNEL_DOWN, KeyEvent.KEYCODE_PAGE_DOWN -> -1
