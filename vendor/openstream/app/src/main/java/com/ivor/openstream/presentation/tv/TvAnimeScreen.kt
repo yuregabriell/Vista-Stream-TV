@@ -36,9 +36,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,8 +56,6 @@ import androidx.tv.material3.ButtonDefaults
 import coil3.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import com.ivor.openstream.data.catalog.KeylessTitle
-import com.ivor.openstream.presentation.catalog.KeylessCatalogViewModel
-import com.ivor.openstream.presentation.catalog.KeylessCatalogScreen
 
 /**
  * Dedicated anime experience for Android TV, backed by the same AniList / public
@@ -99,8 +94,7 @@ fun TvAnimeScreen(
     initialBrowse: Boolean = false,
     modifier: Modifier = Modifier,
     onOpenUnifiedTitle: (String, Int) -> Unit,
-    viewModel: KeylessCatalogViewModel = hiltViewModel(),
-    titleNavigation: TvAnimeTitleNavigationViewModel = hiltViewModel()
+    viewModel: TvAnimeUnifiedCatalogViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
     var genre by rememberSaveable(initialGenre, initialQuery) { mutableStateOf(initialGenre) }
@@ -109,26 +103,15 @@ fun TvAnimeScreen(
     }
     var searchText by rememberSaveable(initialGenre, initialQuery) { mutableStateOf(initialQuery) }
     var submittedQuery by rememberSaveable(initialGenre, initialQuery) { mutableStateOf(initialQuery) }
-    var resolvingTitle by remember { mutableStateOf<String?>(null) }
-    var fallbackTitle by remember { mutableStateOf<KeylessTitle?>(null) }
-    val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
     val firstAction = remember { FocusRequester() }
 
-    // Anime cards now use the same TMDB-backed details, seasons, sources and
-    // player as global search. AniList IDs are never passed as TMDB IDs.
+    // The TV anime catalog now contains only real TMDB records, like global
+    // search. Each card has its canonical ID, so no matcher, timeout, separate
+    // details page or second stream resolver can ever be entered.
     fun openAnime(item: KeylessTitle) {
-        if (resolvingTitle != null) return
-        fallbackTitle = null
-        resolvingTitle = item.title
-        scope.launch {
-            // Don't leave the user on a spinner while trying many aliases
-            // against a slow metadata gateway. AniList details remain available.
-            val route = withTimeoutOrNull(6_000L) { titleNavigation.resolve(item) }
-            resolvingTitle = null
-            if (route != null) onOpenUnifiedTitle(route.first, route.second)
-            else fallbackTitle = item
-        }
+        val id = item.tmdbId ?: return
+        onOpenUnifiedTitle(if (item.format == "MOVIE") "movie" else "tv", id)
     }
 
     fun browseGenre(value: String) {
@@ -165,24 +148,7 @@ fun TvAnimeScreen(
         if (browsing) runCatching { firstAction.requestFocus() }
     }
 
-    BackHandler(enabled = browsing && fallbackTitle == null && resolvingTitle == null) { browseGenre("") }
-    if (resolvingTitle != null) {
-        TvLoading(modifier.fillMaxSize())
-        return
-    }
-    if (fallbackTitle != null) {
-        // A missing TMDB match must NOT block an AniList title. Keep the
-        // existing keyless source resolver and episode information available.
-        // This fallback uses the same TV-native player instead of an error page.
-        KeylessCatalogScreen(
-            modifier = modifier,
-            initialTitle = fallbackTitle,
-            onInitialDismiss = { fallbackTitle = null },
-            onOpenSources = onOpenSources,
-            viewModel = viewModel
-        )
-        return
-    }
+    BackHandler(enabled = browsing) { browseGenre("") }
 
     // The TV anime Home shares the exact same cinematic structure as Movies:
     // backdrop hero + dedicated genre row + horizontal rails + browse footer.
@@ -320,7 +286,7 @@ fun TvAnimeScreen(
             TvLoading(Modifier.weight(1f))
         } else if (animeItems.isEmpty()) {
             TvAnimeMessage(
-                message = state.error ?: "Não foi possível carregar o AniList. Verifica a Internet.",
+                message = state.error ?: "Não foi possível carregar o catálogo de anime. Verifica a Internet.",
                 action = "Tentar novamente",
                 onAction = viewModel::refresh,
                 modifier = Modifier.weight(1f)
