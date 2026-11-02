@@ -6,6 +6,14 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 
 /**
  * Optional TorrServer transport for Stremio infoHash/fileIdx sources.
@@ -14,6 +22,26 @@ import java.util.Locale
  * an ordinary LAN HTTP stream. No torrent files are stored by the VS app.
  * A separately running TorrServer/TorrServe process is required.
  */
+/**
+ * Stremio omits fileIdx when it expects the client to choose the largest
+ * video file. TorrServer file IDs are 1-based and have sizes in file_stats.
+ * Only video files are candidates; refuse uncertain/empty metadata.
+ */
+internal fun largestTorrServerVideoIndex(response: String): Int? = runCatching {
+    val root = Json.parseToJsonElement(response) as? JsonObject ?: return@runCatching null
+    (root["file_stats"] as? JsonArray).orEmpty().mapNotNull { value ->
+        val file = value as? JsonObject ?: return@mapNotNull null
+        val id = (file["id"] as? JsonPrimitive)?.intOrNull ?: return@mapNotNull null
+        val path = (file["path"] as? JsonPrimitive)?.contentOrNull
+            ?.lowercase(Locale.ROOT) ?: return@mapNotNull null
+        val size = (file["length"] as? JsonPrimitive)?.longOrNull ?: return@mapNotNull null
+        if (id !in 1..10_000 || size <= 0 ||
+            listOf(".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4v", ".ts")
+                .none(path::endsWith)) return@mapNotNull null
+        id to size
+    }.maxByOrNull { it.second }?.first
+}.getOrNull()
+
 class TorrServerBridge(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("vs_torrserver_v1", Context.MODE_PRIVATE)
 
@@ -112,6 +140,35 @@ class TorrServerBridge(context: Context) {
      * The resulting localhost/LAN /stream route starts buffering on playback.
      * The optional filename is deliberately excluded from the URL.
      */
+    private val selectedFileIds = ConcurrentHashMap<String, Int>()
+
+    /** For addons that omit Stremio fileIdx: select the largest video on the opted-in LAN engine.
+     * The metadata request is bounded and never starts downloading media.
+     */
+    fun discoverFileIndex(base: String, rawHash: String): Int? {
+        val hash = rawHash.trim().lowercase(Locale.ROOT)
+        if (!hash.matches(Regex("[a-f0-9]{40}")) || canonicalAddress(base) != base) return null
+        val key = "$base/$hash"
+        selectedFileIds[key]?.let { return it }
+        val url = Uri.parse("$base/stream/video").buildUpon()
+            .appendQueryParameter("link", "magnet:?xt=urn:btih:$hash")
+            .appendQueryParameter("stat", "")
+            .build().toString()
+        val index = runCatching {
+            val connection = URL(url).openConnection() as HttpURLConnection
+            connection.connectTimeout = 1_200
+            connection.readTimeout = 1_800
+            try {
+                if (connection.responseCode != 200) null
+                else largestTorrServerVideoIndex(
+                    connection.inputStream.bufferedReader().use { it.readText() }
+                )
+            } finally { connection.disconnect() }
+        }.getOrNull()
+        if (index != null) selectedFileIds[key] = index
+        return index
+    }
+
     fun playUrl(base: String, rawHash: String, fileIndex: Int): String? {
         val hash = rawHash.trim().lowercase(Locale.ROOT)
         if (!hash.matches(Regex("[a-f0-9]{40}")) || fileIndex !in 0..10_000 ||
