@@ -241,24 +241,7 @@ fun TvLiveScreen(onPlayChannel: (Channel, List<Channel>, Country) -> Unit) {
         }
     }
 
-    val playing = currentChannel
-    if (playing != null) {
-        TvLivePlayer(
-            channel = playing,
-            country = country,
-            onClose = { currentChannel = null },
-            onPrevious = {
-                val idx = visible.indexOfFirst { it.id == playing.id }
-                if (visible.isNotEmpty()) currentChannel =
-                    visible[(idx - 1 + visible.size) % visible.size]
-            },
-            onNext = {
-                val idx = visible.indexOfFirst { it.id == playing.id }
-                if (visible.isNotEmpty()) currentChannel =
-                    visible[(idx + 1) % visible.size]
-            }
-        )
-    }
+
 }
 
 @Composable
