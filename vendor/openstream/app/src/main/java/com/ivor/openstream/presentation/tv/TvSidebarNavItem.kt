@@ -23,7 +23,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import com.ivor.openstream.R
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ClickableSurfaceDefaults
@@ -93,11 +95,19 @@ internal fun TvSidebarNavItem(
         // The selected pill and icon belong to the SAME 52dp surface.
         // This prevents the highlight from drifting away from the icon on TV densities.
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Icon(
-                imageVector = destination.roundedGlyph(),
-                contentDescription = stringResource(destination.labelRes),
-                modifier = Modifier.size(glyphSize)
-            )
+            if (destination == TvDestination.ANIME) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_tv_anime_shuriken),
+                    contentDescription = stringResource(destination.labelRes),
+                    modifier = Modifier.size(glyphSize)
+                )
+            } else {
+                Icon(
+                    imageVector = destination.roundedGlyph(),
+                    contentDescription = stringResource(destination.labelRes),
+                    modifier = Modifier.size(glyphSize)
+                )
+            }
         }
     }
 }
