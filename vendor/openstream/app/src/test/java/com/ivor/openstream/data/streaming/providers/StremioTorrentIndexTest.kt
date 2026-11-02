@@ -25,6 +25,19 @@ class StremioTorrentIndexTest {
         assertEquals(2, largestTorrServerVideoIndex(status))
     }
 
+    @Test fun prefersMatchingFilenameInMultiEpisodeTorrent() {
+        val status = """
+            {
+              "file_stats": [
+                {"id":1,"path":"Season/Episode 02.mkv","length":990000000},
+                {"id":2,"path":"Season/Episode 01.mkv","length":450000000}
+              ]
+            }
+        """.trimIndent()
+        assertEquals(2, largestTorrServerVideoIndex(status, "Episode 01.mkv"))
+        assertNull(largestTorrServerVideoIndex(status, "Episode 03.mkv"))
+    }
+
     @Test fun rejectsEmptyOrUnrecognizedTorrentMetadata() {
         assertNull(largestTorrServerVideoIndex("not-json"))
         assertNull(largestTorrServerVideoIndex("""{"file_stats":[{"id":1,"path":"setup.exe","length":12000}]}"""))
