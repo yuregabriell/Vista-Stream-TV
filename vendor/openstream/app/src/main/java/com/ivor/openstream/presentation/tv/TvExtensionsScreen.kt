@@ -34,6 +34,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -83,7 +85,9 @@ fun TvExtensionsScreen(
     val searchMode by viewModel.searchMode.collectAsState()
     val officialProvidersEnabled by providersViewModel.enabled.collectAsState()
     LaunchedEffect(viewModel) { viewModel.liveRefreshWhileVisible() }
-    var showInstalled by remember { mutableStateOf(true) }
+    // Separate UX surfaces: native integrations, installed playback sources and discovery.
+    var area by remember { mutableIntStateOf(0) }
+    val showInstalled = area == 1
     var sourceCategory by remember { mutableStateOf(0) }
     var showAddRepo by remember { mutableStateOf(false) }
     var repoInput by remember { mutableStateOf("") }
@@ -107,11 +111,12 @@ fun TvExtensionsScreen(
     val firstPill = remember { FocusRequester() }
     val detailAction = remember { FocusRequester() }
 
-    LaunchedEffect(showInstalled, visible.isEmpty()) {
-        val first = visible.firstOrNull()
-        runCatching { if (first != null) rowRequester(first.key).requestFocus() else firstPill.requestFocus() }
+    LaunchedEffect(area) {
+        withFrameNanos { }
+        withFrameNanos { }
+        runCatching { firstPill.requestFocus() }
     }
-    BackHandler(enabled = detailHasFocus && pendingRemove == null && selected != null) {
+    BackHandler(enabled = area != 0 && detailHasFocus && pendingRemove == null && selected != null) {
         runCatching { rowRequester(selected!!.key).requestFocus() }
     }
 
@@ -121,223 +126,280 @@ fun TvExtensionsScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         Column(Modifier.fillMaxSize()) {
-            val counts = "${stringResource(R.string.st_installed)}: ${state.installed.size}  ·  " +
-                "${stringResource(R.string.st_enabled)}: ${state.catalog.enabled.size}"
             TvPageHeader(
                 title = "Extensões e fontes",
-                supporting = state.message?.let { "$counts  ·  $it" } ?: counts,
+                supporting = "Personaliza o catálogo e gere as fontes do player",
                 actions = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Button(onClick = { showAddRepo = true },
-                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Button(
+                            onClick = { showAddRepo = true },
+                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding
+                        ) {
+                            Icon(Icons.Default.Add, null, modifier = Modifier.size(ButtonDefaults.IconSize))
                             Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                            Text("Adicionar fonte")
+                            Text("Adicionar")
                         }
                         OutlinedButton(
                             onClick = viewModel::refresh,
                             enabled = !state.catalog.isSyncing,
                             contentPadding = ButtonDefaults.ButtonWithIconContentPadding
                         ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                            Icon(Icons.Default.Refresh, null, modifier = Modifier.size(ButtonDefaults.IconSize))
                             Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                            Text(stringResource(R.string.action_refresh_repositories))
-                        }
-                        if (state.updatable.isNotEmpty()) {
-                            Button(
-                                onClick = viewModel::updateAll,
-                                contentPadding = ButtonDefaults.ButtonWithIconContentPadding
-                            ) {
-                                Icon(Icons.Default.SystemUpdateAlt, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                                Text(stringResource(R.string.action_update_all))
-                            }
+                            Text("Atualizar")
                         }
                     }
                 }
             )
 
-            Text(
-                "NATIVAS DO VISTASTREAM",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = TvLayout.ContentStart, top = 6.dp)
-            )
             Row(
-                modifier = Modifier.fillMaxWidth().padding(
-                    start = TvLayout.ContentStart, end = TvLayout.ContentEnd, top = 6.dp, bottom = 8.dp
+                modifier = Modifier.padding(
+                    start = TvLayout.ContentStart,
+                    top = 8.dp, bottom = 12.dp
                 ),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 TvPill(
-                    label = if (officialProvidersEnabled) "Plataformas oficiais · Ativado"
-                        else "Plataformas oficiais · Desativado",
-                    selected = officialProvidersEnabled,
-                    onClick = { providersViewModel.setEnabled(!officialProvidersEnabled) }
+                    "Nativas",
+                    selected = area == 0,
+                    onClick = { area = 0 },
+                    modifier = Modifier.focusRequester(firstPill)
                 )
-                androidx.compose.material3.Text(
-                    "Metadados TMDB · Portugal · não disponibiliza vídeos",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                TvPill(
+                    "Instaladas (${state.installed.size})",
+                    selected = area == 1,
+                    onClick = { area = 1 }
+                )
+                TvPill(
+                    "Explorar",
+                    selected = area == 2,
+                    onClick = { area = 2 }
                 )
             }
-            androidx.compose.material3.Text(
-                "Onde assistir: informação e filtros por plataforma. Ativada por padrão nas novas " +
-                    "instalações; não adiciona filmes, fontes nem subscrições.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(start = TvLayout.ContentStart,
-                    end = TvLayout.ContentEnd, bottom = 8.dp)
-            )
 
-            Text(
-                "FONTES E ADDONS COMPATÍVEIS",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = TvLayout.ContentStart, top = 8.dp, bottom = 4.dp)
-            )
-            Row(Modifier.fillMaxSize()) {
-                // The list.
+            if (area == 0) {
                 Column(
-                    Modifier
-                        .padding(start = TvLayout.ContentStart, end = 16.dp)
-                        .width(340.dp)
-                        .fillMaxHeight()
+                    modifier = Modifier.fillMaxSize().padding(
+                        start = TvLayout.ContentStart,
+                        end = TvLayout.ContentEnd, bottom = 30.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(vertical = 8.dp)
+                    Column(
+                        Modifier.fillMaxWidth()
+                            .background(
+                                MaterialTheme.colorScheme.surfaceContainerHigh,
+                                RoundedCornerShape(20.dp)
+                            )
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        item {
-                            TvPill(
-                                label = stringResource(R.string.mk_tab_installed) + " (${state.installed.size})",
-                                selected = showInstalled,
-                                onClick = { showInstalled = true },
-                                modifier = Modifier.focusRequester(firstPill)
-                            )
-                        }
-                        item {
-                            TvPill(
-                                label = "Explorar (${state.results.count { it.manifest.isSupported }})",
-                                selected = !showInstalled,
-                                onClick = { showInstalled = false }
-                            )
-                        }
-                    }
-                    TvFilterDropdown(
-                        label = "Tipo de fonte",
-                        selection = listOf("Todas compatíveis", "Addons Stremio", "Fontes Web / Vista")[sourceCategory],
-                        options = listOf("Todas compatíveis", "Addons Stremio", "Fontes Web / Vista"),
-                        selectedIndex = sourceCategory,
-                        onSelect = { sourceCategory = it }
-                    )
-                    if (!showInstalled) {
-                        // A single selector replaces the sprawling Todas/Vista/Stremio pills.
-                        val directories = com.ivor.openstream.presentation.marketplace.MarketplaceDirectory.entries
-                        TvFilterDropdown(
-                            label = "Catálogo de addons",
-                            selection = state.directory.label,
-                            options = directories.map { it.label },
-                            selectedIndex = directories.indexOf(state.directory),
-                            onSelect = { index ->
-                                directories.getOrNull(index)?.let(viewModel::setDirectory)
-                            }
-                        )
-                        TvDpadTextInput(
-                            value = state.query,
-                            onSubmit = viewModel::setQuery,
-                            title = "Pesquisar fontes compatíveis",
-                            placeholder = "Pesquisar fonte ou addon…",
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
-                        )
-                    }
-                    if (showInstalled && state.installed.size > 1) {
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            contentPadding = PaddingValues(bottom = 8.dp)
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            SourceSearchMode.entries.forEach { mode ->
-                                item {
-                                    TvPill(
-                                        label = stringResource(mode.labelRes),
-                                        selected = searchMode == mode,
-                                        onClick = { viewModel.setSearchMode(mode) }
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    "Plataformas oficiais",
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+                                Text(
+                                    "TMDB · Disponibilidade em Portugal",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            TvPill(
+                                if (officialProvidersEnabled) "Ativado" else "Ativar",
+                                selected = officialProvidersEnabled,
+                                onClick = { providersViewModel.setEnabled(!officialProvidersEnabled) }
+                            )
+                        }
+                        Text(
+                            "Indica em que serviços uma obra está disponível e permite filtrar por plataforma. Não adiciona streams.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 2
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(
+                            Modifier.weight(1f)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceContainerLow,
+                                    RoundedCornerShape(18.dp)
+                                )
+                                .padding(18.dp)
+                        ) {
+                            Text("Catálogo TMDB", style = MaterialTheme.typography.titleMedium)
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "Títulos, capas, temporadas e episódios.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text("Integrado", color = MaterialTheme.colorScheme.primary)
+                        }
+                        Column(
+                            Modifier.weight(1f)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceContainerLow,
+                                    RoundedCornerShape(18.dp)
+                                )
+                                .padding(18.dp)
+                        ) {
+                            Text("Curadoria AniList", style = MaterialTheme.typography.titleMedium)
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "Tendências, estreias e géneros de anime.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text("Integrado", color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxSize()
+                        .padding(start = TvLayout.ContentStart, end = TvLayout.ContentEnd),
+                    horizontalArrangement = Arrangement.spacedBy(18.dp)
+                ) {
+                    Column(
+                        Modifier.width(325.dp).fillMaxHeight(),
+                        verticalArrangement = Arrangement.spacedBy(9.dp)
+                    ) {
+                        TvFilterDropdown(
+                            label = "Tipo de fonte",
+                            selection = listOf(
+                                "Todas", "Stremio", "Web / Vista"
+                            )[sourceCategory],
+                            options = listOf("Todas", "Stremio", "Web / Vista"),
+                            selectedIndex = sourceCategory,
+                            onSelect = { sourceCategory = it }
+                        )
+                        if (area == 2) {
+                            TvDpadTextInput(
+                                value = state.query,
+                                onSubmit = viewModel::setQuery,
+                                title = "Procurar addon",
+                                placeholder = "Nome ou categoria…",
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            Text(
+                                "Ordem e ativação das fontes",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            if (area == 1) "${visible.size} fontes instaladas"
+                            else "${visible.size} addons compatíveis",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (visible.isEmpty()) {
+                            Text(
+                                if (area == 1) "Sem fontes instaladas nesta categoria."
+                                else "Não há addons compatíveis com este filtro.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.weight(1f)
+                                    .focusRestorer(selected?.let {
+                                        rowRequester(it.key)
+                                    } ?: FocusRequester.Default),
+                                contentPadding = PaddingValues(bottom = 36.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                itemsIndexed(visible, key = { _, item -> item.key }) { _, extension ->
+                                    ListItem(
+                                        selected = extension.key == selected?.key,
+                                        onClick = {
+                                            selectedKey = extension.key
+                                            runCatching { detailAction.requestFocus() }
+                                        },
+                                        headlineContent = {
+                                            Text(
+                                                extension.manifest.name, maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        },
+                                        supportingContent = {
+                                            Text(
+                                                statusLabel(extension), maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        },
+                                        leadingContent = {
+                                            Icon(
+                                                Icons.Default.Extension, null,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        },
+                                        modifier = Modifier
+                                            .focusRequester(rowRequester(extension.key))
+                                            .onFocusChanged {
+                                                if (it.isFocused) selectedKey = extension.key
+                                            }
                                     )
                                 }
                             }
                         }
                     }
-                    if (visible.isEmpty()) {
-                        androidx.compose.material3.Text(
-                            text = if (showInstalled) "Nenhuma fonte instalada nesta categoria." else "Nenhuma fonte compatível encontrada.",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 24.dp)
-                        )
-                    } else {
-                        LazyColumn(
-                            modifier = Modifier.focusRestorer(selected?.let { rowRequester(it.key) } ?: FocusRequester.Default),
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                            contentPadding = PaddingValues(top = 4.dp, bottom = 32.dp)
-                        ) {
-                            itemsIndexed(visible, key = { _, it -> it.key }) { index, extension ->
-                                ListItem(
-                                    selected = extension.key == selected?.key,
-                                    // OK enters the actionable detail pane instead of doing nothing.
-                                    onClick = {
-                                        selectedKey = extension.key
-                                        if (extension.manifest.isSupported || extension.isInstalled) {
-                                            runCatching { detailAction.requestFocus() }
-                                        }
-                                    },
-                                    headlineContent = {
-                                        Text(extension.manifest.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    },
-                                    supportingContent = {
-                                        Text(statusLabel(extension), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    },
-                                    leadingContent = {
-                                        if (showInstalled) {
-                                            Text("${index + 1}", style = MaterialTheme.typography.titleMedium)
-                                        } else {
-                                            Icon(Icons.Default.Extension, contentDescription = null, modifier = Modifier.size(20.dp))
-                                        }
-                                    },
-                                    modifier = Modifier
-                                        .focusRequester(rowRequester(extension.key))
-                                        .onFocusChanged { if (it.isFocused) selectedKey = extension.key }
-                                )
+                    Column(
+                        Modifier.weight(1f).fillMaxHeight()
+                            .background(
+                                MaterialTheme.colorScheme.surfaceContainerLow,
+                                RoundedCornerShape(22.dp)
+                            )
+                            .onFocusChanged { detailHasFocus = it.hasFocus }
+                            .padding(22.dp)
+                    ) {
+                        if (selected != null) {
+                            val position = state.installed.indexOfFirst {
+                                it.key == selected.key
                             }
+                            ExtensionDetail(
+                                extension = selected,
+                                actionFocusRequester = detailAction,
+                                canMoveUp = showInstalled && position > 0,
+                                canMoveDown = showInstalled &&
+                                    position in 0 until state.installed.lastIndex,
+                                onInstall = { viewModel.install(selected) },
+                                onUpdate = { viewModel.update(selected) },
+                                onEnabledChange = { viewModel.setEnabled(selected, it) },
+                                onMove = { offset -> viewModel.moveSource(selected, offset) },
+                                onRemove = { pendingRemove = selected }
+                            )
+                            if (showInstalled && state.installed.size > 1) {
+                                Spacer(Modifier.height(10.dp))
+                                Text(
+                                    "Ordem de procura", style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    SourceSearchMode.entries.forEach { mode ->
+                                        TvPill(
+                                            label = stringResource(mode.labelRes),
+                                            selected = searchMode == mode,
+                                            onClick = { viewModel.setSearchMode(mode) }
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            Text(
+                                "Seleciona uma fonte à esquerda.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
                         }
-                    }
-                }
-
-                // The detail pane.
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .background(
-                            MaterialTheme.colorScheme.surfaceContainerLow,
-                            RoundedCornerShape(topStart = 28.dp)
-                        )
-                        .onFocusChanged { detailHasFocus = it.hasFocus }
-                        .padding(start = 28.dp, end = TvLayout.ContentEnd, top = 20.dp)
-                ) {
-                    if (selected != null) {
-                        val position = state.installed.indexOfFirst { it.key == selected.key }
-                        ExtensionDetail(
-                            extension = selected,
-                            actionFocusRequester = detailAction,
-                            canMoveUp = showInstalled && position > 0,
-                            canMoveDown = showInstalled && position in 0 until state.installed.lastIndex,
-                            onInstall = { viewModel.install(selected) },
-                            onUpdate = { viewModel.update(selected) },
-                            onEnabledChange = { viewModel.setEnabled(selected, it) },
-                            onMove = { offset -> viewModel.moveSource(selected, offset) },
-                            onRemove = { pendingRemove = selected }
-                        )
                     }
                 }
             }
@@ -370,12 +432,12 @@ fun TvExtensionsScreen(
                         }) { androidx.compose.material3.Text("Configurar AIOStreams PT-BR") }
                         androidx.compose.material3.TextButton(onClick = {
                             viewModel.addRepo("https://raw.githubusercontent.com/recloudstream/extensions/master/repo.json")
-                            showInstalled = false
+                            area = 2
                             showAddRepo = false
                         }) { androidx.compose.material3.Text("Ver CloudStream oficial (.cs3): só catálogo") }
                         androidx.compose.material3.TextButton(onClick = {
                             viewModel.addRepo("https://raw.githubusercontent.com/admknight/CloudstreamExtensions/master/repo.json")
-                            showInstalled = false
+                            area = 2
                             showAddRepo = false
                         }) { androidx.compose.material3.Text("Ver mega biblioteca (.cs3): só catálogo") }
                     }
@@ -385,7 +447,7 @@ fun TvExtensionsScreen(
                         onClick = {
                             viewModel.addRepo(repoInput)
                             repoInput = ""
-                            showInstalled = false
+                            area = 2
                             showAddRepo = false
                         },
                         enabled = repoInput.isNotBlank()
