@@ -74,11 +74,13 @@ import com.ivor.openstream.presentation.marketplace.extensionSubtitle
 @Composable
 fun TvExtensionsScreen(
     modifier: Modifier = Modifier,
-    viewModel: MarketplaceViewModel = hiltViewModel()
+    viewModel: MarketplaceViewModel = hiltViewModel(),
+    providersViewModel: TvProvidersViewModel = hiltViewModel()
 ) {
     val uriHandler = LocalUriHandler.current
     val state by viewModel.state.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
+    val officialProvidersEnabled by providersViewModel.enabled.collectAsState()
     LaunchedEffect(viewModel) { viewModel.liveRefreshWhileVisible() }
     var showInstalled by remember { mutableStateOf(false) }
     var compatibleOnly by remember { mutableStateOf(false) }
@@ -116,6 +118,16 @@ fun TvExtensionsScreen(
                 supporting = state.message?.let { "$counts  ·  $it" } ?: counts,
                 actions = {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(
+                            onClick = { providersViewModel.setEnabled(!officialProvidersEnabled) },
+                            contentPadding = ButtonDefaults.ButtonWithIconContentPadding
+                        ) {
+                            Icon(Icons.Default.Extension, contentDescription = null,
+                                modifier = Modifier.size(ButtonDefaults.IconSize))
+                            Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                            Text(if (officialProvidersEnabled) "Plataformas · Ativo"
+                                else "Ativar plataformas")
+                        }
                         Button(onClick = { showAddRepo = true },
                             contentPadding = ButtonDefaults.ButtonWithIconContentPadding) {
                             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
@@ -143,6 +155,16 @@ fun TvExtensionsScreen(
                         }
                     }
                 }
+            )
+
+            androidx.compose.material3.Text(
+                "Extensão nativa · Onde assistir: Netflix, Prime Video, Disney+ e outras plataformas " +
+                    "conforme disponibilidade oficial em Portugal. Quando ativada, adiciona filtros " +
+                    "por plataforma ao catálogo e à pesquisa; não fornece streams nem subscrições.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(start = TvLayout.ContentStart,
+                    end = TvLayout.ContentEnd, bottom = 8.dp)
             )
 
             Row(Modifier.fillMaxSize()) {
