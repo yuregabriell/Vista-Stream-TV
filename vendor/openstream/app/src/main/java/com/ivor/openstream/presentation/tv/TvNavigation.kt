@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -26,6 +28,9 @@ import com.ivor.openstream.presentation.navigation.DeepLinkRequest
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.focusGroup
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Brush
@@ -127,9 +132,23 @@ private fun TvAppScaffold(
     val showDrawer = TvDestination.topLevel.any { it.route == route } ||
         route?.startsWith("tv_anime/browse") == true
     val requesters = remember { TvDestination.topLevel.associateWith { FocusRequester() } }
+    var resetTopToken by remember { mutableIntStateOf(0) }
 
     fun go(destination: TvDestination) {
-        if (destination == selected && route == destination.route) return
+        if (destination == selected && route == destination.route) {
+            // Re-pressing the CURRENT sidebar tab returns that screen to its
+            // top. Home/Anime animate there without refetching the catalog.
+            if (destination == TvDestination.HOME || destination == TvDestination.ANIME) {
+                resetTopToken++
+            } else {
+                navController.navigate(destination.route) {
+                    popUpTo(destination.route) { inclusive = true }
+                    launchSingleTop = true
+                    restoreState = false
+                }
+            }
+            return
+        }
         navController.navigate(destination.route) {
             popUpTo(TvDestination.HOME.route) { saveState = true }
             launchSingleTop = true
@@ -181,9 +200,23 @@ private fun TvAppScaffold(
             navController = navController,
             startDestination = TvDestination.HOME.route,
             modifier = Modifier.weight(1f).fillMaxHeight()
+                // Directional UP/DOWN from the content must never exit to the
+                // sidebar when a LazyColumn repositions cards. Only LEFT may
+                // cross the content boundary into the navigation rail.
+                .focusProperties {
+                    exit = { direction ->
+                        when (direction) {
+                            FocusDirection.Up, FocusDirection.Down, FocusDirection.Right ->
+                                FocusRequester.Cancel
+                            else -> FocusRequester.Default
+                        }
+                    }
+                }
+                .focusGroup()
         ) {
             composable(TvDestination.HOME.route) {
                 TvHomeScreen(
+                    resetTopToken = resetTopToken,
                     onOpenAnime = { go(TvDestination.ANIME) },
                     onBrowseCatalog = { navController.navigate(TvRoutes.CATALOG) },
                     onOpenExtensions = { go(TvDestination.EXTENSIONS) },
@@ -224,6 +257,7 @@ private fun TvAppScaffold(
 
             composable(TvDestination.ANIME.route) {
                 TvAnimeScreen(
+                    resetTopToken = resetTopToken,
                     onOpenSources = { go(TvDestination.EXTENSIONS) },
                     onOpenMovies = { go(TvDestination.HOME) },
                     onOpenUnifiedTitle = { mediaType, id ->
