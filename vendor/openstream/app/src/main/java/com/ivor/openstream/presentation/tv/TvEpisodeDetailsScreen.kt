@@ -155,9 +155,20 @@ fun TvEpisodeDetailsScreen(
             ?.let { "$TV_BACKDROP_BASE$it" })
         TvBackdropScrims()
         Column(Modifier.fillMaxSize()) {
-            // Show the compact breadcrumb only after the user scrolls past the hero.
-            if (listState.firstVisibleItemIndex > 0 ||
-                listState.firstVisibleItemScrollOffset > 18) {
+            // Keep the official title logo outside the scroll container so
+            // D-pad focus on Play or episode options can never clip it.
+            if (listState.firstVisibleItemIndex == 0) {
+                Box(
+                    modifier = Modifier.fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.62f))
+                        .padding(start = TvLayout.PageStart, top = 6.dp, bottom = 6.dp)
+                ) {
+                    TvOfficialTitleLogo(
+                        title = title.name, mediaType = mediaType,
+                        titleId = title.id, compact = true
+                    )
+                }
+            } else {
                 Row(
                     modifier = Modifier.fillMaxWidth()
                         .background(MaterialTheme.colorScheme.background.copy(alpha = 0.87f))
@@ -193,13 +204,6 @@ fun TvEpisodeDetailsScreen(
                                 top = 10.dp, bottom = 18.dp),
                         verticalArrangement = Arrangement.spacedBy(7.dp)
                     ) {
-                        // Official artwork when TMDB has a logo; plain text remains the fallback.
-                        TvOfficialTitleLogo(
-                            title = title.name,
-                            mediaType = mediaType,
-                            titleId = title.id,
-                            compact = true
-                        )
                         if (mediaType != "movie") {
                             Text(
                                 currentEpisode?.name?.takeIf { it.isNotBlank() }
