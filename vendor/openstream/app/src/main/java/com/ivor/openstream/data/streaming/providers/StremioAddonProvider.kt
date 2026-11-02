@@ -44,6 +44,10 @@ internal fun directMediaExternalUrl(raw: String?): String? {
     return url.toString().takeIf { supported.any(path::endsWith) }
 }
 
+/** Stremio fileIdx is zero-based; TorrServer file IDs are one-based. */
+internal fun stremioToTorrServerIndex(index: Int?): Int? =
+    index?.takeIf { it in 0..9_999 }?.plus(1)
+
 /**
  * A Stremio add-on, spoken over its public HTTP protocol
  * (https://github.com/Stremio/stremio-addon-sdk/blob/master/docs/protocol.md):
@@ -230,7 +234,7 @@ class StremioAddonProvider(
             ?: rawMagnet?.let { Regex("(?i)urn:btih:([a-f0-9]{40})").find(it)?.groupValues?.getOrNull(1) }
         // Stremio fileIdx is zero-based; TorrServer file_stats IDs are one-based.
         val stremioIndex = (stream["fileIdx"] as? JsonPrimitive)?.intOrNull
-        val torrServerIndex = stremioIndex?.takeIf { it in 0..9_999 }?.plus(1)
+        val torrServerIndex = stremioToTorrServerIndex(stremioIndex)
             ?: if (direct == null && hash != null && torrentBase != null) missingFileIndex(hash) else null
         val p2p = direct == null && hash != null && torrServerIndex != null && torrentBase != null
         val url = direct ?: if (p2p) torrentBridge?.playUrl(
