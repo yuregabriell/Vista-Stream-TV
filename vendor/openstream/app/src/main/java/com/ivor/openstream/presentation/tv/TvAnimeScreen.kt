@@ -87,6 +87,7 @@ private val TV_ANIME_GENRES = listOf(
 
 @Composable
 fun TvAnimeScreen(
+    resetTopToken: Int = 0,
     onOpenSources: () -> Unit = {},
     onOpenMovies: () -> Unit = {},
     initialGenre: String = "",
@@ -97,6 +98,7 @@ fun TvAnimeScreen(
     viewModel: TvAnimeUnifiedCatalogViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    var lastSeenResetTop by remember { mutableIntStateOf(resetTopToken) }
     var genre by rememberSaveable(initialGenre, initialQuery) { mutableStateOf(initialGenre) }
     var showingAll by rememberSaveable(initialBrowse, initialGenre, initialQuery) {
         mutableStateOf(initialBrowse && initialGenre.isBlank() && initialQuery.isBlank())
@@ -105,6 +107,16 @@ fun TvAnimeScreen(
     var submittedQuery by rememberSaveable(initialGenre, initialQuery) { mutableStateOf(initialQuery) }
     val keyboard = LocalSoftwareKeyboardController.current
     val firstAction = remember { FocusRequester() }
+    LaunchedEffect(resetTopToken) {
+        if (lastSeenResetTop != resetTopToken) {
+            lastSeenResetTop = resetTopToken
+            viewModel.clearFocusedAnime()
+            genre = ""
+            searchText = ""
+            submittedQuery = ""
+            showingAll = false
+        }
+    }
 
     // The TV anime catalog now contains only real TMDB records, like global
     // search. Each card has its canonical ID, so no matcher, timeout, separate
@@ -158,6 +170,7 @@ fun TvAnimeScreen(
             animeItems = homeAnimes,
             genres = TV_ANIME_GENRES,
             editorialRails = state.editorialRails,
+            resetTopToken = resetTopToken,
             lastFocusedId = viewModel.lastFocusedAnimeId,
             lastFocusedRail = viewModel.lastFocusedRail,
             onCardFocused = viewModel::rememberFocusedAnime,
