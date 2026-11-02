@@ -34,6 +34,8 @@ import com.ivor.openstream.presentation.livetv.Channel
 import com.ivor.openstream.presentation.livetv.Country
 import com.ivor.openstream.presentation.livetv.countries
 import com.ivor.openstream.presentation.livetv.readRemoteChannels
+import com.ivor.openstream.presentation.livetv.LiveTvAddons
+import com.ivor.openstream.presentation.livetv.LiveTvSourcesDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
@@ -62,6 +64,7 @@ internal fun TvLiveScreen(onPlayChannel: (Channel, List<Channel>, Country) -> Un
     var refreshToken by remember { mutableIntStateOf(0) }
     var category by rememberSaveable { mutableStateOf("Todos") }
     var pickerOpen by remember { mutableStateOf(false) }
+    var sourcesOpen by remember { mutableStateOf(false) }
     var favorites by remember(countryCode) {
         mutableStateOf(prefs.getStringSet("favorites_" + countryCode, emptySet())?.toSet() ?: emptySet())
     }
@@ -72,7 +75,11 @@ internal fun TvLiveScreen(onPlayChannel: (Channel, List<Channel>, Country) -> Un
         channels = emptyList()
         category = "Todos"
         try {
-            channels = withContext(Dispatchers.IO) { readRemoteChannels(countryCode) }
+            val publicChannels = withContext(Dispatchers.IO) {
+                runCatching { readRemoteChannels(countryCode) }.getOrDefault(emptyList())
+            }
+            val addOnChannels = LiveTvAddons.channels(context, countryCode)
+            channels = (publicChannels + addOnChannels).distinctBy { it.id }
             if (channels.isEmpty()) loadError = "Nenhum canal disponível nesta fonte."
         } catch (_: Exception) {
             loadError = "Falha ao carregar canais. Verifica a ligação."
@@ -114,6 +121,8 @@ internal fun TvLiveScreen(onPlayChannel: (Channel, List<Channel>, Country) -> Un
                         Text("●  VISTASTREAM LIVE", color = liveAccent,
                             style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold)
                         Spacer(Modifier.weight(1f))
+                        TvPill("Fontes BR", onClick = { sourcesOpen = true }, icon = Icons.Default.Public)
+                        Spacer(Modifier.width(10.dp))
                         TvPill("Atualizar", onClick = { refreshToken++ }, icon = Icons.Default.Refresh)
                     }
                     Spacer(Modifier.height(9.dp))
@@ -218,6 +227,12 @@ internal fun TvLiveScreen(onPlayChannel: (Channel, List<Channel>, Country) -> Un
         }
     }
 
+    if (sourcesOpen) {
+        LiveTvSourcesDialog(
+            onDismiss = { sourcesOpen = false },
+            onSaved = { sourcesOpen = false; refreshToken++ }
+        )
+    }
     if (pickerOpen) {
         Dialog(onDismissRequest = { pickerOpen = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)) {
@@ -293,7 +308,7 @@ private fun TvLiveChannelCard(
                     overflow = TextOverflow.Ellipsis)
             }
         }
-        Text(channel.group, color = Color(0xFFAFA6C5),
+        Text(channel.group + " · " + channel.sourceLabel, color = Color(0xFFAFA6C5),
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
         TvPill(if (favorite) "♥ Guardado" else "♡ Guardar", onClick = onFavorite)
