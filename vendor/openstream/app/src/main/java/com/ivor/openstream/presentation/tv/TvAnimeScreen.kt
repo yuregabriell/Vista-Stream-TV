@@ -137,7 +137,10 @@ fun TvAnimeScreen(
             kotlinx.coroutines.delay(15L * 60 * 1000)
         }
     }
-    LaunchedEffect(Unit) { runCatching { firstAction.requestFocus() } }
+    // Home manages its own hero focus. Entering browse focuses the genre strip.
+    LaunchedEffect(browsing) {
+        if (browsing) runCatching { firstAction.requestFocus() }
+    }
 
     if (selectedTitle != null) {
         // Use the existing actual anime source resolver, subtitle selection,
@@ -182,73 +185,44 @@ fun TvAnimeScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // Permanent section identity, as on the premium phone anime home.
-        Row(
-            Modifier.fillMaxWidth()
-                .padding(start = AnimeSafeStart, end = TvLayout.ContentEnd, top = 27.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "ANIMES  /  VISTASTREAM",
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    if (submittedQuery.isNotEmpty()) "Pesquisar: $submittedQuery"
-                    else TV_ANIME_GENRES.firstOrNull { it.first == genre }?.second ?: "Um mundo só de animes",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            TvPill(
-                label = "Todos os animes",
-                selected = !browsing,
-                onClick = { browseGenre("") },
-                modifier = Modifier.focusRequester(firstAction)
-            )
-            TvPill(
-                label = "Atualizar",
-                onClick = viewModel::refresh
-            )
-        }
-
-        Row(
-            Modifier.fillMaxWidth()
-                .padding(start = AnimeSafeStart, end = TvLayout.ContentEnd, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            TvDpadTextInput(
-                value = searchText,
-                placeholder = "Pesquisar animes por nome",
-                title = "Pesquisar animes",
-                modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
-                maxLength = 80,
-                onSubmit = { entered ->
-                    searchText = entered
-                    showingAll = false
-                    genre = ""
-                    submittedQuery = entered
-                }
-            )
-            // The D-pad search control already runs the query on OK/IME Search.
-            // A second button beside it truncated the field on 720p TVs.
-        }
-
+        // Genre-first TV experience: no manual refresh or duplicate search field.
         LazyRow(
-            contentPadding = PaddingValues(start = AnimeSafeStart, end = TvLayout.ContentEnd,
-                top = 2.dp, bottom = 18.dp),
+            contentPadding = PaddingValues(
+                start = AnimeSafeStart,
+                end = TvLayout.ContentEnd,
+                top = 24.dp,
+                bottom = 20.dp
+            ),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            lazyItems(TV_ANIME_GENRES, key = { it.first }) { (code, label) ->
-                TvPill(label = label, selected = genre == code, onClick = { browseGenre(code) })
+            item(key = "anime-genre-all") {
+                TvPill(
+                    label = "Todos",
+                    selected = genre.isBlank() && submittedQuery.isBlank(),
+                    onClick = {
+                        showingAll = true
+                        genre = ""
+                        searchText = ""
+                        submittedQuery = ""
+                    },
+                    modifier = Modifier.focusRequester(firstAction)
+                )
             }
+            lazyItems(TV_ANIME_GENRES, key = { it.first }) { (code, label) ->
+                TvPill(
+                    label = label,
+                    selected = genre == code,
+                    onClick = { browseGenre(code) }
+                )
+            }
+        }
+        if (submittedQuery.isNotBlank()) {
+            Text(
+                text = "Resultados para: $submittedQuery",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(start = AnimeSafeStart, bottom = 10.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         if (browsing) {
