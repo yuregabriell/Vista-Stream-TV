@@ -52,7 +52,8 @@ internal fun directMediaExternalUrl(raw: String?): String? {
  * (`tt0133093`, or `tt0903747:1:1` for an episode) or, when the add-on accepts them, `tmdb:` ids.
  *
  * Direct URLs play with Media3; torrent hashes work only when an optional local/LAN
- * TorrServer is configured and the add-on supplies the file index. The Stremio
+ * TorrServer is configured; if fileIdx is missing, the bridge may select the largest
+ * video file from server metadata. The Stremio
  * externalUrl field is a webpage link; only URLs clearly naming playable video
  * files are accepted, never arbitrary websites or protected players.
  * Configured add-ons keep their settings in the base URL.
@@ -126,8 +127,15 @@ class StremioAddonProvider(
 
         // Add-ons often list one release several times, once per file host; keep one entry each.
         val releases = LinkedHashMap<String, MutableList<VideoServer>>()
+        var missingFileIdLookups = 0
         streams.forEach { element ->
-            val candidate = (element as? JsonObject)?.let { toCandidate(it, title, torrentBase) } ?: return@forEach
+            val candidate = (element as? JsonObject)?.let { stream ->
+                toCandidate(stream, title, torrentBase) { hash ->
+                    // Metadata discovery is network-bound; limit it per addon search.
+                    if (missingFileIdLookups++ >= 3) null
+                    else torrentBase?.let { torrentBridge?.discoverFileIndex(it, hash) }
+                }
+            } ?: return@forEach
             releases.getOrPut(candidate.releaseKey) { mutableListOf() } += candidate.server
         }
         val seenIds = HashSet<String>()
@@ -204,7 +212,12 @@ class StremioAddonProvider(
     /** A stream as a server, plus the key that groups its mirrors on other hosts. */
     private class Candidate(val server: VideoServer, val releaseKey: String)
 
-    private fun toCandidate(stream: JsonObject, title: String, torrentBase: String?): Candidate? {
+    private fun toCandidate(
+        stream: JsonObject,
+        title: String,
+        torrentBase: String?,
+        missingFileIndex: (String) -> Int?
+    ): Candidate? {
         // Stremio externalUrl normally means a web page, NOT playable media.
         // A few addons return a genuine direct media URL here instead of under
         // "url". Accept only recognisable video files/playlists; never hand
@@ -215,10 +228,13 @@ class StremioAddonProvider(
         val rawMagnet = stream.text("url")?.takeIf { it.startsWith("magnet:?") }
         val hash = stream.text("infoHash")
             ?: rawMagnet?.let { Regex("(?i)urn:btih:([a-f0-9]{40})").find(it)?.groupValues?.getOrNull(1) }
-        val fileIndex = (stream["fileIdx"] as? JsonPrimitive)?.intOrNull
-        val p2p = direct == null && hash != null && fileIndex != null && torrentBase != null
+        // Stremio fileIdx is zero-based; TorrServer file_stats IDs are one-based.
+        val stremioIndex = (stream["fileIdx"] as? JsonPrimitive)?.intOrNull
+        val torrServerIndex = stremioIndex?.takeIf { it in 0..9_999 }?.plus(1)
+            ?: if (direct == null && hash != null && torrentBase != null) missingFileIndex(hash) else null
+        val p2p = direct == null && hash != null && torrServerIndex != null && torrentBase != null
         val url = direct ?: if (p2p) torrentBridge?.playUrl(
-            torrentBase!!, hash!!, fileIndex!!
+            torrentBase!!, hash!!, torrServerIndex!!
         ) else null
         if (url == null) return null
 
