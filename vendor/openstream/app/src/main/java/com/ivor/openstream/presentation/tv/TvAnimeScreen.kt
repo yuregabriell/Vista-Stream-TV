@@ -128,7 +128,15 @@ fun TvAnimeScreen(
             viewModel.browse("anime", query = submittedQuery, genre = genre)
         }
     }
-    LaunchedEffect(Unit) { viewModel.refreshIfStale() }
+    // Refresh automatically when stale, including if the TV remains on this page
+    // for hours. The repository has a 3h cache; this check itself does no network
+    // request until the cache expires.
+    LaunchedEffect(viewModel) {
+        while (true) {
+            viewModel.refreshIfStale()
+            kotlinx.coroutines.delay(15L * 60 * 1000)
+        }
+    }
     LaunchedEffect(Unit) { runCatching { firstAction.requestFocus() } }
 
     if (selectedTitle != null) {
@@ -157,12 +165,6 @@ fun TvAnimeScreen(
             genres = TV_ANIME_GENRES,
             onOpenTitle = { selectedTitle = it },
             onGenre = ::browseGenre,
-            onSearch = { entered ->
-                searchText = entered
-                showingAll = false
-                genre = ""
-                submittedQuery = entered
-            },
             onOpenMovies = onOpenMovies,
             onBrowseAll = {
                 showingAll = true
@@ -170,7 +172,6 @@ fun TvAnimeScreen(
                 searchText = ""
                 submittedQuery = ""
             },
-            onRefresh = viewModel::refresh,
             modifier = modifier
         )
         return
