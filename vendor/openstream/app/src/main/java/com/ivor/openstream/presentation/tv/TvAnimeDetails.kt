@@ -193,13 +193,13 @@ fun TvAnimeDetails(
 
             item(key = "anime-premium-episodes") {
                 TvRail("Episódios · Temporada $season", start = TvLayout.PageStart) {
-                    items(episodeChoices, key = { "${it.season}:${it.number}" }) { item ->
+                    items(episodeChoices, key = { "${it.season}:${it.number}" }) { ep ->
                         TvLandscapeCard(
-                            title = "E${item.number} · ${item.title}",
+                            title = "E${ep.number} · ${ep.title}",
                             imageUrl = title.background ?: title.poster,
-                            subtitle = if (item.number == episode) "Selecionado" else "Temporada ${item.season}",
+                            subtitle = if (ep.number == episode) "Selecionado" else "Temporada ${ep.season}",
                             width = 210.dp,
-                            onClick = { onEpisode(item.season, item.number) }
+                            onClick = { onEpisode(ep.season, ep.number) }
                         )
                     }
                 }
