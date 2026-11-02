@@ -40,7 +40,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class HomeMode { FILMS_SERIES, ANIME }
+enum class HomeMode { FILMS_SERIES, ANIME, SHORTS }
 
 enum class RailStyle {
     /** Big rank numerals beside posters, for a top-ten list. */
@@ -97,8 +97,9 @@ class HomeViewModel @Inject constructor(
     // Keep the mode local to the device/profile session; no account or API key needed.
     private val homePreferences = context.getSharedPreferences("vista_home_mode_v1", Context.MODE_PRIVATE)
     private val _mode = MutableStateFlow(
-        if (homePreferences.getString("mode", "") == HomeMode.ANIME.name)
-            HomeMode.ANIME else HomeMode.FILMS_SERIES
+        HomeMode.entries.firstOrNull {
+            it.name == homePreferences.getString("mode", "")
+        } ?: HomeMode.FILMS_SERIES
     )
     val mode: StateFlow<HomeMode> = _mode
     private val cachedHomes = mutableMapOf<HomeMode, HomeUiState.Success>()
@@ -260,6 +261,9 @@ class HomeViewModel @Inject constructor(
         _mode.value = target
         homePreferences.edit().putString("mode", target.name).apply()
         feedJob?.cancel()
+        // Shorts has a separate, rights-verified catalog. Do not query TMDB
+        // or accidentally show full-length movies as short episodes.
+        if (target == HomeMode.SHORTS) return
         val cached = cachedHomes[target]
         if (cached != null) {
             _uiState.value = cached
@@ -271,7 +275,7 @@ class HomeViewModel @Inject constructor(
      * Called periodically and whenever this screen resumes.
      */
     fun refreshIfStale() {
-        if (feedJob?.isActive == true) return
+        if (_mode.value == HomeMode.SHORTS || feedJob?.isActive == true) return
         val last = lastHomeLoadedAt[_mode.value] ?: 0L
         val age = System.currentTimeMillis() - last
         if (last == 0L || age < 0L || age >= HOME_REFRESH_MS) {
@@ -282,6 +286,7 @@ class HomeViewModel @Inject constructor(
 
     /** Pull-to-refresh refreshes only the currently visible home. */
     fun refresh() {
+        if (_mode.value == HomeMode.SHORTS) return
         val current = _uiState.value
         if (current is HomeUiState.Success) _uiState.value = current.copy(isRefreshing = true)
         cachedHomes.remove(_mode.value)
@@ -292,6 +297,7 @@ class HomeViewModel @Inject constructor(
     fun loadData(showLoading: Boolean = true, forceRefresh: Boolean = false) {
         feedJob?.cancel()
         val selectedMode = _mode.value
+        if (selectedMode == HomeMode.SHORTS) return
         feedJob = viewModelScope.launch {
             if (showLoading) _uiState.value = HomeUiState.Loading
             val needed = if (selectedMode == HomeMode.ANIME) {
