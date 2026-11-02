@@ -54,7 +54,8 @@ class KeylessCatalogClient @Inject constructor(
 
     /** Cinemeta is a Stremio metadata/catalog service; it does NOT host the movies. */
     suspend fun titles(type: String, query: String = "", page: Int = 1, force: Boolean = false, genre: String = "", year: Int? = null): List<KeylessTitle> = withContext(Dispatchers.IO) {
-        val cacheKey = "${type}_${query.trim().lowercase()}_${genre}_${year ?: 0}_$page"
+        val imageRevision = if (type == "anime") "high_res_v2_" else ""
+        val cacheKey = "${imageRevision}${type}_${query.trim().lowercase()}_${genre}_${year ?: 0}_$page"
         if (!force && query.isBlank() && genre.isBlank() && year == null && page == 1 &&
             System.currentTimeMillis() - prefs.getLong("${cacheKey}_ts", 0L) < 3 * 60 * 60 * 1000L) {
             prefs.getString(cacheKey, null)?.let { raw ->
@@ -89,7 +90,7 @@ class KeylessCatalogClient @Inject constructor(
      * Metadata does not imply playable streams.
      */
     suspend fun refresh(force: Boolean = false): Map<String, List<KeylessTitle>> = supervisorScope {
-        val cacheName = "home_public_catalog_v2"
+        val cacheName = "home_public_catalog_v3"
         val saved = prefs.getString(cacheName, null)?.let { raw ->
             runCatching { json.decodeFromString<Map<String, List<KeylessTitle>>>(raw) }.getOrNull()
         }
