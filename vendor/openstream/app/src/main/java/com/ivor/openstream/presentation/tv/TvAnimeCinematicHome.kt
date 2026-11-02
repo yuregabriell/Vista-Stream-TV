@@ -77,15 +77,15 @@ internal fun TvAnimeCinematicHome(
                     .align(Alignment.TopEnd)
             )
         } else if (shown.poster != null) {
-            // Anilist bannerImage is typically a very shallow strip. On a TV it
-            // gets heavily upscaled and looks blurry. Keep the large cover at
-            // its natural portrait proportions on the right instead.
+            // AniList banners are narrow and often blurred when scaled to a TV.
+            // Never upscale them as a full-screen backdrop: use the portrait cover
+            // at a modest size until a verified landscape TMDB image is available.
             AsyncImage(
                 model = shown.poster,
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.align(Alignment.TopEnd).fillMaxHeight(0.79f)
-                    .widthIn(max = 460.dp)
+                modifier = Modifier.align(Alignment.TopEnd).fillMaxHeight(0.72f)
+                    .widthIn(max = 320.dp)
             )
         }
         TvBackdropScrims()
@@ -133,10 +133,10 @@ internal fun TvAnimeCinematicHome(
                             modifier = Modifier.widthIn(max = 600.dp)
                         )
                     }
-                    // Same compact details action as Films & Series. Playback source
-                    // selection remains on the title page, not a misleading auto-play.
+                    // One clear primary action, matching the film/series hero.
+                    // This opens the title/episode page, never starts video unexpectedly.
                     TvPill(
-                        label = "Detalhes",
+                        label = "Ver anime e episódios",
                         icon = Icons.Rounded.Info,
                         onClick = { onOpenTitle(shown) },
                         modifier = Modifier.focusRequester(heroAction)
