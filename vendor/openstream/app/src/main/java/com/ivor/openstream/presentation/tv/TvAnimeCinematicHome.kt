@@ -48,6 +48,7 @@ internal fun TvAnimeCinematicHome(
     val shown = highlighted ?: featured
     val artworkViewModel: TvAnimeHeroArtworkViewModel = hiltViewModel()
     val sharpBackdrop by artworkViewModel.artwork.collectAsState()
+    val officialMatch by artworkViewModel.match.collectAsState()
     LaunchedEffect(shown.sourceId) { artworkViewModel.show(shown) }
     val heroAction = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { heroAction.requestFocus() } }
@@ -97,15 +98,24 @@ internal fun TvAnimeCinematicHome(
                             color = MaterialTheme.colorScheme.primary)
                         TvPill("FILMES & SÉRIES", onClick = onOpenMovies)
                     }
-                    Text(
-                        shown.title,
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.widthIn(max = 590.dp)
-                    )
+                    if (officialMatch != null) {
+                        TvOfficialTitleLogo(
+                            title = shown.title,
+                            mediaType = officialMatch!!.mediaType,
+                            titleId = officialMatch!!.tmdbId,
+                            compact = true
+                        )
+                    } else {
+                        Text(
+                            shown.title,
+                            style = MaterialTheme.typography.displaySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.widthIn(max = 570.dp)
+                        )
+                    }
                     Text(
                         listOfNotNull(
                             shown.year?.toString(),
