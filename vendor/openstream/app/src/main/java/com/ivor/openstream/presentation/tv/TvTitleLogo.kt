@@ -47,19 +47,18 @@ class TvTitleLogoViewModel @Inject constructor(
         if (_logoPath.value != null || id <= 0 || mediaType !in listOf("movie", "tv")) return
         viewModelScope.launch {
             try {
-                // Some releases have only EN/JA logo assets. Try regional and
-                // language-neutral artwork before falling back to a text title.
-                val first = if (mediaType == "movie") api.movieTitleImages(id)
-                    else api.tvTitleImages(id)
-                var best = first.preferredLogoPath()
-                if (best == null) {
-                    val alternate = if (mediaType == "movie")
-                        api.movieTitleImages(id, "pt,en,ja,es,fr,null")
-                    else api.tvTitleImages(id, "pt,en,ja,es,fr,null")
-                    best = alternate.preferredLogoPath()
-                }
+                // Make one comprehensive image request instead of a serial
+                // PT/EN request plus a second fallback call for every title.
+                // The response is cached by the TMDB metadata HTTP cache.
+                val images = if (mediaType == "movie")
+                    api.movieTitleImages(id, "pt,en,ja,es,fr,null")
+                else api.tvTitleImages(id, "pt,en,ja,es,fr,null")
+                val best = images.preferredLogoPath()
                 if (requestedKey == key) {
-                    if (best != null) successfulLogos[key] = best
+                    if (best != null) {
+                        if (successfulLogos.size > 60) successfulLogos.clear()
+                        successfulLogos[key] = best
+                    }
                     _logoPath.value = best
                 }
             } catch (cancel: CancellationException) {
@@ -80,8 +79,8 @@ fun TvOfficialTitleLogo(
     viewModel: TvTitleLogoViewModel = hiltViewModel()
 ) {
     val path by viewModel.logoPath.collectAsState()
-    var failed by remember(path) { mutableStateOf(false) }
-    var loaded by remember(path) { mutableStateOf(false) }
+    var failed by remember(path, titleId, mediaType) { mutableStateOf(false) }
+    var loaded by remember(path, titleId, mediaType) { mutableStateOf(false) }
     LaunchedEffect(titleId, mediaType) { viewModel.load(mediaType, titleId) }
 
     // Fixed 110dp reserved for the logo prevents lazy-scroll remeasurement
