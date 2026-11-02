@@ -1,7 +1,6 @@
 package com.ivor.openstream.presentation.tv
 
 import android.content.Context
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -26,14 +25,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.media3.common.MediaItem
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Surface
 import coil3.compose.AsyncImage
@@ -52,7 +45,7 @@ private val liveAccent = Color(0xFFDF9BFF)
 
 /** Remote control first: separate ten-foot TV layout, shared channel catalog with mobile. */
 @Composable
-fun TvLiveScreen() {
+fun TvLiveScreen(onPlayChannel: (Channel, List<Channel>, Country) -> Unit) {
     val context = LocalContext.current
     val prefs = remember(context) { context.getSharedPreferences("vistastream_live_tv", Context.MODE_PRIVATE) }
     val initialCountry = remember {
@@ -69,7 +62,6 @@ fun TvLiveScreen() {
     var refreshToken by remember { mutableIntStateOf(0) }
     var category by rememberSaveable { mutableStateOf("Todos") }
     var pickerOpen by remember { mutableStateOf(false) }
-    var currentChannel by remember { mutableStateOf<Channel?>(null) }
     var favorites by remember(countryCode) {
         mutableStateOf(prefs.getStringSet("favorites_" + countryCode, emptySet())?.toSet() ?: emptySet())
     }
@@ -78,7 +70,6 @@ fun TvLiveScreen() {
         loading = true
         loadError = null
         channels = emptyList()
-        currentChannel = null
         category = "Todos"
         try {
             channels = withContext(Dispatchers.IO) { readRemoteChannels(countryCode) }
@@ -211,7 +202,7 @@ fun TvLiveScreen() {
                             TvLiveChannelCard(
                                 channel = channel,
                                 favorite = channel.id in favorites,
-                                onPlay = { currentChannel = channel },
+                                onPlay = { onPlayChannel(channel, visible, country) }
                                 onFavorite = { toggleFavorite(channel) },
                                 modifier = Modifier.weight(1f)
                             )
@@ -323,72 +314,5 @@ private fun TvLiveChannelCard(
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
         TvPill(if (favorite) "♥ Guardado" else "♡ Guardar", onClick = onFavorite)
-    }
-}
-
-@Composable
-private fun TvLivePlayer(
-    channel: Channel,
-    country: Country,
-    onClose: () -> Unit,
-    onPrevious: () -> Unit,
-    onNext: () -> Unit
-) {
-    val context = LocalContext.current
-    val player = remember(context) { ExoPlayer.Builder(context).build() }
-    var error by remember { mutableStateOf<String?>(null) }
-    BackHandler { onClose() }
-    DisposableEffect(player) {
-        val errorListener = object : Player.Listener {
-            override fun onPlayerError(exception: PlaybackException) {
-                error = "Este canal não está disponível nesta fonte."
-            }
-        }
-        player.addListener(errorListener)
-        onDispose { player.removeListener(errorListener); player.release() }
-    }
-    LaunchedEffect(channel.url) {
-        error = null
-        player.stop()
-        player.setMediaItem(MediaItem.fromUri(channel.url))
-        player.prepare()
-        player.playWhenReady = true
-    }
-    Dialog(onDismissRequest = onClose,
-        properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Column(
-            Modifier.fillMaxSize().background(Color(0xFF08090F))
-                .padding(horizontal = 48.dp, vertical = 22.dp)
-        ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("● AO VIVO", color = Color(0xFFFF88A9),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold)
-                Spacer(Modifier.width(18.dp))
-                Text(channel.name + "  ·  " + country.label, color = Color.White,
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.weight(1f), maxLines = 1,
-                    overflow = TextOverflow.Ellipsis)
-                TvPill("Fechar ✕", onClick = onClose)
-            }
-            Spacer(Modifier.height(14.dp))
-            Box(Modifier.fillMaxWidth().weight(1f).background(Color.Black),
-                contentAlignment = Alignment.Center) {
-                AndroidView(
-                    factory = { ctx -> PlayerView(ctx).apply { this.player = player; useController = true } },
-                    modifier = Modifier.fillMaxSize(),
-                    update = { it.player = player }
-                )
-                if (error != null) Text(error.orEmpty(), color = Color(0xFFFFBBC9))
-            }
-            Spacer(Modifier.height(14.dp))
-            Row(Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically) {
-                TvPill("◀ Canal anterior", onClick = onPrevious)
-                Text("Troca de canal pelo comando", color = Color(0xFFB9B2C9))
-                TvPill("Canal seguinte ▶", onClick = onNext)
-            }
-        }
     }
 }
