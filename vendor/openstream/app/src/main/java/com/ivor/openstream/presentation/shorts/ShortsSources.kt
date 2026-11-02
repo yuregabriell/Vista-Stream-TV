@@ -206,7 +206,7 @@ private suspend fun discoverOpenVideos(query: String): List<ShortDiscoveryVideo>
                     description = obj["description"]?.jsonPrimitive?.contentOrNull
                         ?: obj["truncatedDescription"]?.jsonPrimitive?.contentOrNull.orEmpty(),
                     pageUrl = pageUrl,
-                    licence = licenceObj["label"]?.jsonPrimitive?.contentOrNull ?: "Creative Commons",
+                    licence = licenceObj?.get("label")?.jsonPrimitive?.contentOrNull ?: "Creative Commons",
                     duration = obj["duration"]?.jsonPrimitive?.intOrNull ?: 0
                 )
             }.filter { it.title.isNotBlank() }.take(16)
