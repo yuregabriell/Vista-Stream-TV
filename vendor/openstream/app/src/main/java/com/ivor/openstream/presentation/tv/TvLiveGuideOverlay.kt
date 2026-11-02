@@ -11,6 +11,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -44,6 +46,8 @@ internal fun TvLiveChannelOverlay(
     onClose: () -> Unit
 ) {
     var category by remember { mutableStateOf("Todos") }
+    val initialFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { initialFocus.requestFocus() } }
     val categories = remember(channels) {
         (listOf("Todos","Favoritos") + channels.map { it.group }.filter { it.isNotBlank() }.distinct().sorted()).distinct()
     }
@@ -63,7 +67,8 @@ internal fun TvLiveChannelOverlay(
                 items(categories, key = { it }) { group ->
                     Surface(
                         onClick = { category = group },
-                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                        modifier = Modifier.fillMaxWidth().height(44.dp)
+                            .then(if (group == "Todos") Modifier.focusRequester(initialFocus) else Modifier),
                         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(11.dp)),
                         colors = ClickableSurfaceDefaults.colors(
                             containerColor = if (group == category) Color(0xFF453057) else Color.Transparent,
@@ -166,6 +171,8 @@ internal fun TvLiveEpgOverlay(
 ) {
     val start = remember { (System.currentTimeMillis() / 1_800_000L) * 1_800_000L }
     val stop = start + 3 * 3_600_000L
+    val guideFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { guideFocus.requestFocus() } }
     Column(
         Modifier.fillMaxSize().background(
             Brush.verticalGradient(listOf(Color(0xF0181B2B), Color(0xFC090B17)))
@@ -195,7 +202,9 @@ internal fun TvLiveEpgOverlay(
                 Row(Modifier.fillMaxWidth().height(66.dp)) {
                     Surface(
                         onClick = { onTune(ch) },
-                        modifier = Modifier.width(232.dp).fillMaxHeight(),
+                        modifier = Modifier.width(232.dp).fillMaxHeight()
+                            .then(if (ch.id == channels.firstOrNull()?.id)
+                                Modifier.focusRequester(guideFocus) else Modifier),
                         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(9.dp)),
                         colors = ClickableSurfaceDefaults.colors(
                             containerColor = if (ch.id == current.id) Color(0xFF44335D) else Color(0xFF26293B),
