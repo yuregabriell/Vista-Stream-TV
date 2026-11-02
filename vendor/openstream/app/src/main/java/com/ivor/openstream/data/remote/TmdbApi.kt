@@ -122,6 +122,12 @@ interface TmdbApi {
         @Query("with_keywords") keywords: String = "210024|287501" // Optionally specify anime-specific keywords
     ): TmdbResponse<AnimeDto>
 
+    @GET("trending/movie/{time_window}")
+    suspend fun getTrendingAnimeMovies(
+        @Path("time_window") timeWindow: String = "week",
+        @Query("page") page: Int = 1
+    ): TmdbResponse<AnimeDto>
+
     @GET("trending/tv/{time_window}")
     suspend fun getTrendingAnime(
         @Path("time_window") timeWindow: String = "day",
