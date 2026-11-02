@@ -22,6 +22,7 @@ TVDB_BASE = "https://api4.thetvdb.com/v4"
 TMDB_ALLOWED = [
     re.compile(r"^configuration$"),
     re.compile(r"^discover/(movie|tv)$"),
+    re.compile(r"^watch/providers/(movie|tv)$"),
     re.compile(r"^trending/(all|movie|tv)/(day|week)$"),
     re.compile(r"^tv/(on_the_air|top_rated|airing_today|popular)$"),
     re.compile(r"^movie/(popular|top_rated|now_playing|upcoming)$"),
@@ -40,7 +41,8 @@ QUERY_KEYS = frozenset({
     "with_keywords", "with_original_language", "with_original_country",
     "timezone", "append_to_response", "include_adult", "year",
     "first_air_date_year", "primary_release_year", "watch_region",
-    "with_watch_providers", "vote_count.gte", "vote_average.gte",
+    "with_watch_providers", "with_watch_monetization_types",
+    "include_image_language", "vote_count.gte", "vote_average.gte",
     "air_date.gte", "air_date.lte", "first_air_date.gte", "first_air_date.lte",
     "include_video", "country", "type", "limit", "offset",
 })
