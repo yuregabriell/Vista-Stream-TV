@@ -38,6 +38,7 @@ internal fun TvFilterDropdown(
     modifier: Modifier = Modifier
 ) {
     var open by remember { mutableStateOf(false) }
+    var hasOpened by remember { mutableStateOf(false) }
     val trigger = remember { FocusRequester() }
     OutlinedButton(
         onClick = { open = true },
@@ -56,7 +57,11 @@ internal fun TvFilterDropdown(
         )
     }
     LaunchedEffect(open) {
-        if (!open) {
+        if (open) {
+            hasOpened = true
+        } else if (hasOpened) {
+            // Never steal focus from the keyboard or another filter when the
+            // dropdown is first composed; restore only after closing it.
             withFrameNanos { }
             runCatching { trigger.requestFocus() }
         }
