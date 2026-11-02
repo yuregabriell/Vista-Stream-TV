@@ -61,6 +61,7 @@ import androidx.tv.material3.Text
 import com.ivor.openstream.R
 import com.ivor.openstream.data.settings.SourceSearchMode
 import com.ivor.openstream.domain.model.MarketplaceExtension
+import com.ivor.openstream.domain.model.ExtensionEngineType
 import com.ivor.openstream.presentation.marketplace.MarketplaceViewModel
 import com.ivor.openstream.presentation.marketplace.extensionSubtitle
 
@@ -82,15 +83,24 @@ fun TvExtensionsScreen(
     val searchMode by viewModel.searchMode.collectAsState()
     val officialProvidersEnabled by providersViewModel.enabled.collectAsState()
     LaunchedEffect(viewModel) { viewModel.liveRefreshWhileVisible() }
-    var showInstalled by remember { mutableStateOf(false) }
-    var compatibleOnly by remember { mutableStateOf(false) }
+    var showInstalled by remember { mutableStateOf(true) }
+    var sourceCategory by remember { mutableStateOf(0) }
     var showAddRepo by remember { mutableStateOf(false) }
     var repoInput by remember { mutableStateOf("") }
     var selectedKey by remember { mutableStateOf<String?>(null) }
     var pendingRemove by remember { mutableStateOf<MarketplaceExtension?>(null) }
     var detailHasFocus by remember { mutableStateOf(false) }
 
-    val visible = if (showInstalled) state.installed else if (compatibleOnly) state.results.filter { it.manifest.isSupported } else state.results
+    // The public repo may list hundreds of runtimes we cannot execute.
+    // Hide those from Explore; keep installed legacy entries removable.
+    val candidates = if (showInstalled) state.installed else state.results
+    val visible = candidates.filter { extension ->
+        (showInstalled || extension.manifest.isSupported) && when (sourceCategory) {
+            1 -> extension.manifest.engine.type == ExtensionEngineType.STREMIO
+            2 -> extension.manifest.engine.type != ExtensionEngineType.STREMIO
+            else -> true
+        }
+    }
     val selected = visible.firstOrNull { it.key == selectedKey } ?: visible.firstOrNull()
     val rowRequesters = remember { mutableMapOf<String, FocusRequester>() }
     fun rowRequester(key: String) = rowRequesters.getOrPut(key) { FocusRequester() }
@@ -114,7 +124,7 @@ fun TvExtensionsScreen(
             val counts = "${stringResource(R.string.st_installed)}: ${state.installed.size}  ·  " +
                 "${stringResource(R.string.st_enabled)}: ${state.catalog.enabled.size}"
             TvPageHeader(
-                title = stringResource(R.string.st_group_sources),
+                title = "Extensões e fontes",
                 supporting = state.message?.let { "$counts  ·  $it" } ?: counts,
                 actions = {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -147,6 +157,12 @@ fun TvExtensionsScreen(
                 }
             )
 
+            Text(
+                "NATIVAS DO VISTASTREAM",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = TvLayout.ContentStart, top = 6.dp)
+            )
             Row(
                 modifier = Modifier.fillMaxWidth().padding(
                     start = TvLayout.ContentStart, end = TvLayout.ContentEnd, top = 6.dp, bottom = 8.dp
@@ -161,21 +177,26 @@ fun TvExtensionsScreen(
                     onClick = { providersViewModel.setEnabled(!officialProvidersEnabled) }
                 )
                 androidx.compose.material3.Text(
-                    "Extensão nativa • dados TMDB/JustWatch · Portugal",
+                    "Metadados TMDB · Portugal · não disponibiliza vídeos",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             androidx.compose.material3.Text(
-                "Extensão nativa · Onde assistir: Netflix, Prime Video, Disney+ e outras plataformas " +
-                    "conforme disponibilidade oficial em Portugal. Quando ativada, adiciona filtros " +
-                    "por plataforma ao catálogo e à pesquisa; não fornece streams nem subscrições.",
+                "Onde assistir: informação e filtros por plataforma. Ativada por padrão nas novas " +
+                    "instalações; não adiciona filmes, fontes nem subscrições.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(start = TvLayout.ContentStart,
                     end = TvLayout.ContentEnd, bottom = 8.dp)
             )
 
+            Text(
+                "FONTES E ADDONS COMPATÍVEIS",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = TvLayout.ContentStart, top = 8.dp, bottom = 4.dp)
+            )
             Row(Modifier.fillMaxSize()) {
                 // The list.
                 Column(
@@ -198,12 +219,19 @@ fun TvExtensionsScreen(
                         }
                         item {
                             TvPill(
-                                label = stringResource(R.string.mk_tab_browse) + " (${state.catalog.extensions.size})",
+                                label = "Explorar (${state.results.count { it.manifest.isSupported }})",
                                 selected = !showInstalled,
                                 onClick = { showInstalled = false }
                             )
                         }
                     }
+                    TvFilterDropdown(
+                        label = "Tipo de fonte",
+                        selection = listOf("Todas compatíveis", "Addons Stremio", "Fontes Web / Vista")[sourceCategory],
+                        options = listOf("Todas compatíveis", "Addons Stremio", "Fontes Web / Vista"),
+                        selectedIndex = sourceCategory,
+                        onSelect = { sourceCategory = it }
+                    )
                     if (!showInstalled) {
                         // A single selector replaces the sprawling Todas/Vista/Stremio pills.
                         val directories = com.ivor.openstream.presentation.marketplace.MarketplaceDirectory.entries
@@ -216,16 +244,11 @@ fun TvExtensionsScreen(
                                 directories.getOrNull(index)?.let(viewModel::setDirectory)
                             }
                         )
-                        TvPill(
-                            label = if (compatibleOnly) "Compatíveis" else "Todas as fontes",
-                            selected = compatibleOnly,
-                            onClick = { compatibleOnly = !compatibleOnly }
-                        )
                         TvDpadTextInput(
                             value = state.query,
                             onSubmit = viewModel::setQuery,
-                            title = "Pesquisar fontes e addons",
-                            placeholder = "Pesquisar extensões, pt-BR, animes…",
+                            title = "Pesquisar fontes compatíveis",
+                            placeholder = "Pesquisar fonte ou addon…",
                             modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
                         )
                     }
@@ -247,7 +270,7 @@ fun TvExtensionsScreen(
                     }
                     if (visible.isEmpty()) {
                         androidx.compose.material3.Text(
-                            text = stringResource(if (showInstalled) R.string.mk_no_sources else R.string.st_pull_repo_hint),
+                            text = if (showInstalled) "Nenhuma fonte instalada nesta categoria." else "Nenhuma fonte compatível encontrada.",
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 24.dp)
@@ -300,7 +323,7 @@ fun TvExtensionsScreen(
                             RoundedCornerShape(topStart = 28.dp)
                         )
                         .onFocusChanged { detailHasFocus = it.hasFocus }
-                        .padding(start = 32.dp, end = TvLayout.ContentEnd, top = 28.dp)
+                        .padding(start = 28.dp, end = TvLayout.ContentEnd, top = 20.dp)
                 ) {
                     if (selected != null) {
                         val position = state.installed.indexOfFirst { it.key == selected.key }
@@ -429,6 +452,26 @@ private fun ExtensionDetail(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = when (manifest.engine.type) {
+                ExtensionEngineType.STREMIO ->
+                    "Addon Stremio · apenas recursos que o motor VistaStream interpreta."
+                ExtensionEngineType.WEB_EMBED, ExtensionEngineType.VIDKING_WEBVIEW ->
+                    "Fonte Web · reprodução incorporada quando compatível."
+                ExtensionEngineType.UNSUPPORTED ->
+                    "Incompatível · não executável. Podes removê-la caso já esteja instalada."
+                else -> "Fonte de reprodução · utiliza o motor de extensões VistaStream."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            "Addons externos não alteram o layout, os badges ou os menus. " +
+                "Essas modificações requerem funcionalidades nativas próprias.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         if (manifest.description.isNotBlank()) {
             Spacer(Modifier.height(12.dp))
