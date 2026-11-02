@@ -147,6 +147,10 @@ class StremioAddonProvider(
         // Preserve every distinct mirror the addon supplies (not just the first host
         // per release). Deduplicate identical URLs, never cap by a fixed source count.
         val allMirrors = releases.values.flatMap { it }.distinctBy { it.url }
+        // Do not present a missing optional P2P engine as "no episodes exist".
+        if (allMirrors.isEmpty() && hasTorrent && torrentBase == null) {
+            throw IllegalStateException("P2P_ENGINE_NOT_CONFIGURED")
+        }
         return firstPlayableMirrors(allMirrors.map { listOf(it) }).map { server ->
             // Two releases with the same label still need different ids, and names to tell them apart.
             var serverId = server.id
