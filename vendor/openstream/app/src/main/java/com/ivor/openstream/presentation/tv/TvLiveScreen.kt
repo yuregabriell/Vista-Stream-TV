@@ -214,8 +214,8 @@ internal fun TvLiveScreen(onPlayChannel: (Channel, List<Channel>, Country) -> Un
                 TvChannelDetails(
                     channel = active,
                     country = country,
-                    programme = active?.let(guide::now),
-                    next = active?.let(guide::next),
+                    programme = active?.let { guide.now(it) },
+                    next = active?.let { guide.next(it) },
                     favourite = active?.id in favourites,
                     onFavourite = { active?.let(::toggleFavourite) },
                     onPlay = { active?.let { onPlayChannel(it, visible, country) } },
