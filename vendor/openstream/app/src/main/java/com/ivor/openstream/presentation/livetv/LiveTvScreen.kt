@@ -78,7 +78,11 @@ import java.util.Locale
 
 /** TV ao vivo: catálogo remoto por país, sem armazenar streams no app/servidor. */
 internal data class Country(val code: String, val flag: String, val label: String)
-internal data class Channel(val id: String, val name: String, val group: String, val logo: String, val url: String)
+internal data class Channel(
+    val id: String, val name: String, val group: String, val logo: String, val url: String,
+    val sourceLabel: String = "IPTV-org", val addonManifest: String? = null,
+    val addonRef: String? = null, val addonType: String = "tv"
+)
 
 internal val countries = listOf(
     Country("PT", "🇵🇹", "Portugal"), Country("BR", "🇧🇷", "Brasil"),
@@ -110,6 +114,7 @@ fun LiveTvScreen(onBack: () -> Unit) {
     }
     val country = countries.firstOrNull { it.code == countryCode } ?: countries.first()
     var countryPickerOpen by remember { mutableStateOf(false) }
+    var sourcesDialogOpen by remember { mutableStateOf(false) }
     var countrySearch by remember { mutableStateOf("") }
     var channelSearch by rememberSaveable { mutableStateOf("") }
     var selectedGroup by rememberSaveable { mutableStateOf("Todos") }
@@ -136,13 +141,18 @@ fun LiveTvScreen(onBack: () -> Unit) {
             player.release()
         }
     }
-    LaunchedEffect(selectedChannel?.url) {
+    LaunchedEffect(selectedChannel?.id) {
         playbackError = null
         player.stop()
-        selectedChannel?.let {
-            player.setMediaItem(MediaItem.fromUri(it.url))
-            player.prepare()
-            player.playWhenReady = true
+        selectedChannel?.let { channel ->
+            val stream = LiveTvAddons.resolve(channel)
+            if (stream == null) {
+                playbackError = "Nenhuma transmissão direta disponível nesta fonte."
+            } else {
+                player.setMediaItem(MediaItem.fromUri(stream))
+                player.prepare()
+                player.playWhenReady = true
+            }
         }
     }
     LaunchedEffect(countryCode, reload) {
@@ -152,7 +162,11 @@ fun LiveTvScreen(onBack: () -> Unit) {
         selectedChannel = null
         selectedGroup = "Todos"
         try {
-            channels = withContext(Dispatchers.IO) { readRemoteChannels(countryCode) }
+            val publicChannels = withContext(Dispatchers.IO) {
+                runCatching { readRemoteChannels(countryCode) }.getOrDefault(emptyList())
+            }
+            val addonChannels = LiveTvAddons.channels(context, countryCode)
+            channels = (publicChannels + addonChannels).distinctBy { it.id }
             if (channels.isEmpty()) error = "Não foram encontrados canais reproduzíveis para este país."
         } catch (_: Exception) {
             error = "Não foi possível carregar os canais agora. Verifica a ligação e tenta novamente."
@@ -194,6 +208,9 @@ fun LiveTvScreen(onBack: () -> Unit) {
                 Text("VISTASTREAM • LIVE", color = Color(0xFFEBA8F7), style = MaterialTheme.typography.labelSmall)
                 Text("TV ao vivo", color = Color.White, fontWeight = FontWeight.ExtraBold,
                     style = MaterialTheme.typography.headlineSmall)
+            }
+            IconButton(onClick = { sourcesDialogOpen = true }) {
+                Icon(Icons.Default.Public, contentDescription = "Fontes de TV e addons", tint = Color.White)
             }
             IconButton(onClick = { reload++ }) {
                 Icon(Icons.Default.Refresh, contentDescription = "Atualizar canais", tint = Color.White)
@@ -366,7 +383,7 @@ fun LiveTvScreen(onBack: () -> Unit) {
                                 style = MaterialTheme.typography.bodyMedium, maxLines = 2,
                                 minLines = 2, overflow = TextOverflow.Ellipsis)
                             Spacer(Modifier.height(6.dp))
-                            Text(ch.group, color = Color(0xFFB9B4C8),
+                            Text(ch.group + " · " + ch.sourceLabel, color = Color(0xFFB9B4C8),
                                 style = MaterialTheme.typography.labelSmall, maxLines = 1,
                                 overflow = TextOverflow.Ellipsis)
                         }
@@ -374,6 +391,13 @@ fun LiveTvScreen(onBack: () -> Unit) {
                 }
             }
         }
+    }
+
+    if (sourcesDialogOpen) {
+        LiveTvSourcesDialog(
+            onDismiss = { sourcesDialogOpen = false },
+            onSaved = { sourcesDialogOpen = false; reload++ }
+        )
     }
 
     if (countryPickerOpen) {
