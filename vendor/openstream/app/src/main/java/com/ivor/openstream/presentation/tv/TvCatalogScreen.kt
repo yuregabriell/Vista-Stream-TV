@@ -26,10 +26,16 @@ import java.time.Year
 fun TvCatalogScreen(
     onOpenTitle: (String, Int) -> Unit,
     modifier: Modifier = Modifier,
+    initialProviderId: Int? = null,
     viewModel: TvCatalogViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
     val grid = rememberLazyGridState()
+    LaunchedEffect(initialProviderId, state.providersEnabled) {
+        if (initialProviderId != null && state.providersEnabled) {
+            viewModel.selectProvider(initialProviderId)
+        }
+    }
     LaunchedEffect(state.mediaType, state.genre, state.year, state.providerId) {
         grid.scrollToItem(0)
     }
