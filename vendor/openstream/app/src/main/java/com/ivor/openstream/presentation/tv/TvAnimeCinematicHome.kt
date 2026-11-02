@@ -4,6 +4,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -28,10 +33,8 @@ internal fun TvAnimeCinematicHome(
     genres: List<Pair<String, String>>,
     onOpenTitle: (KeylessTitle) -> Unit,
     onGenre: (String) -> Unit,
-    onSearch: (String) -> Unit,
     onOpenMovies: () -> Unit,
     onBrowseAll: () -> Unit,
-    onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val featured = remember(animeItems) {
@@ -40,6 +43,9 @@ internal fun TvAnimeCinematicHome(
     } ?: return
     var highlighted by remember(animeItems) { mutableStateOf<KeylessTitle?>(null) }
     val shown = highlighted ?: featured
+    val artworkViewModel: TvAnimeHeroArtworkViewModel = hiltViewModel()
+    val sharpBackdrop by artworkViewModel.artwork.collectAsState()
+    LaunchedEffect(shown.sourceId) { artworkViewModel.show(shown) }
     val heroAction = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { heroAction.requestFocus() } }
 
@@ -62,11 +68,26 @@ internal fun TvAnimeCinematicHome(
     }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val featureHeight = maxHeight * 0.48f
-        TvBackdrop(
-            url = shown.background ?: shown.poster,
-            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.78f).align(Alignment.TopEnd)
-        )
+        val featureHeight = maxHeight * 0.50f
+        if (sharpBackdrop != null) {
+            // Proper 16:9 1280px+ backdrop from TMDB, never a thin AniList banner.
+            TvBackdrop(
+                url = sharpBackdrop,
+                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.78f)
+                    .align(Alignment.TopEnd)
+            )
+        } else if (shown.poster != null) {
+            // Anilist bannerImage is typically a very shallow strip. On a TV it
+            // gets heavily upscaled and looks blurry. Keep the large cover at
+            // its natural portrait proportions on the right instead.
+            AsyncImage(
+                model = shown.poster,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.align(Alignment.TopEnd).fillMaxHeight(0.79f)
+                    .widthIn(max = 460.dp)
+            )
+        }
         TvBackdropScrims()
 
         Column(Modifier.fillMaxSize()) {
@@ -112,14 +133,14 @@ internal fun TvAnimeCinematicHome(
                             modifier = Modifier.widthIn(max = 600.dp)
                         )
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        TvPill(
-                            label = "Ver anime e episódios",
-                            onClick = { onOpenTitle(shown) },
-                            modifier = Modifier.focusRequester(heroAction)
-                        )
-                        TvPill("Atualizar", onClick = onRefresh)
-                    }
+                    // Same compact details action as Films & Series. Playback source
+                    // selection remains on the title page, not a misleading auto-play.
+                    TvPill(
+                        label = "Detalhes",
+                        icon = Icons.Rounded.Info,
+                        onClick = { onOpenTitle(shown) },
+                        modifier = Modifier.focusRequester(heroAction)
+                    )
                 }
             }
             LazyColumn(
@@ -127,17 +148,6 @@ internal fun TvAnimeCinematicHome(
                 contentPadding = PaddingValues(bottom = 54.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                item(key = "anime-search") {
-                    TvDpadTextInput(
-                        value = "",
-                        placeholder = "Pesquisar animes por nome",
-                        title = "Pesquisar animes",
-                        onSubmit = onSearch,
-                        modifier = Modifier
-                            .padding(start = TvLayout.ContentStart, end = TvLayout.ContentEnd)
-                            .widthIn(max = 580.dp)
-                    )
-                }
                 item(key = "anime-genres") {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         TvRowHeader("Explorar por género")

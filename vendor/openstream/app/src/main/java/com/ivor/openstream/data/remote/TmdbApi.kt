@@ -17,6 +17,20 @@ import retrofit2.http.Query
 import retrofit2.http.QueryMap
 
 interface TmdbApi {
+    // English metadata for exact artwork matching, without changing the PT-BR
+    // language used by the rest of the film/series catalog.
+    @GET("search/tv")
+    suspend fun searchTvForArtwork(
+        @Query("query") query: String,
+        @Query("language") language: String = "en-US"
+    ): TmdbResponse<AnimeDto>
+
+    @GET("search/movie")
+    suspend fun searchMovieForArtwork(
+        @Query("query") query: String,
+        @Query("language") language: String = "en-US"
+    ): TmdbResponse<AnimeDto>
+
     @GET("movie/{id}/images")
     suspend fun movieTitleImages(
         @Path("id") id: Int,
