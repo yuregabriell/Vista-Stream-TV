@@ -134,10 +134,10 @@ class StremioAddonProvider(
         var missingFileIdLookups = 0
         streams.forEach { element ->
             val candidate = (element as? JsonObject)?.let { stream ->
-                toCandidate(stream, title, torrentBase) { hash ->
+                toCandidate(stream, title, torrentBase) { hash, filename ->
                     // Metadata discovery is network-bound; limit it per addon search.
                     if (missingFileIdLookups++ >= 3) null
-                    else torrentBase?.let { torrentBridge?.discoverFileIndex(it, hash) }
+                    else torrentBase?.let { torrentBridge?.discoverFileIndex(it, hash, filename) }
                 }
             } ?: return@forEach
             releases.getOrPut(candidate.releaseKey) { mutableListOf() } += candidate.server
@@ -220,7 +220,7 @@ class StremioAddonProvider(
         stream: JsonObject,
         title: String,
         torrentBase: String?,
-        missingFileIndex: (String) -> Int?
+        missingFileIndex: (String, String?) -> Int?
     ): Candidate? {
         // Stremio externalUrl normally means a web page, NOT playable media.
         // A few addons return a genuine direct media URL here instead of under
@@ -232,18 +232,20 @@ class StremioAddonProvider(
         val rawMagnet = stream.text("url")?.takeIf { it.startsWith("magnet:?") }
         val hash = stream.text("infoHash")
             ?: rawMagnet?.let { Regex("(?i)urn:btih:([a-f0-9]{40})").find(it)?.groupValues?.getOrNull(1) }
-        // Stremio fileIdx is zero-based; TorrServer file_stats IDs are one-based.
+        val hints = stream["behaviorHints"] as? JsonObject
+        val filename = hints?.text("filename")
+        // Stremio fileIdx uses torrent order, while TorrServer enumerates files
+        // sorted by filename. Prefer exact filename from TorrServer metadata.
         val stremioIndex = (stream["fileIdx"] as? JsonPrimitive)?.intOrNull
-        val torrServerIndex = stremioToTorrServerIndex(stremioIndex)
-            ?: if (direct == null && hash != null && torrentBase != null) missingFileIndex(hash) else null
+        val discovered = if (direct == null && hash != null && torrentBase != null &&
+            (filename != null || stremioIndex == null)) missingFileIndex(hash, filename) else null
+        val torrServerIndex = discovered ?: stremioToTorrServerIndex(stremioIndex)
         val p2p = direct == null && hash != null && torrServerIndex != null && torrentBase != null
         val url = direct ?: if (p2p) torrentBridge?.playUrl(
             torrentBase!!, hash!!, torrServerIndex!!
         ) else null
         if (url == null) return null
 
-        val hints = stream["behaviorHints"] as? JsonObject
-        val filename = hints?.text("filename")
         val parts = StremioStreamLabels.Parts(
             nameLines = stream.text("name").nonBlankLines(),
             detailLines = (stream.text("title") ?: stream.text("description")).nonBlankLines(),
