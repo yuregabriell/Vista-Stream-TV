@@ -6,6 +6,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -64,7 +65,7 @@ internal fun TvSidebarNavItem(
     val scheme = MaterialTheme.colorScheme
     val surfaceColor by animateColorAsState(
         targetValue = when {
-            selected -> scheme.primary
+            selected -> Color.Transparent
             focused -> scheme.primary.copy(alpha = 0.22f)
             else -> Color.Transparent
         },
@@ -88,7 +89,9 @@ internal fun TvSidebarNavItem(
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f)
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        // Fill the complete 52dp button; a wrap-content Box was anchored by the
+        // TV Surface's internal layout, causing visual left/top drift.
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Icon(
                 imageVector = destination.roundedGlyph(),
                 contentDescription = stringResource(destination.labelRes),
