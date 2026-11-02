@@ -76,6 +76,7 @@ fun TvOfficialTitleLogo(
     mediaType: String,
     titleId: Int,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
     viewModel: TvTitleLogoViewModel = hiltViewModel()
 ) {
     val path by viewModel.logoPath.collectAsState()
@@ -85,7 +86,8 @@ fun TvOfficialTitleLogo(
 
     // Fixed 110dp reserved for the logo prevents lazy-scroll remeasurement
     // from clipping its top when the official artwork arrives asynchronously.
-    Box(modifier.widthIn(max = 570.dp).height(110.dp)) {
+    Box(modifier.widthIn(max = if (compact) 470.dp else 570.dp)
+        .height(if (compact) 76.dp else 110.dp)) {
         if (path == null || failed || !loaded) {
             Text(
                 title,
@@ -103,7 +105,7 @@ fun TvOfficialTitleLogo(
                 contentScale = ContentScale.Fit,
                 onSuccess = { loaded = true },
                 onError = { failed = true },
-                modifier = Modifier.widthIn(max = 520.dp).fillMaxHeight()
+                modifier = Modifier.widthIn(max = if (compact) 450.dp else 520.dp).fillMaxHeight()
             )
         }
     }
