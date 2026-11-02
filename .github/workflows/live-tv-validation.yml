@@ -1,0 +1,49 @@
+name: VistaStream Live TV validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "vendor/openstream/**"
+      - "web/**"
+      - ".github/workflows/live-tv-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify web JavaScript syntax
+        run: |
+          node --check web/app.js
+          node --check web/live-tv.js
+          node --check web/stremio.js
+          node --test web/test-addons.mjs
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK platform
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-37" "build-tools;36.0.0"
+      - name: Preserve local upstream and Vista identity
+        run: |
+          bash scripts/vendor.sh
+          python3 scripts/customize.py vendor/openstream
+      - name: Compile mobile and TV Kotlin (without publishing an APK)
+        working-directory: vendor/openstream
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace

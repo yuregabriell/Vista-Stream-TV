@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -64,6 +65,7 @@ enum class TvDestination(
 ) {
     HOME("tv_home", Icons.Default.Home, R.string.nav_home),
     ANIME("tv_anime", Icons.Default.AutoAwesome, R.string.genre_anime),
+    LIVE("tv_live", Icons.Default.Tv, R.string.nav_live_tv),
     SEARCH("tv_search", Icons.Default.Search, R.string.nav_search),
     SAVED("tv_saved", Icons.Default.Bookmark, R.string.nav_saved),
     DOWNLOADS("tv_downloads", Icons.Default.Download, R.string.nav_downloads),
@@ -72,7 +74,7 @@ enum class TvDestination(
 
     companion object {
         /** Bottom-bar style destinations, in order. */
-        val topLevel: List<TvDestination> = listOf(HOME, ANIME, SEARCH, SAVED, DOWNLOADS, EXTENSIONS, SETTINGS)
+        val topLevel: List<TvDestination> = listOf(HOME, ANIME, LIVE, SEARCH, SAVED, DOWNLOADS, EXTENSIONS, SETTINGS)
     }
 }
 

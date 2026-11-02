@@ -16,6 +16,7 @@ import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,6 +43,7 @@ internal val TvSidebarWidth: Dp = 64.dp
 private fun TvDestination.roundedGlyph(): ImageVector = when (this) {
     TvDestination.HOME -> Icons.Rounded.Home
     TvDestination.ANIME -> Icons.Rounded.AutoAwesome
+    TvDestination.LIVE -> Icons.Rounded.Tv
     TvDestination.SEARCH -> Icons.Rounded.Search
     TvDestination.SAVED -> Icons.Rounded.Bookmark
     TvDestination.DOWNLOADS -> Icons.Rounded.Download

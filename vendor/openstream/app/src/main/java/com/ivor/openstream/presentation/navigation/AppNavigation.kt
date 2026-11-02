@@ -34,6 +34,7 @@ import androidx.compose.animation.slideOutHorizontally
 import com.ivor.openstream.presentation.details.DetailsScreen
 import com.ivor.openstream.presentation.person.PersonScreen
 import com.ivor.openstream.presentation.home.HomeScreen
+import com.ivor.openstream.presentation.livetv.LiveTvScreen
 import com.ivor.openstream.presentation.downloads.DownloadsScreen
 import com.ivor.openstream.presentation.player.PlayerScreen
 import com.ivor.openstream.presentation.search.SearchScreen
@@ -114,6 +115,7 @@ sealed class Screen(
 ) {
     data object Home : Screen("home", "Home", R.string.nav_home, Icons.Default.Home)
     data object Search : Screen("search", "Search", R.string.nav_search, Icons.Default.Search)
+    data object LiveTv : Screen("live_tv")
     data object WatchLater : Screen("watch_later", "Saved", R.string.nav_saved, Icons.Default.Bookmark)
     data object Downloads : Screen("downloads", "Downloads", R.string.nav_downloads, Icons.Default.Download)
     data object History : Screen("history", "History", R.string.nav_history, Icons.Default.History)
@@ -302,11 +304,16 @@ fun AppNavigation(
                         },
                         onSettingsClick = { navController.navigate(Screen.Settings.route) },
                         onOpenSources = { navController.navigate(Screen.Marketplace.route) },
+                        onOpenLiveTv = { navController.navigate(Screen.LiveTv.route) },
                         onUpdateClick = { navController.navigate(Screen.Update.route) },
                         profile = activeProfile,
                         onSwitchProfile = { showProfilePicker = true }
                     )
                     }
+                }
+
+                composable(Screen.LiveTv.route) {
+                    LiveTvScreen(onBack = { navController.popBackStack() })
                 }
 
                 composable(Screen.Search.route) { backStackEntry ->

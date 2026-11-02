@@ -13,6 +13,7 @@
   <link rel="apple-touch-icon" href="./icons/icon-180.png">
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./native.css">
+  <link rel="stylesheet" href="./live-tv.css">
   <title>VistaStream — Filmes, Séries, Animes & Fontes</title>
 </head>
 <body>
@@ -24,6 +25,7 @@
         <button data-tab="home" class="nav-item selected"><span class="nav-glyph">⌂</span> Início</button>
         <button data-tab="discover" class="nav-item"><span class="nav-glyph">◫</span> Descobrir</button>
         <button data-tab="anime" class="nav-item"><span class="nav-glyph">✦</span> Animes</button>
+        <button data-tab="tv" class="nav-item"><span class="nav-glyph">◉</span> TV ao vivo</button>
         <button data-tab="search" class="nav-item"><span class="nav-glyph">⌕</span> Pesquisa</button>
         <button data-tab="library" class="nav-item"><span class="nav-glyph">▤</span> Biblioteca</button>
         <button data-tab="sources" class="nav-item"><span class="nav-glyph">◈</span> Fontes</button>
@@ -38,7 +40,7 @@
     <main class="main" id="main">
       <header class="topbar">
         <a class="mobile-brand" href="#home" aria-label="VistaStream"><span class="logo-mark">V<span>•</span></span><span>Vista<span class="mark-light">Stream</span></span></a>
-        <div class="top-links"><button class="toplink current" data-segment="all">Filmes & Séries</button><button class="toplink" data-segment="anime">Animes</button></div>
+        <div class="top-links"><button class="toplink current" data-segment="all">Filmes & Séries</button><button class="toplink" data-segment="anime">Animes</button><button class="toplink" data-tab="tv">TV ao vivo</button></div>
         <div class="top-actions"><button class="icon-btn" id="quick-search" title="Pesquisar" aria-label="Pesquisar">⌕</button><button class="avatar-btn" id="quick-settings" aria-label="Definições">V</button></div>
       </header>
       <div id="toast" role="status" aria-live="polite" class="toast" hidden></div>
@@ -51,6 +53,7 @@
     <nav class="bottom-nav" aria-label="Navegação móvel">
       <button data-tab="home" class="selected"><span>⌂</span><small>Início</small></button>
       <button data-tab="discover"><span>◫</span><small>Explorar</small></button>
+      <button data-tab="tv"><span>◉</span><small>TV</small></button>
       <button data-tab="sources"><span>◈</span><small>Fontes</small></button>
       <button data-tab="search"><span>⌕</span><small>Buscar</small></button>
       <button data-tab="library"><span>▤</span><small>Biblioteca</small></button>
