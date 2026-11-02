@@ -14,6 +14,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 /**
  * The TV Anime section and the general TV search share TMDB identities.
@@ -22,6 +23,7 @@ import kotlinx.coroutines.launch
  */
 data class TvAnimeUnifiedState(
     val sections: Map<String, List<KeylessTitle>> = emptyMap(),
+    val editorialRails: Map<String, List<KeylessTitle>> = emptyMap(),
     val loading: Boolean = false,
     val error: String? = null,
     val browseItems: List<KeylessTitle> = emptyList(),
@@ -57,20 +59,42 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
         refreshJob = viewModelScope.launch {
             _state.value = _state.value.copy(loading = true, error = null)
             try {
-                // TV discovery is deliberately limited to three pages initially;
-                // the regular catalog has independent pagination.
-                val pages = coroutineScope {
+                // Trending and genre rails are ranked server-side on TMDB. AniList
+                // may inspire their names, but must never provide a different ID.
+                // Seven small requests every 3h; cover art and details use the
+                // same canonical IDs as the global TV search.
+                val feeds: Map<String, List<KeylessTitle>> = coroutineScope {
                     listOf(
-                        async { discover("tv", 1) },
-                        async { discover("tv", 2) },
-                        async { discover("movie", 1) }
-                    ).map { task -> runCatching { task.await() }.getOrDefault(emptyList()) }
+                        async { "Em alta no mundo dos animes" to trending() },
+                        async { "Novidades e estreias" to discover("tv", 1, sort = "first_air_date.desc", recent = true) },
+                        async { "Ação e aventura" to discover("tv", 1, "Action") },
+                        async { "Fantasia e outros mundos" to discover("tv", 1, "Fantasy") },
+                        async { "Romance e emoções" to discover("tv", 1, "Romance") },
+                        async { "Filmes de anime" to discover("movie", 1) },
+                        async { "_mais_populares" to discover("tv", 1) }
+                    ).mapNotNull { task -> runCatching { task.await() }.getOrNull() }
+                        .toMap()
                 }
-                val items = pages.flatten().distinctBy { it.sourceId }
-                if (items.isNotEmpty()) {
+                val collection = feeds.values.flatten().distinctBy { it.sourceId }
+                if (collection.isNotEmpty()) {
                     refreshedAt = System.currentTimeMillis()
+                    // Keep existing rails if a partial network failure happened.
+                    val rails = linkedMapOf<String, List<KeylessTitle>>()
+                    for (name in listOf(
+                        "Em alta no mundo dos animes", "Novidades e estreias",
+                        "Ação e aventura", "Fantasia e outros mundos",
+                        "Romance e emoções", "Filmes de anime"
+                    )) {
+                        val found = feeds[name].orEmpty()
+                        rails[name] = if (found.isNotEmpty()) found
+                            else _state.value.editorialRails[name].orEmpty()
+                    }
+                    val popular = feeds["_mais_populares"].orEmpty()
+                    if (rails["Em alta no mundo dos animes"].isNullOrEmpty() && popular.isNotEmpty())
+                        rails["Em alta no mundo dos animes"] = popular
                     _state.value = _state.value.copy(
-                        sections = mapOf("anime" to items),
+                        sections = mapOf("anime" to (collection + popular).distinctBy { it.sourceId }),
+                        editorialRails = rails,
                         loading = false, error = null
                     )
                 } else {
@@ -84,6 +108,19 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
                     error = "Falha ao carregar o catálogo de anime.")
             }
         }
+    }
+
+    private suspend fun trending(): List<KeylessTitle> = coroutineScope {
+        val shows = async {
+            tmdb.getTrendingAnime("week").results.mapNotNull { toTitle(it, "tv") }
+        }
+        val films = async {
+            tmdb.getTrendingAnimeMovies("week").results.mapNotNull { toTitle(it, "movie") }
+        }
+        // Some weeks have very few anime movies in global trends.
+        (runCatching { shows.await() }.getOrDefault(emptyList()) +
+            runCatching { films.await() }.getOrDefault(emptyList()))
+            .distinctBy { it.sourceId }.take(36)
     }
 
     fun browse(type: String, query: String = "", genre: String = "") {
@@ -135,17 +172,31 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
         }
     }
 
-    private suspend fun discover(type: String, page: Int, genre: String = ""): List<KeylessTitle> {
-        val filter = mutableMapOf(
+    private suspend fun discover(
+        type: String, page: Int, genre: String = "",
+        sort: String = "popularity.desc", recent: Boolean = false
+    ): List<KeylessTitle> {
+        val filters = mutableMapOf(
             "page" to page.toString(),
-            "sort_by" to "popularity.desc",
+            "sort_by" to sort,
             "with_original_language" to "ja",
             "with_genres" to if (genreCode(type, genre) != null)
                 "16,${genreCode(type, genre)}" else "16",
-            "language" to "pt-BR"
+            "language" to "pt-BR",
+            "include_adult" to "false"
         )
-        val response = if (type == "movie") tmdb.discoverMovieWith(filter)
-            else tmdb.discoverTvWith(filter)
+        if (recent) {
+            val today = LocalDate.now()
+            val start = today.minusMonths(16)
+            if (type == "tv") {
+                filters["first_air_date.gte"] = start.toString()
+                filters["first_air_date.lte"] = today.toString()
+            } else {
+                filters["primary_release_year"] = today.year.toString()
+            }
+        }
+        val response = if (type == "movie") tmdb.discoverMovieWith(filters)
+            else tmdb.discoverTvWith(filters)
         return response.results.mapNotNull { toTitle(it, type) }
     }
 
@@ -162,8 +213,14 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
     }
 
     private fun toTitle(item: AnimeDto, type: String): KeylessTitle? {
-        if (item.id <= 0 || item.name.isBlank() || item.posterPath.isNullOrBlank()) return null
         val ids = item.genreIds.orEmpty()
+        // TMDB trending/search endpoints are NOT guaranteed to return anime.
+        // Check EVERY card locally, even when a discover request was filtered.
+        // One Piece's 1999 anime is TV 37854; the live-action show is TV 111110.
+        if (item.id <= 0 || item.name.isBlank() || item.posterPath.isNullOrBlank() ||
+            item.originalLanguage != "ja" || 16 !in ids) return null
+        if (type == "tv" && item.name.equals("One Piece", ignoreCase = true) &&
+            item.id != 37854) return null
         val genreNames = buildList {
             if (28 in ids || 10759 in ids) add("Action")
             if (12 in ids) add("Adventure")
