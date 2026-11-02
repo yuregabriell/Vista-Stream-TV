@@ -15,6 +15,7 @@ internal object LiveTvAddons {
     const val RICOS = "https://zoreu.github.io/ricosstremio/manifest.json"
     const val NOVA_CONFIG = "https://nova.livebx.net/"
     const val IPTV_BR_REFERENCE = "https://github.com/WillAcris/IPTV-BR"
+    const val IPTV_BR_LEGACY_MANIFEST = "https://iptv-br.onrender.com/manifest.json"
     const val AIOLIVE_CONFIG = "https://mrcanelas.github.io/aiolivetv/"
     private const val PREFS = "vistastream_live_tv"
     private const val MAX_BYTES = 1_500_000
@@ -33,7 +34,7 @@ internal object LiveTvAddons {
 
     /** Blank removes the source; tokens, when required, stay local in SharedPreferences. */
     fun configure(context: Context, provider: String, raw: String): Boolean {
-        if (provider !in listOf("nova", "custom")) return false
+        if (provider !in listOf("nova", "aio", "iptvbr", "custom")) return false
         val url = raw.trim().replaceFirst(Regex("^stremio://", RegexOption.IGNORE_CASE), "https://")
         if (url.isNotEmpty() && safeManifest(url) == null) return false
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -92,7 +93,11 @@ internal object LiveTvAddons {
     suspend fun channels(context: Context, country: String): List<Channel> = withContext(Dispatchers.IO) {
         val addons = buildList {
             if (country == "BR" && ricosEnabled(context)) add("Canal Ricos" to RICOS)
+            if (country == "BR") {
+                configured(context, "iptvbr").takeIf { it.isNotBlank() }?.let { add("IPTV Brasil" to it) }
+            }
             configured(context, "nova").takeIf { it.isNotBlank() }?.let { add("Nova Channels" to it) }
+            configured(context, "aio").takeIf { it.isNotBlank() }?.let { add("AIOLiveTV" to it) }
             configured(context, "custom").takeIf { it.isNotBlank() }?.let { add("Stremio TV" to it) }
         }
         val output = mutableListOf<Channel>()
