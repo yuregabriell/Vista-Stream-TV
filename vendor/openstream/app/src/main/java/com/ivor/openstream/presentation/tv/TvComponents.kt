@@ -4,6 +4,8 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.BringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +31,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -517,9 +522,18 @@ fun TvCaptionedPoster(
     posterWidth: Dp = TvLayout.PosterWidth,
     posterHeight: Dp = TvLayout.PosterHeight
 ) {
-    // Local compact sizing lets Anime display the title AND the year on a
-    // 960x540 dp TV canvas without shrinking poster cards globally.
-    Column(modifier.width(posterWidth)) {
+    // A focused Card would otherwise scroll only its IMAGE into view, leaving
+    // the title/year cut off at the bottom of the TV. Bring the entire caption
+    // column into view whenever focus enters a poster.
+    val requester = remember { BringIntoViewRequester() }
+    val focusScope = rememberCoroutineScope()
+    Column(
+        modifier.width(posterWidth)
+            .bringIntoViewRequester(requester)
+            .onFocusChanged { state ->
+                if (state.hasFocus) focusScope.launch { requester.bringIntoView() }
+            }
+    ) {
         TvPosterCard(title = title, posterPath = posterPath, onClick = onClick,
             onLongClick = onLongClick, width = posterWidth, height = posterHeight)
         Spacer(Modifier.height(if (posterWidth < TvLayout.PosterWidth) 5.dp else 8.dp))
