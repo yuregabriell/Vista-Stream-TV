@@ -33,11 +33,15 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - uses: android-actions/setup-android@v3
-      - name: Install Android SDK platform
+      - name: Locate runner Android SDK
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-37" "build-tools;36.0.0"
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          command -v sdkmanager || ls /usr/local/lib/android/sdk/cmdline-tools/*/bin/sdkmanager
+      - name: Install Android SDK platform
+        shell: bash
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-37" "build-tools;36.0.0"
       - name: Preserve local upstream and Vista identity
         run: |
           bash scripts/vendor.sh
