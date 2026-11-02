@@ -1,7 +1,204 @@
 {
   "manifestVersion": 1,
   "name": "Vista · Catálogo Comunitário",
-  "description": "Diretório remoto de fontes e addons verificados e adicionados pela equipa Vista. Atualizado no GitHub sem reinstalar o APK.",
+  "description": "Diretório de add-ons PT-BR e PT-PT opt-in, com manifestos públicos verificados em 2026-11-02. A resposta do manifesto não comprova vídeos disponíveis nem direitos de distribuição.",
   "website": "https://github.com/yuregabriell/Vista-Stream-TV/tree/main/extensions",
-  "extensions": []
+  "extensions": [
+    {
+      "id": "mico-leao-dublado",
+      "name": "Mico-Leão Dublado",
+      "description": "Catálogo comunitário de filmes em português brasileiro; devolve torrents (infoHash). Requer motor P2P configurado. Manifesto acessível; não garante que os torrents tenham peers ou direitos de distribuição.",
+      "version": "1.0.0",
+      "versionCode": 1,
+      "apiVersion": 1,
+      "authors": [
+        "Comunidade Stremio"
+      ],
+      "language": "PT-BR",
+      "contentTypes": [
+        "movie"
+      ],
+      "manifestUrl": "https://27a5b2bfe3c0-stremio-brazilian-addon.baby-beamup.club/manifest.json",
+      "tags": [
+        "movies",
+        "stremio",
+        "portuguese",
+        "pt-br",
+        "torrent"
+      ],
+      "status": 1,
+      "updatedAt": "2026-11-02",
+      "installedByDefault": false,
+      "engine": {
+        "type": "stremio",
+        "endpoint": "https://27a5b2bfe3c0-stremio-brazilian-addon.baby-beamup.club",
+        "priority": 60
+      }
+    },
+    {
+      "id": "cinetorrent",
+      "name": "CineTorrent",
+      "description": "Fontes torrent com identificação de áudio português brasileiro e inglês. A presença do manifesto não garante disponibilidade de vídeos. Requer P2P ativo.",
+      "version": "1.0.0",
+      "versionCode": 1,
+      "apiVersion": 1,
+      "authors": [
+        "Comunidade Stremio"
+      ],
+      "language": "PT-BR, EN",
+      "contentTypes": [
+        "movie",
+        "series"
+      ],
+      "manifestUrl": "https://150203dd784e-cinetorrent-addon.baby-beamup.club/manifest.json",
+      "tags": [
+        "movies",
+        "series",
+        "stremio",
+        "portuguese",
+        "pt-br",
+        "torrent"
+      ],
+      "status": 1,
+      "updatedAt": "2026-11-02",
+      "installedByDefault": false,
+      "engine": {
+        "type": "stremio",
+        "endpoint": "https://150203dd784e-cinetorrent-addon.baby-beamup.club",
+        "priority": 61
+      }
+    },
+    {
+      "id": "magneto",
+      "name": "Magneto",
+      "description": "Agregador comunitário de torrents para filmes e séries em português brasileiro. Serviço externo pode estar intermitente; necessita P2P ativo.",
+      "version": "1.0.0",
+      "versionCode": 1,
+      "apiVersion": 1,
+      "authors": [
+        "Comunidade Stremio"
+      ],
+      "language": "PT-BR",
+      "contentTypes": [
+        "movie",
+        "series"
+      ],
+      "manifestUrl": "https://magneto-jnv5.onrender.com/v1/manifest.json",
+      "tags": [
+        "movies",
+        "series",
+        "stremio",
+        "portuguese",
+        "pt-br",
+        "torrent",
+        "beta"
+      ],
+      "status": 1,
+      "updatedAt": "2026-11-02",
+      "installedByDefault": false,
+      "engine": {
+        "type": "stremio",
+        "endpoint": "https://magneto-jnv5.onrender.com/v1",
+        "priority": 63
+      }
+    },
+    {
+      "id": "selectavision",
+      "name": "SelectaVision · Dragon Ball",
+      "description": "Add-on de Dragon Ball com áudio português brasileiro e japonês. Devolveu uma ligação HTTPS num teste de episódio; reprodução e autorizações devem ser verificadas por título.",
+      "version": "1.0.0",
+      "versionCode": 1,
+      "apiVersion": 1,
+      "authors": [
+        "Comunidade Stremio"
+      ],
+      "language": "PT-BR, JA",
+      "contentTypes": [
+        "series"
+      ],
+      "manifestUrl": "https://edersonff.github.io/selecta-vision-stremio/manifest.json",
+      "tags": [
+        "series",
+        "anime",
+        "stremio",
+        "portuguese",
+        "pt-br",
+        "http"
+      ],
+      "status": 1,
+      "updatedAt": "2026-11-02",
+      "installedByDefault": false,
+      "engine": {
+        "type": "stremio",
+        "endpoint": "https://edersonff.github.io/selecta-vision-stremio",
+        "priority": 62
+      }
+    },
+    {
+      "id": "one-pace-ptbr-subs",
+      "name": "One Pace · Legendas PT-BR",
+      "description": "SOMENTE LEGENDAS: serviço Stremio de legendas PT-BR para One Pace. O VistaStream ainda não importa o recurso subtitles deste tipo de add-on; não fornece vídeo.",
+      "version": "1.0.0",
+      "versionCode": 1,
+      "apiVersion": 1,
+      "authors": [
+        "Comunidade Stremio"
+      ],
+      "language": "PT-BR",
+      "contentTypes": [
+        "series"
+      ],
+      "manifestUrl": "https://3715ec511f6d-onepace-ptbr-addon.baby-beamup.club/manifest.json",
+      "tags": [
+        "series",
+        "anime",
+        "subtitles",
+        "stremio",
+        "portuguese",
+        "pt-br"
+      ],
+      "status": 3,
+      "updatedAt": "2026-11-02",
+      "installedByDefault": false,
+      "engine": {
+        "type": "unsupported",
+        "endpoint": "https://3715ec511f6d-onepace-ptbr-addon.baby-beamup.club",
+        "priority": 80
+      }
+    },
+    {
+      "id": "legendasdivx-pt",
+      "name": "LegendasDivx.pt · Legendas",
+      "description": "SOMENTE LEGENDAS: add-on Stremio de legendas em português que exige conta/token do serviço. Integração de legendas Stremio ainda não implementada; não fornece vídeo.",
+      "version": "1.0.0",
+      "versionCode": 1,
+      "apiVersion": 1,
+      "authors": [
+        "Comunidade Stremio"
+      ],
+      "language": "PT-PT, PT-BR",
+      "contentTypes": [
+        "movie",
+        "series"
+      ],
+      "manifestUrl": "https://e1d6cc1ff4a7-legendasdivx-stremio.baby-beamup.club/manifest.json",
+      "tags": [
+        "movies",
+        "series",
+        "subtitles",
+        "stremio",
+        "portuguese",
+        "pt-pt",
+        "pt-br"
+      ],
+      "status": 3,
+      "updatedAt": "2026-11-02",
+      "installedByDefault": false,
+      "engine": {
+        "type": "unsupported",
+        "endpoint": "https://e1d6cc1ff4a7-legendasdivx-stremio.baby-beamup.club",
+        "priority": 81
+      }
+    }
+  ]
 }
