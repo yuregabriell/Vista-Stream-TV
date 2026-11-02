@@ -81,7 +81,8 @@ internal data class Country(val code: String, val flag: String, val label: Strin
 internal data class Channel(
     val id: String, val name: String, val group: String, val logo: String, val url: String,
     val sourceLabel: String = "IPTV-org", val addonManifest: String? = null,
-    val addonRef: String? = null, val addonType: String = "tv"
+    val addonRef: String? = null, val addonType: String = "tv",
+    val tvgId: String = ""
 )
 
 internal val countries = listOf(
@@ -468,10 +469,11 @@ internal fun readRemoteChannels(countryCode: String): List<Channel> {
                         val name = info.substringAfterLast(",").trim()
                             .ifBlank { readAttribute(info, "tvg-name") }
                         val group = readAttribute(info, "group-title").ifBlank { "Geral" }
+                        val tvgId = readAttribute(info, "tvg-id")
                         val logo = readAttribute(info, "tvg-logo").takeIf { it.startsWith("https://") }.orEmpty()
                         if (name.isNotBlank() && line.length < 4096) {
                             val id = countryCode + "|" + name.lowercase(Locale.ROOT)
-                            result.add(Channel(id, name.take(120), group.take(50), logo, line))
+                            result.add(Channel(id, name.take(120), group.take(50), logo, line, tvgId = tvgId))
                         }
                     }
                     metadata = null
