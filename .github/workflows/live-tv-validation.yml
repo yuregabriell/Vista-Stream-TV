@@ -55,4 +55,4 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace
           ./gradlew :app:testDebugUnitTest --tests '*StremioExternalMediaTest' --tests '*StremioTorrentIndexTest' --no-daemon --stacktrace -x :app:checkDebugAarMetadata
-          ./gradlew :app:testDebugUnitTest --tests '*VidkingSeedRequestTest' --tests '*SourceFailureDiagnosticsTest' --no-daemon --stacktrace
+          ./gradlew :app:testDebugUnitTest --tests '*VidkingSeedRequestTest' --tests '*SourceFailureDiagnosticsTest' --no-daemon --stacktrace -x :app:checkDebugAarMetadata
