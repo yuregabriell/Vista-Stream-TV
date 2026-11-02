@@ -25,12 +25,21 @@ object MetadataCachePolicy {
     private val HOUR = TimeUnit.HOURS.toSeconds(1)
     private val DAY = TimeUnit.DAYS.toSeconds(1)
 
-    fun isTmdb(url: HttpUrl): Boolean = url.host == TMDB_HOST
+    // The authenticated interceptor rewrites requests to the bundled metadata
+    // gateway *before* the cache interceptors run. Recognise those safe TMDB
+    // proxy routes as well, otherwise every title/logo request bypasses HTTP
+    // cache policy and loads again on page navigation.
+    fun isTmdb(url: HttpUrl): Boolean =
+        url.host == TMDB_HOST ||
+            url.encodedPath.startsWith("/api/public/tmdb/3/") ||
+            url.encodedPath.startsWith("/api/tmdb/3/")
 
     /** Seconds an answer for [url] stays fresh. */
     fun freshSeconds(url: HttpUrl): Long {
         // "/3/movie/550/release_dates" -> ["movie", "550", "release_dates"]
-        val segments = url.pathSegments.dropWhile { it == "3" }.filter { it.isNotEmpty() }
+        // Support both TMDB's original /3 path and the metadata gateway's
+        // /api/public/tmdb/3 and /api/tmdb/3 paths.
+        val segments = url.pathSegments.dropWhile { it != "3" }.drop(1).filter { it.isNotEmpty() }
         val first = segments.firstOrNull() ?: return HOUR
         return when {
             segments.lastOrNull() in SLOW_CHANGING -> 7 * DAY
