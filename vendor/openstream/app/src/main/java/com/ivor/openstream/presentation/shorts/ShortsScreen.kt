@@ -95,6 +95,39 @@ fun ShortsScreen(modifier: Modifier = Modifier) {
         )
     }
 
+    var section by remember { mutableIntStateOf(0) }
+    Column(modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(
+                start = 16.dp, end = 16.dp, top = 6.dp, bottom = 8.dp
+            ),
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            listOf("Assistir", "Descobrir", "Fontes").forEachIndexed { index, name ->
+                androidx.compose.material3.FilterChip(
+                    selected = section == index,
+                    onClick = { section = index },
+                    label = { Text(name, maxLines = 1) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+        when (section) {
+            0 -> ShortsVerifiedLibrary(series, onPlay = { playing = it },
+                modifier = Modifier.weight(1f))
+            1 -> ShortsDiscoverPanel(modifier = Modifier.weight(1f))
+            else -> ShortsSourcesPanel(modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+
+@Composable
+private fun ShortsVerifiedLibrary(
+    series: List<ShortDrama>,
+    onPlay: (ShortDrama) -> Unit,
+    modifier: Modifier = Modifier
+) {
     if (series.isEmpty()) {
         Box(
             modifier = modifier.fillMaxWidth().padding(
@@ -168,7 +201,7 @@ fun ShortsScreen(modifier: Modifier = Modifier) {
             }
             items(series, key = { it.id }) { item ->
                 Surface(
-                    onClick = { playing = item },
+                    onClick = { onPlay(item) },
                     shape = RoundedCornerShape(22.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerHigh
                 ) {
