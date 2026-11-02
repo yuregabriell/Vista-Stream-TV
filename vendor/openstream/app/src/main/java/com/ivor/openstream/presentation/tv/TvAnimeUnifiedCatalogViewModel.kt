@@ -52,6 +52,20 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
     private var browseJob: Job? = null
     private var browsePage = 0
     private var browseHasMore = true
+    // Back navigation retains the exact anime card/rail rather than
+    // returning focus to the featured hero or the sidebar.
+    var lastFocusedAnimeId: String? = null
+        private set
+    var lastFocusedRail: String? = null
+        private set
+    fun rememberFocusedAnime(id: String, rail: String) {
+        lastFocusedAnimeId = id
+        lastFocusedRail = rail
+    }
+    fun clearFocusedAnime() {
+        lastFocusedAnimeId = null
+        lastFocusedRail = null
+    }
     private var editorialGenres: Map<String, List<KeylessTitle>> = emptyMap()
     private var resolvedEditorial: List<Pair<AnimeEditorialItem, KeylessTitle>> = emptyList()
 
