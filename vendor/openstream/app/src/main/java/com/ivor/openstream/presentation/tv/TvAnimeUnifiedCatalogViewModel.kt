@@ -93,6 +93,8 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
                         async { "Fantasia e outros mundos" to discover("tv", 1, "Fantasy") },
                         async { "Romance e emoções" to discover("tv", 1, "Romance") },
                         async { "Filmes de anime" to discover("movie", 1) },
+                        async { "_filmes_anime_2" to discover("movie", 2) },
+                        async { "_filmes_anime_3" to discover("movie", 3) },
                         async { "_mais_populares" to discover("tv", 1) },
                         async { "_mais_populares_2" to discover("tv", 2) }
                     ).mapNotNull { task -> runCatching { task.await() }.getOrNull() }
@@ -117,6 +119,13 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
                     // with popularity-ranked Japanese animation, not with
                     // unrelated trending live-action titles. Preserve true
                     // weekly trending at the front of this rail.
+                    // Multiple movie pages ensure the cinema rail is populated
+                    // beyond the few AniList movies that happen to match.
+                    val movieCatalog = (feeds["Filmes de anime"].orEmpty() +
+                        feeds["_filmes_anime_2"].orEmpty() +
+                        feeds["_filmes_anime_3"].orEmpty())
+                        .distinctBy { it.sourceId }
+                    if (movieCatalog.isNotEmpty()) rails["Filmes de anime"] = movieCatalog
                     val popular = (feeds["_mais_populares"].orEmpty() +
                         feeds["_mais_populares_2"].orEmpty())
                         .distinctBy { it.sourceId }
@@ -151,6 +160,9 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
      * supplies artwork, episode details or a playback ID. Every card below is
      * an existing or safely resolved canonical TMDB animation record.
      */
+    private fun previousMovieRail(): List<KeylessTitle> =
+        _state.value.editorialRails["Filmes de anime"].orEmpty()
+
     private suspend fun applyEditorial(base: List<KeylessTitle>) {
         val feed = aniList.get() ?: return
         val index = base.distinctBy { it.sourceId }.toMutableList()
@@ -232,7 +244,12 @@ class TvAnimeUnifiedCatalogViewModel @Inject constructor(
         genreRail("Comédia", "Comedy")
         genreRail("Desporto", "Sports")
         val movieOrder = list(ranked.filter { it.isMovie })
-        if (movieOrder.isNotEmpty()) orderedRails["Filmes de anime"] = movieOrder
+        val existingMovies = previousMovieRail()
+        val allMovies = (movieOrder + existingMovies)
+            .filter { it.format == "MOVIE" }
+            .distinctBy { it.sourceId }
+            .take(48)
+        if (allMovies.isNotEmpty()) orderedRails["Filmes de anime"] = allMovies
 
         val previous = _state.value
         val combined = previous.editorialRails.toMutableMap()
