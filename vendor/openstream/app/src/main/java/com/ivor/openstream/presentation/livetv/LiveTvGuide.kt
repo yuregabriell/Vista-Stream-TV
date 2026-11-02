@@ -73,7 +73,6 @@ internal object LiveTvGuideProvider {
         val guide = runCatching { download(code) }
             .onFailure { Log.w("VistaEPG", "Guide unavailable: " + it.javaClass.simpleName) }
             .getOrElse { LiveTvGuide.empty() }
-        if (guide.schedule(Channel("", "", "", "", "", tvgId = "")).isNotEmpty()) Unit
         synchronized(this@LiveTvGuideProvider) {
             cachedCode = code
             cachedGuide = guide
