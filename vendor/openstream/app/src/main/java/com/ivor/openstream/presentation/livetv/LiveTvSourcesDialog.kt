@@ -19,50 +19,68 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 
-/** Mobile and Android TV share add-on preferences, installed in the TV source library. */
+/** Stremio TV sources are manifests, never untrusted code executed inside VistaStream. */
 @Composable
 internal fun LiveTvSourcesDialog(onDismiss: () -> Unit, onSaved: () -> Unit) {
     val context = LocalContext.current
     var ricos by remember { mutableStateOf(LiveTvAddons.ricosEnabled(context)) }
+    var brasil by remember { mutableStateOf(LiveTvAddons.configured(context, "iptvbr")) }
     var nova by remember { mutableStateOf(LiveTvAddons.configured(context, "nova")) }
+    var aio by remember { mutableStateOf(LiveTvAddons.configured(context, "aio")) }
     var custom by remember { mutableStateOf(LiveTvAddons.configured(context, "custom")) }
     var invalid by remember { mutableStateOf(false) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Fontes de TV ao vivo") },
+        title = { Text("Fontes brasileiras · TV ao vivo") },
         text = {
-            Column(
-                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text("IPTV-org · Canais públicos por país (já instalado).")
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(13.dp)) {
+                Text("IPTV-org · Canais públicos por país — fonte integrada.")
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Canal Ricos (Brasil) · Stremio", modifier = Modifier.weight(1f))
+                    Column(Modifier.weight(1f)) {
+                        Text("Canal Ricos · Stremio")
+                        Text("Fonte brasileira regional integrada; disponibilidade variável.")
+                    }
                     Switch(checked = ricos, onCheckedChange = { ricos = it })
                 }
-                Text("Nova Channels · exige chave LiveDebrid. Configura em nova.livebx.net e cola o manifest personalizado.")
+                Text("IPTV Brasil · addon Stremio. O servidor antigo está indisponível; não ativa automaticamente canais que não funcionam.")
                 OutlinedTextField(
-                    value = nova,
-                    onValueChange = { nova = it; invalid = false },
+                    value = brasil, onValueChange = { brasil = it; invalid = false },
+                    label = { Text("IPTV Brasil · manifest.json") },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true
+                )
+                TextButton(onClick = { brasil = LiveTvAddons.IPTV_BR_LEGACY_MANIFEST; invalid = false }) {
+                    Text("Usar o endereço histórico (experimental)")
+                }
+                Text("Nova Channels · requer manifesto configurado com a tua conta/chave no site do addon.")
+                OutlinedTextField(
+                    value = nova, onValueChange = { nova = it; invalid = false },
                     label = { Text("Nova Channels · manifest.json") },
                     modifier = Modifier.fillMaxWidth(), singleLine = true
                 )
-                Text("AIOLiveTV ou outro addon Stremio TV: configura no respetivo serviço e cola o manifest.")
+                Text("AIOLiveTV · exige uma instância própria e configuração de fontes/EPG. Não existe servidor público oficial.")
                 OutlinedTextField(
-                    value = custom,
-                    onValueChange = { custom = it; invalid = false },
-                    label = { Text("Outro addon Live TV · manifest.json") },
+                    value = aio, onValueChange = { aio = it; invalid = false },
+                    label = { Text("AIOLiveTV · manifest.json") },
                     modifier = Modifier.fillMaxWidth(), singleLine = true
                 )
-                Text("IPTV Brasil: o manifest antigo está offline (Not Found). Não é ativado automaticamente.")
-                Text("As fontes são consultadas quando abres TV ao vivo. Algumas exigem conta ou direitos de transmissão.")
-                if (invalid) Text("Usa endereços HTTPS válidos terminados em /manifest.json.")
+                Text("Outra fonte Stremio Live TV")
+                OutlinedTextField(
+                    value = custom, onValueChange = { custom = it; invalid = false },
+                    label = { Text("Manifest personalizado · manifest.json") },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true
+                )
+                Text("As fontes são carregadas por catálogo e os streams são resolvidos ao reproduzir. Canais pagos exigem acesso autorizado.")
+                if (invalid) Text("Utiliza URLs HTTPS válidas terminadas em /manifest.json.")
             }
         },
         confirmButton = {
             Button(onClick = {
-                if (!LiveTvAddons.configure(context, "nova", nova) ||
-                    !LiveTvAddons.configure(context, "custom", custom)) {
+                val entries = listOf(
+                    "iptvbr" to brasil, "nova" to nova, "aio" to aio, "custom" to custom
+                )
+                if (entries.any { (key, value) -> !LiveTvAddons.configure(context, key, value) }) {
                     invalid = true
                 } else {
                     LiveTvAddons.setRicosEnabled(context, ricos)
