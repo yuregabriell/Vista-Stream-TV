@@ -99,7 +99,13 @@ fun TvExtensionsScreen(
     // Hide those from Explore; keep installed legacy entries removable.
     val candidates = if (showInstalled) state.installed else state.results
     val visible = candidates.filter { extension ->
-        (showInstalled || extension.manifest.isSupported) && when (sourceCategory) {
+        // Show curator-approved subtitle-only add-ons for discovery even though
+        // the Vista player does not yet install the Stremio subtitles resource.
+        // Other unsupported community code remains hidden from this TV view.
+        val curatedSubtitle = extension.manifest.repoId ==
+            com.ivor.openstream.data.extensions.VistaRemoteRepositories.VISTA_ID &&
+            "subtitles" in extension.manifest.tags
+        (showInstalled || extension.manifest.isSupported || curatedSubtitle) && when (sourceCategory) {
             1 -> extension.manifest.engine.type == ExtensionEngineType.STREMIO
             2 -> extension.manifest.engine.type != ExtensionEngineType.STREMIO
             else -> true
@@ -478,6 +484,7 @@ fun TvExtensionsScreen(
 
 @Composable
 private fun statusLabel(extension: MarketplaceExtension): String = when {
+    !extension.manifest.isSupported && "subtitles" in extension.manifest.tags -> "Apenas legendas · não integrado"
     !extension.manifest.isSupported -> stringResource(R.string.mk_unsupported)
     extension.hasUpdate -> stringResource(R.string.action_update)
     extension.isEnabled -> stringResource(R.string.er_active_player)
@@ -501,7 +508,8 @@ private fun ExtensionDetail(
     var showTechnical by remember(extension.key) { mutableStateOf(false) }
     val kind = when (manifest.engine.type) {
         ExtensionEngineType.STREMIO -> "ADDON STREMIO"
-        ExtensionEngineType.UNSUPPORTED -> "INCOMPATÍVEL"
+        ExtensionEngineType.UNSUPPORTED -> if ("subtitles" in manifest.tags)
+            "LEGENDAS STREMIO · NÃO INTEGRADO" else "INCOMPATÍVEL"
         else -> "FONTE DE REPRODUÇÃO"
     }
     Column(
@@ -527,7 +535,7 @@ private fun ExtensionDetail(
             Text(
                 if (extension.isInstalled) {
                     if (extension.isEnabled) "● Ativa" else "○ Pausada"
-                } else "Disponível",
+                } else if (manifest.isSupported) "Disponível" else "Só para consulta",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary
             )
