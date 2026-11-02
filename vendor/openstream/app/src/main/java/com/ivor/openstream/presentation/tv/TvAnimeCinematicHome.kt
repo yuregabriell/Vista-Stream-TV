@@ -34,6 +34,7 @@ import com.ivor.openstream.data.catalog.KeylessTitle
 internal fun TvAnimeCinematicHome(
     animeItems: List<KeylessTitle>,
     genres: List<Pair<String, String>>,
+    editorialRails: Map<String, List<KeylessTitle>> = emptyMap(),
     onOpenTitle: (KeylessTitle) -> Unit,
     onGenre: (String) -> Unit,
     onOpenMovies: () -> Unit,
@@ -53,22 +54,20 @@ internal fun TvAnimeCinematicHome(
     val heroAction = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { heroAction.requestFocus() } }
 
-    val rails = remember(animeItems) {
+    // The rails are server-ranked TMDB queries (weekly trends, premieres,
+    // genre-specific popularity). Anime lists no longer depend on a different
+    // AniList catalog or scrape a few shared popular cards to invent rankings.
+    val rails = remember(animeItems, editorialRails) {
         listOf(
-            "Em alta no mundo dos animes" to animeItems.take(35),
-            "Novidades e estreias" to animeItems
-                .filter { it.year != null }.sortedByDescending { it.year }.take(30),
-            "Ação e aventura" to animeItems.filter {
-                it.genres.any { g -> g.equals("Action", true) || g.equals("Adventure", true) }
-            }.take(24),
-            "Fantasia e outros mundos" to animeItems.filter {
-                it.genres.any { g -> g.equals("Fantasy", true) || g.equals("Supernatural", true) }
-            }.take(24),
-            "Romance e emoções" to animeItems.filter {
-                it.genres.any { g -> g.equals("Romance", true) || g.equals("Drama", true) }
-            }.take(24),
-            "Filmes de anime" to animeItems.filter { it.format.equals("MOVIE", true) }.take(24)
-        )
+            "Em alta no mundo dos animes",
+            "Novidades e estreias",
+            "Ação e aventura",
+            "Fantasia e outros mundos",
+            "Romance e emoções",
+            "Filmes de anime"
+        ).map { name -> name to editorialRails[name].orEmpty() }
+            .filter { it.second.isNotEmpty() }
+            .ifEmpty { listOf("Animes em destaque" to animeItems.take(30)) }
     }
 
     BoxWithConstraints(modifier.fillMaxSize()) {
