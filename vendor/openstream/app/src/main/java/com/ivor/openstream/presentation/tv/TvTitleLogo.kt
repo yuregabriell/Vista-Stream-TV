@@ -91,7 +91,10 @@ fun TvOfficialTitleLogo(
         if (path == null || failed || !loaded) {
             Text(
                 title,
-                style = MaterialTheme.typography.displaySmall,
+                // Compact header is only 64dp; two display-sized lines would
+                // overflow and clip at the very top of the detail page.
+                style = if (compact) MaterialTheme.typography.headlineSmall
+                    else MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
