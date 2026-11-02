@@ -211,7 +211,10 @@ private fun TvAppScaffold(
             composable(TvDestination.ANIME.route) {
                 TvAnimeScreen(
                     onOpenSources = { go(TvDestination.EXTENSIONS) },
-                    onOpenMovies = { go(TvDestination.HOME) }
+                    onOpenMovies = { go(TvDestination.HOME) },
+                    onOpenUnifiedTitle = { mediaType, id ->
+                        navController.navigate(TvRoutes.details(mediaType, id))
+                    }
                 )
             }
 
@@ -226,7 +229,10 @@ private fun TvAppScaffold(
                     initialGenre = entry.arguments?.getString("genre").orEmpty(),
                     initialQuery = entry.arguments?.getString("query").orEmpty(),
                     initialBrowse = true,
-                    onOpenSources = { go(TvDestination.EXTENSIONS) }
+                    onOpenSources = { go(TvDestination.EXTENSIONS) },
+                    onOpenUnifiedTitle = { mediaType, id ->
+                        navController.navigate(TvRoutes.details(mediaType, id))
+                    }
                 )
             }
 
