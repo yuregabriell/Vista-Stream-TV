@@ -80,14 +80,21 @@ private val KEY_GAP: Dp = 6.dp
 fun TvSearchScreen(
     onTitleClick: (animeId: Int, mediaType: String) -> Unit,
     onAnimeBrowse: (genre: String, query: String) -> Unit = { _, _ -> },
+    onOpenPlatform: (Int) -> Unit = {},
     modifier: Modifier = Modifier,
     onOpenSources: () -> Unit = {},
     keylessViewModel: KeylessCatalogViewModel = hiltViewModel(),
-    viewModel: SearchViewModel = hiltViewModel()
+    viewModel: SearchViewModel = hiltViewModel(),
+    providersViewModel: TvProvidersViewModel = hiltViewModel()
 ) {
     if (!keylessViewModel.hasTmdbKey) {
         KeylessCatalogScreen(modifier = modifier, onOpenSources = onOpenSources, searchFirst = true, viewModel = keylessViewModel)
         return
+    }
+    val platformsEnabled by providersViewModel.enabled.collectAsState()
+    val platforms by providersViewModel.providerDirectory.collectAsState()
+    LaunchedEffect(platformsEnabled) {
+        if (platformsEnabled) providersViewModel.loadDirectory()
     }
     val state by viewModel.uiState.collectAsState()
     val query = state.query
@@ -182,7 +189,9 @@ fun TvSearchScreen(
                     recent = state.recent,
                     onSearchRecent = viewModel::submit,
                     onGenre = viewModel::selectGenre,
-                    onAnimeBrowse = onAnimeBrowse
+                    onAnimeBrowse = onAnimeBrowse,
+                    providers = if (platformsEnabled) platforms else emptyList(),
+                    onOpenPlatform = onOpenPlatform
                 )
                 state.error != null && results.isEmpty() -> TvErrorState(onRetry = viewModel::retry)
                 state.isLoading && results.isEmpty() -> TvLoading()
@@ -289,12 +298,26 @@ private fun BrowsePane(
     recent: List<String>,
     onSearchRecent: (String) -> Unit,
     onGenre: (BrowseGenre) -> Unit,
-    onAnimeBrowse: (genre: String, query: String) -> Unit
+    onAnimeBrowse: (genre: String, query: String) -> Unit,
+    providers: List<com.ivor.openstream.data.remote.model.WatchProviderDto>,
+    onOpenPlatform: (Int) -> Unit
 ) {
     androidx.compose.foundation.lazy.LazyColumn(
         contentPadding = PaddingValues(top = 36.dp, bottom = 48.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
+        if (providers.isNotEmpty()) {
+            item(key = "browse-platforms") {
+                PillRow(title = "Descobrir por plataforma · Portugal") {
+                    items(providers.take(30), key = { it.providerId }) { provider ->
+                        TvPill(
+                            label = provider.providerName,
+                            onClick = { onOpenPlatform(provider.providerId) }
+                        )
+                    }
+                }
+            }
+        }
         if (recent.isNotEmpty()) {
             item(key = "recent") {
                 PillRow(title = stringResource(R.string.search_recent)) {
