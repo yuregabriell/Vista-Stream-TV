@@ -25,7 +25,9 @@ class TvStreamingProvidersAddon @Inject constructor(
     private val api: TmdbApi
 ) {
     private val prefs = context.getSharedPreferences("vista_tv_watch_providers", Context.MODE_PRIVATE)
-    private val _enabled = MutableStateFlow(prefs.getBoolean("enabled", false))
+    // Native, read-only provider badges are enabled by default on a fresh install.
+    // Preserve an explicit user choice to disable the feature.
+    private val _enabled = MutableStateFlow(prefs.getBoolean("enabled", true))
     val enabled: StateFlow<Boolean> = _enabled
     private val region = "PT"
     private val directoryLock = Mutex()
