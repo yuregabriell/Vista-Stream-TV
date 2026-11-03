@@ -513,7 +513,14 @@ class PlaybackSession @Inject constructor(
     private fun cleanupUnusedNativeVideo() {
         scope.launch {
             delay(900L)
-            nativeP2pBridge.releaseUnusedExcept(_nowPlaying.value?.mediaUri)
+            runCatching {
+                val releasedUrls = nativeP2pBridge.releaseUnusedExcept(_nowPlaying.value?.mediaUri)
+                // A loopback stream may also have blocks in Media3's HTTP cache.
+                // Evict only the released stream keys, not the app-wide cache.
+                releasedUrls.forEach { uri ->
+                    runCatching { cache.removeResource(uri) }
+                }
+            }.onFailure { Log.w("PlaybackSession", "Native P2P cleanup failed", it) }
         }
     }
 
