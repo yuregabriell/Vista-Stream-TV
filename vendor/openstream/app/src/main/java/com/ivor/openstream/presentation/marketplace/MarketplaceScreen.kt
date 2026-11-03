@@ -703,6 +703,65 @@ private fun SearchOrderCard(mode: SourceSearchMode, onModeChange: (SourceSearchM
     }
 }
 
+/**
+ * Catalogs and repositories are visible before this is installed. Applying the
+ * preset explicitly enables the user's saved PT-BR and P2P lineup.
+ */
+@Composable
+private fun PortuguesePresetCard(
+    installed: Int,
+    isInstalling: Boolean,
+    onInstall: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = ExpressiveShapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("Presets", style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Black)
+            Text("Configurações de extensões prontas a instalar.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Surface(
+                shape = ExpressiveShapes.medium,
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                ) {
+                    Text("PT-BR · Filmes, séries e animes",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold)
+                    Text("21 extensões · 5 repositórios adicionais · HTTP e Torrent/P2P",
+                        style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "Baseado na seleção exportada do VistaStream. Alguns addons " +
+                            "podem estar offline; instalar o preset não garante fontes " +
+                            "para todos os títulos. As fontes não são ativadas automaticamente " +
+                            "ao instalar o aplicativo.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Button(
+                        onClick = onInstall,
+                        enabled = !isInstalling,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = ExpressiveShapes.small
+                    ) {
+                        Text(if (isInstalling) "A instalar preset…" else
+                            if (installed == 0) "Instalar preset PT-BR" else "Aplicar preset PT-BR")
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun RepositoriesTab(
     state: MarketplaceUiState,
@@ -710,6 +769,7 @@ private fun RepositoriesTab(
     onImport: () -> Unit,
     onExport: () -> Unit
 ) {
+    val installingPreset by viewModel.presetInstalling.collectAsState()
     var repoUrl by rememberSaveable { mutableStateOf("") }
     val links = LocalUriHandler.current
 
@@ -719,6 +779,14 @@ private fun RepositoriesTab(
             contentPadding = PaddingValues(start = gutter, end = gutter, top = 22.dp, bottom = 192.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            item(key = "preset-pt-br") {
+                PortuguesePresetCard(
+                    installed = state.installed.size,
+                    isInstalling = installingPreset,
+                    onInstall = viewModel::applyPortuguesePreset
+                )
+            }
+
             item(key = "batch-transfer-repositories") {
                 BatchTransferActions(onImport, onExport)
             }
