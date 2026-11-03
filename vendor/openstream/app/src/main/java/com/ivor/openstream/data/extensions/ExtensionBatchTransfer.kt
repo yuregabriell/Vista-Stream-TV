@@ -1,7 +1,6 @@
 package com.ivor.openstream.data.extensions
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /**
@@ -42,13 +41,13 @@ object ExtensionBatchTransfer {
     const val FILE_NAME = "vistastream-extensoes.json"
     const val MAX_BYTES = 2_000_000
 
-    fun encode(backup: ExtensionBackup): String = json.encodeToString(backup)
+    fun encode(backup: ExtensionBackup): String = json.encodeToString(ExtensionBackup.serializer(), backup)
 
     fun decode(raw: String): ExtensionBackup {
         require(raw.toByteArray(Charsets.UTF_8).size <= MAX_BYTES) {
             "O ficheiro de extensões é demasiado grande."
         }
-        val backup = json.decodeFromString<ExtensionBackup>(raw)
+        val backup = json.decodeFromString(ExtensionBackup.serializer(), raw)
         require(backup.format == "vista-extensions" && backup.version == 1) {
             "Formato de backup de extensões incompatível."
         }
