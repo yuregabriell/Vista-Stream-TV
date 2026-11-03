@@ -156,7 +156,13 @@ class StreamingRepositoryImpl @Inject constructor(
             )
         )
         if (remembered == null && firstStageProviders.isEmpty()) {
-            publish(ServerResolution(isComplete = true))
+            publish(ServerResolution(
+                servers = partialSeed?.servers.orEmpty(),
+                failedProviders = pausedProviders.map {
+                    "${it.displayName}: temporariamente em pausa após falhas recentes"
+                },
+                isComplete = true
+            ))
             return@channelFlow
         }
 
