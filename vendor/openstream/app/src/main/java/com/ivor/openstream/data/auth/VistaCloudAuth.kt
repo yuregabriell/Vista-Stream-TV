@@ -214,6 +214,10 @@ class VistaCloudAuth(context: Context) {
         require(rows.length() == 1) { "Dados VistaStream indisponíveis" }
         return rows.getJSONObject(0)
     }
+    fun markVistaStreamConnected() {
+        action("vs_connected", bearer = token())
+    }
+
     fun userId(): String {
         val info = JSONObject(request("GET", "/auth/v1/user", bearer = token()))
         val id = info.getString("id")
