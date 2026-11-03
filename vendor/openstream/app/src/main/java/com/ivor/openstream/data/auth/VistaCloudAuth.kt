@@ -5,6 +5,11 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import org.json.JSONObject
+import org.json.JSONArray
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.KeyStore
@@ -209,4 +214,34 @@ class VistaCloudAuth(context: Context) {
         require(rows.length() == 1) { "Dados VistaStream indisponíveis" }
         return rows.getJSONObject(0)
     }
+    fun userId(): String {
+        val info = JSONObject(request("GET", "/auth/v1/user", bearer = token()))
+        val id = info.getString("id")
+        require(Regex("[0-9a-fA-F-]{36}").matches(id)) { "Conta inválida" }
+        return id
+    }
+
+    /**
+     * Optimistic concurrency: only update if the row version still matches.
+     * The server RLS checks the signed user ID, so a caller can't write to others.
+     */
+    fun patchCloudData(userId: String, version: Long, favorites: JSONArray, progress: JSONObject): Boolean {
+        val payload = JSONObject().put("favorites", favorites).put("progress", progress)
+        val request = Request.Builder()
+            .url(URL + "/rest/v1/vs_user_data?user_id=eq." + userId + "&version=eq." + version)
+            .header("apikey", PUBLISHABLE_KEY)
+            .header("Authorization", "Bearer " + token())
+            .header("Prefer", "return=representation")
+            .patch(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+            .build()
+        val client = OkHttpClient.Builder()
+            .callTimeout(java.time.Duration.ofSeconds(20))
+            .build()
+        client.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) throw IllegalStateException("Erro ao sincronizar (" + response.code + ")")
+            return JSONArray(body).length() == 1
+        }
+    }
+
 }
