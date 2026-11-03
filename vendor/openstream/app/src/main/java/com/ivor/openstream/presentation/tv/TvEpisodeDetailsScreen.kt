@@ -65,6 +65,7 @@ fun TvEpisodeDetailsScreen(
     val episodeProgress by detailsViewModel.episodeProgress.collectAsState()
     var activePanel by remember { mutableStateOf<TvEpisodePanel?>(null) }
     var confirmRemove by remember { mutableStateOf(false) }
+    var navigatingToPlayer by remember { mutableStateOf(false) }
 
     LaunchedEffect(mediaType, animeId, season, episode) {
         playerViewModel.loadSeasonDetails(mediaType, animeId, season, episode, resolveStreams = true)
@@ -74,6 +75,11 @@ fun TvEpisodeDetailsScreen(
             // Do not let a hidden details page keep resolving 20+ add-ons while
             // the TV is already rebuilding Home or starting its playback screen.
             playerViewModel.cancelSourcePreview()
+            if (!navigatingToPlayer) {
+                // Returning to Home/menus: reclaim any prepared but unused native
+                // torrent buffers. Do not break a source handed to Media3.
+                playerViewModel.releaseAbandonedPreviewSources()
+            }
         }
     }
     val servers = when (val s = serversState) {
@@ -104,6 +110,7 @@ fun TvEpisodeDetailsScreen(
     }
     fun beginPlayback(selectedSeason: Int, selectedEpisode: Int, airDate: String?, play: () -> Unit) {
         if (!isUpcomingEpisode(airDate) || doNotWarn) {
+            navigatingToPlayer = true
             play()
         } else {
             pendingFutureEpisode = selectedSeason to selectedEpisode
@@ -426,6 +433,7 @@ fun TvEpisodeDetailsScreen(
                 onContinue = {
                     pendingFutureEpisode = null
                     pendingDate = null
+                    navigatingToPlayer = true
                     if (selected.first == season && selected.second == episode) onPlay()
                     else onPlayEpisode(selected.first, selected.second)
                 }

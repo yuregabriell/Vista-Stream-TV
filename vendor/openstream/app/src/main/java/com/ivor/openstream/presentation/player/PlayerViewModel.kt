@@ -861,13 +861,15 @@ class PlayerViewModel @Inject constructor(
         loadJob?.cancel()
     }
 
+    /** Called when the TV details route is popped, not when it opens the player. */
+    fun releaseAbandonedPreviewSources() = playbackSession.releaseAbandonedPreviewSources()
+
     override fun onCleared() {
-        // A details route can prepare native torrent sources without ever opening
-        // Media3. Cancel the jobs and release their temporary pieces when the route
-        // is removed. PlaybackSession protects streams that another screen is using.
+        // Every screen's ViewModel can be cleared as it navigates into the player.
+        // Only cancel this screen's search here; the TV details screen explicitly
+        // distinguishes returning to the menu from starting playback for P2P cleanup.
         cancelSourcePreview()
         loadJob?.cancel()
-        playbackSession.releaseAbandonedPreviewSources()
         super.onCleared()
     }
 
