@@ -1,4 +1,8 @@
 package com.ivor.openstream.presentation.marketplace
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import java.io.ByteArrayOutputStream
+import com.ivor.openstream.data.extensions.ExtensionBatchTransfer
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.border
@@ -44,6 +48,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.Update
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
@@ -78,6 +83,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
@@ -113,6 +119,62 @@ fun MarketplaceScreen(
     var detailsFor by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val context = LocalContext.current
+    var pendingExport by remember { mutableStateOf<String?>(null) }
+
+    val exportPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument(ExtensionBatchTransfer.MIME_TYPE)
+    ) { uri ->
+        val data = pendingExport
+        pendingExport = null
+        if (uri != null && data != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { output ->
+                    output.write(data.toByteArray(Charsets.UTF_8))
+                } ?: error("Não foi possível abrir o ficheiro de destino.")
+            }.onSuccess {
+                viewModel.showTransferMessage("Extensões exportadas com sucesso.")
+            }.onFailure {
+                viewModel.showTransferMessage("Erro ao exportar: " + it.message.orEmpty())
+            }
+        }
+    }
+
+    val importPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                val backup = context.contentResolver.openInputStream(uri)?.use { input ->
+                    val result = ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        require(result.size() + count <= ExtensionBatchTransfer.MAX_BYTES) {
+                            "O ficheiro excede o limite de 2 MB."
+                        }
+                        result.write(buffer, 0, count)
+                    }
+                    result.toString("UTF-8")
+                } ?: error("Não foi possível abrir o ficheiro.")
+                viewModel.importExtensions(backup)
+            }.onFailure {
+                viewModel.showTransferMessage("Erro ao importar: " + it.message.orEmpty())
+            }
+        }
+    }
+    val beginExport: () -> Unit = {
+        runCatching {
+            pendingExport = viewModel.exportExtensions()
+            exportPicker.launch(ExtensionBatchTransfer.FILE_NAME)
+        }.onFailure {
+            viewModel.showTransferMessage("Erro ao preparar exportação: " + it.message.orEmpty())
+        }
+    }
+    val beginImport: () -> Unit = {
+        importPicker.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
+    }
 
     LaunchedEffect(viewModel) { viewModel.liveRefreshWhileVisible() }
 
@@ -215,12 +277,16 @@ fun MarketplaceScreen(
                     viewModel = viewModel,
                     onOpenDetails = { detailsFor = it.key },
                     onBrowse = { selectedTab = MarketplaceTab.BROWSE },
-                    onApplyPreset = { confirmPreset = true }
+                    onApplyPreset = { confirmPreset = true },
+                    onImport = beginImport,
+                    onExport = beginExport
                 )
 
                 MarketplaceTab.REPOSITORIES -> RepositoriesTab(
                     state = state,
-                    viewModel = viewModel
+                    viewModel = viewModel,
+                    onImport = beginImport,
+                    onExport = beginExport
                 )
             }
         }
@@ -430,7 +496,9 @@ private fun InstalledTab(
     viewModel: MarketplaceViewModel,
     onOpenDetails: (MarketplaceExtension) -> Unit,
     onBrowse: () -> Unit,
-    onApplyPreset: () -> Unit
+    onApplyPreset: () -> Unit,
+    onImport: () -> Unit,
+    onExport: () -> Unit
 ) {
     val searchMode by viewModel.searchMode.collectAsState()
     CenteredListBox(Modifier.fillMaxSize(), minGutter = 16.dp) { gutter ->
@@ -444,6 +512,10 @@ private fun InstalledTab(
                     installed = state.installed.size,
                     enabled = state.catalog.enabled.size
                 )
+            }
+
+            item(key = "batch-transfer-installed") {
+                BatchTransferActions(onImport, onExport)
             }
 
             item(key = "portuguese-preset") {
@@ -549,6 +621,44 @@ private fun InstalledTab(
     }
 }
 
+@Composable
+private fun BatchTransferActions(onImport: () -> Unit, onExport: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = ExpressiveShapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                "Importar e exportar extensões",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                "Transfere vários repositórios e extensões de uma só vez, com ordem e estados ativados/desativados. " +
+                    "O backup JSON não inclui credenciais nem ficheiros de vídeo.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick = onImport,
+                    modifier = Modifier.weight(1f),
+                    shape = ExpressiveShapes.small
+                ) { Text("Importar em lote", maxLines = 1) }
+                OutlinedButton(
+                    onClick = onExport,
+                    modifier = Modifier.weight(1f),
+                    shape = ExpressiveShapes.small
+                ) { Text("Exportar em lote", maxLines = 1) }
+            }
+        }
+    }
+}
+
 /** How the player searches: everything at once, or one source at a time down the list below. */
 @Composable
 private fun SearchOrderCard(mode: SourceSearchMode, onModeChange: (SourceSearchMode) -> Unit) {
@@ -596,7 +706,9 @@ private fun SearchOrderCard(mode: SourceSearchMode, onModeChange: (SourceSearchM
 @Composable
 private fun RepositoriesTab(
     state: MarketplaceUiState,
-    viewModel: MarketplaceViewModel
+    viewModel: MarketplaceViewModel,
+    onImport: () -> Unit,
+    onExport: () -> Unit
 ) {
     var repoUrl by rememberSaveable { mutableStateOf("") }
     val links = LocalUriHandler.current
@@ -607,6 +719,10 @@ private fun RepositoriesTab(
             contentPadding = PaddingValues(start = gutter, end = gutter, top = 22.dp, bottom = 192.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            item(key = "batch-transfer-repositories") {
+                BatchTransferActions(onImport, onExport)
+            }
+
             item(key = "ptbr-addon-configurator") {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
