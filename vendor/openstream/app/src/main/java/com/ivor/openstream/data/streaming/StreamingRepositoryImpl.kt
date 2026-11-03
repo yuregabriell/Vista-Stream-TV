@@ -1,6 +1,8 @@
 package com.ivor.openstream.data.streaming
 
+import android.content.Context
 import android.content.SharedPreferences
+import com.ivor.openstream.presentation.tv.TvDetect
 import com.ivor.openstream.domain.model.MediaIdentity
 import com.ivor.openstream.domain.model.ServerResolution
 import com.ivor.openstream.domain.model.VideoServer
@@ -31,6 +33,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -42,7 +45,8 @@ class StreamingRepositoryImpl @Inject constructor(
     @Named("StreamingClient") private val client: OkHttpClient,
     private val preferences: SharedPreferences,
     private val appSettings: AppSettingsStore,
-    private val streamCache: ResolvedStreamCache
+    private val streamCache: ResolvedStreamCache,
+    @ApplicationContext private val context: Context
 ) : StreamingRepository {
     private val consecutiveFailures = ConcurrentHashMap<String, Int>()
 
@@ -55,7 +59,9 @@ class StreamingRepositoryImpl @Inject constructor(
      */
     private val providerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     // Bound costly native torrent, WebView, and HTTP resolver work on Android TV.
-    private val providerSlots = Semaphore(MAX_CONCURRENT_PROVIDERS)
+    private val providerSlots = Semaphore(
+        if (TvDetect.isTv(context)) TV_MAX_CONCURRENT_PROVIDERS else MAX_CONCURRENT_PROVIDERS
+    )
 
     /**
      * By default every installed provider runs at once and servers are sent as each one answers,
@@ -77,7 +83,11 @@ class StreamingRepositoryImpl @Inject constructor(
     ): Flow<ServerResolution> = channelFlow {
         val installedProviders = withContext(Dispatchers.IO) { providerRegistry.activeProviders() }
         val providerPriorities = installedProviders.associate { it.id to it.priority }
-        val inOrder = appSettings.current.sourceSearchMode == SourceSearchMode.IN_ORDER
+        // TVs cannot afford ongoing native-torrent discovery while Media3 buffers.
+        // Automatic TV searches stop at the first provider with usable candidates;
+        // the explicit Find more action still searches every enabled provider.
+        val inOrder = appSettings.current.sourceSearchMode == SourceSearchMode.IN_ORDER ||
+            (TvDetect.isTv(context) && preferLastWorking && !includeFallbacks)
         val cacheable = preferLastWorking && !includeFallbacks
         val sources = sourcesFingerprint(installedProviders, inOrder)
         var partialSeed: ServerResolution? = null
@@ -443,6 +453,7 @@ class StreamingRepositoryImpl @Inject constructor(
 
         /** Long enough for a WebView source (native hoster pass, then up to 17 s in the WebView). */
         const val MAX_CONCURRENT_PROVIDERS = 8
+        const val TV_MAX_CONCURRENT_PROVIDERS = 2
         const val PROVIDER_QUEUE_TIMEOUT_MS = 50_000L
         const val PROVIDER_TIMEOUT_MS = 25_000L
         const val ID_LOOKUP_TIMEOUT_MS = 8_000L
