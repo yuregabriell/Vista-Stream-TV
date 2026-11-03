@@ -46,8 +46,8 @@ class StreamingRepositoryImpl @Inject constructor(
 ) : StreamingRepository {
     private val consecutiveFailures = ConcurrentHashMap<String, Int>()
 
-    /** When a provider's breaker last opened; it is retried once [BREAKER_COOLDOWN_MS] has passed. */
-    private val breakerOpenedAt = ConcurrentHashMap<String, Long>()
+    /** Until when a provider is paused after repeated failures or access restrictions. */
+    private val breakerUntilAt = ConcurrentHashMap<String, Long>()
 
     /**
      * Provider work runs here rather than inside the flow, so a provider stuck in a blocking HTTP
@@ -107,8 +107,14 @@ class StreamingRepositoryImpl @Inject constructor(
         }
 
         val installedEnabled = installedProviders.filter { it.isEnabled }
-        // Never let the breaker leave nothing to try: then everything gets another go.
-        val enabledProviders = installedEnabled.filterNot { isBreakerOpen(it.id) }.ifEmpty { installedEnabled }
+        // "Procurar mais" is an explicit retry that bypasses provider backoff.
+        // An automatic search must not call all broken endpoints again simply
+        // because every provider is temporarily unavailable.
+        val pausedProviders = if (includeFallbacks) emptyList() else
+            installedEnabled.filter { isBreakerOpen(it.id) }
+        val enabledProviders = installedEnabled.filterNot { provider ->
+            !includeFallbacks && isBreakerOpen(provider.id)
+        }
         // Not when everything is being searched on purpose ("Find more", failover).
         val remembered = if (preferLastWorking && !includeFallbacks && inOrder) {
             lastWorkingSourceId(identity)?.let { id -> enabledProviders.firstOrNull { it.id == id } }
@@ -150,7 +156,13 @@ class StreamingRepositoryImpl @Inject constructor(
             )
         )
         if (remembered == null && firstStageProviders.isEmpty()) {
-            publish(ServerResolution(isComplete = true))
+            publish(ServerResolution(
+                servers = partialSeed?.servers.orEmpty(),
+                failedProviders = pausedProviders.map {
+                    "${it.displayName}: temporariamente em pausa após falhas recentes"
+                },
+                isComplete = true
+            ))
             return@channelFlow
         }
 
@@ -168,13 +180,15 @@ class StreamingRepositoryImpl @Inject constructor(
         val preferredServerId = preferences.getString(preferenceKey(identity), null)
 
         var servers = partialSeed?.servers.orEmpty()
-        val failedProviders = mutableListOf<String>()
+        val failedProviders = pausedProviders.mapTo(mutableListOf()) {
+            "${it.displayName}: temporariamente em pausa após falhas recentes"
+        }
 
         fun absorb(outcome: ResolutionEvent.Outcome) {
             outcome.result.fold(
                 onSuccess = { incoming ->
                     consecutiveFailures.remove(outcome.provider.id)
-                    breakerOpenedAt.remove(outcome.provider.id)
+                    breakerUntilAt.remove(outcome.provider.id)
                     providerRegistry.recordOutcome(outcome.provider, incoming.isNotEmpty())
                     if (incoming.isNotEmpty()) {
                         servers = ServerRanker.mergeAndRank(
@@ -189,7 +203,7 @@ class StreamingRepositoryImpl @Inject constructor(
                 },
                 onFailure = { error ->
                     Log.w(TAG, "${outcome.provider.displayName} failed: ${error.message}")
-                    recordFailure(outcome.provider.id)
+                    recordFailure(outcome.provider.id, error)
                     providerRegistry.recordOutcome(outcome.provider, false)
                     // Do not hide an upstream HTTP/DNS failure as “no title found”.
                     // Only report a bounded, safe category; URLs and tokens must never reach UI.
@@ -340,16 +354,20 @@ class StreamingRepositoryImpl @Inject constructor(
         isComplete = isComplete
     )
 
-    private fun recordFailure(providerId: String) {
-        val failures = consecutiveFailures.merge(providerId, 1) { old, added -> old + added } ?: 1
-        if (failures >= CIRCUIT_BREAKER_THRESHOLD) breakerOpenedAt[providerId] = System.currentTimeMillis()
+    private fun recordFailure(providerId: String, error: Throwable) {
+        val count = consecutiveFailures.merge(providerId, 1) { old, added -> old + added } ?: 1
+        val cooldown = ProviderFailureBackoff.cooldownMillis(error, count)
+        if (cooldown > 0) {
+            breakerUntilAt[providerId] = System.currentTimeMillis() + cooldown
+        }
     }
 
-    /** Skipped after repeated failures, but only for a while: networks and sites recover. */
+    /** A paused provider remains installed. Manual "Procurar mais" can always retry. */
     private fun isBreakerOpen(providerId: String): Boolean {
-        if ((consecutiveFailures[providerId] ?: 0) < CIRCUIT_BREAKER_THRESHOLD) return false
-        val openedAt = breakerOpenedAt[providerId] ?: return false
-        return System.currentTimeMillis() - openedAt < BREAKER_COOLDOWN_MS
+        val until = breakerUntilAt[providerId] ?: return false
+        if (System.currentTimeMillis() < until) return true
+        breakerUntilAt.remove(providerId, until)
+        return false
     }
 
     override suspend fun getServers(identity: MediaIdentity): List<VideoServer> =
@@ -433,7 +451,5 @@ class StreamingRepositoryImpl @Inject constructor(
         /** How long the source that played last time is waited on before the others start too. */
         const val REMEMBERED_HEAD_START_MS = 10_000L
         const val WORKING_SOURCE_KEY = "last_working_source"
-        const val CIRCUIT_BREAKER_THRESHOLD = 5
-        const val BREAKER_COOLDOWN_MS = 2 * 60_000L
     }
 }
