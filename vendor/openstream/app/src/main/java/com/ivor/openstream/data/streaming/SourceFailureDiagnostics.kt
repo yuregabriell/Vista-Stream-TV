@@ -16,6 +16,8 @@ internal fun sourceFailureSummary(error: Throwable): String {
             ?.groupValues?.getOrNull(1)?.toIntOrNull()
     }.firstOrNull()
     return when {
+        chain.any { it.message == "STREMIO_ID_MISSING" } ->
+            "ID IMDb não encontrado · esta extensão exige identificador IMDb/Kitsu"
         chain.any { it.message == "P2P_NATIVE_UNAVAILABLE" } ->
             "Motor P2P nativo não encontrou peers ou não conseguiu preparar o vídeo"
         chain.any { it.message == "P2P_ENGINE_NOT_CONFIGURED" } ->
