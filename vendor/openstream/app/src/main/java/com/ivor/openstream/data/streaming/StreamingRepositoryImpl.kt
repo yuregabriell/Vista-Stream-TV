@@ -55,10 +55,9 @@ class StreamingRepositoryImpl @Inject constructor(
 
     /**
      * By default every installed provider runs at once and servers are sent as each one answers,
-     * so playback can start on the first. Fallback providers join when direct ones have found
-     * nothing, either once all of them are done or after [FALLBACK_HEAD_START_MS], whichever comes
-     * first. With [SourceSearchMode.IN_ORDER] providers run one at a time in the user's order and
-     * the search stops at the first that finds something ("Find more" then searches the rest).
+     * so playback can start on the first. This includes torrent/Stremio and backup
+     * providers during the initial search rather than hiding them behind Find more.
+     * [SourceSearchMode.IN_ORDER] retains its explicit sequential early-stop semantics.
      *
      * With [preferLastWorking] the source that last played something ([rememberWorkingSource]) is
      * asked first, on its own. If it has streams the search ends there; if it has none, or has not
@@ -107,7 +106,7 @@ class StreamingRepositoryImpl @Inject constructor(
         // Never let the breaker leave nothing to try: then everything gets another go.
         val enabledProviders = installedEnabled.filterNot { isBreakerOpen(it.id) }.ifEmpty { installedEnabled }
         // Not when everything is being searched on purpose ("Find more", failover).
-        val remembered = if (preferLastWorking && !includeFallbacks) {
+        val remembered = if (preferLastWorking && !includeFallbacks && inOrder) {
             lastWorkingSourceId(identity)?.let { id -> enabledProviders.firstOrNull { it.id == id } }
         } else {
             null
@@ -117,12 +116,15 @@ class StreamingRepositoryImpl @Inject constructor(
         } else {
             enabledProviders.filterNot { it.id == remembered.id }
         }
-        val directProviders = if (includeFallbacks) {
+        // ALL_AT_ONCE means *all* installed extensions on the first request:
+        // direct HTTP, Stremio, torrents and fallback engines. A fast HTTP answer
+        // must not prevent torrents appearing alongside it in the picker.
+        val directProviders = if (includeFallbacks || !inOrder) {
             otherProviders
         } else {
             otherProviders.filterNot(ExtensionStreamProvider::isFallback)
         }
-        val fallbackProviders = if (includeFallbacks) {
+        val fallbackProviders = if (includeFallbacks || !inOrder) {
             emptyList()
         } else {
             otherProviders.filter(ExtensionStreamProvider::isFallback)
@@ -353,7 +355,7 @@ class StreamingRepositoryImpl @Inject constructor(
 
     /** What a cached resolution must match: the same sources, versions, order and search mode. */
     private fun sourcesFingerprint(providers: List<ExtensionStreamProvider>, inOrder: Boolean): String =
-        providers.joinToString(separator = "|", postfix = if (inOrder) "#ordered" else "#all") { provider ->
+        providers.joinToString(separator = "|", postfix = if (inOrder) "#ordered" else "#all-providers-v2") { provider ->
             "${provider.id}@${provider.versionCode}@${provider.priority}@${provider.isEnabled}@${provider.isFallback}"
         }
 
