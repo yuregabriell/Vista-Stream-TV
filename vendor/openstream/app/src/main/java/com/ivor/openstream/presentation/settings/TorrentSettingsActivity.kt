@@ -9,11 +9,12 @@ import android.graphics.Typeface
 import android.view.Gravity
 import android.widget.*
 import com.ivor.openstream.data.streaming.providers.TorrServerBridge
+import com.ivor.openstream.data.streaming.providers.VistaNativeP2pBridge
 import java.util.concurrent.Executors
 
 /**
- * Opt-in TorrServer integration. The engine runs separately (TorrServe app,
- * a PC or NAS on the LAN) and is NOT bundled in the VS APK.
+ * Opt-in playback transports. Native mode is in the app; TorrServer still runs
+ * as an optional separate process (TorrServe app, PC or NAS).
  */
 class TorrentSettingsActivity : Activity() {
     private val bridge by lazy { TorrServerBridge(this) }
@@ -29,6 +30,7 @@ class TorrentSettingsActivity : Activity() {
         window.statusBarColor=bg
         window.navigationBarColor=bg
         val current=bridge.config()
+        val nativeEngine=VistaNativeP2pBridge(this)
         val root=LinearLayout(this).apply {
             orientation=LinearLayout.VERTICAL
             setBackgroundColor(bg)
@@ -39,8 +41,28 @@ class TorrentSettingsActivity : Activity() {
             "Reproduz torrents de add-ons Stremio por um TorrServer local ou na rede. " +
             "Não descarrega o filme completo para o VS. Usa apenas torrents que podes partilhar legalmente.",
             14f,muted).apply {setPadding(0,dp(8),0,dp(18))})
+        root.addView(text("Motor nativo do VistaStream (experimental)",18f).apply {
+            setPadding(0,dp(10),0,dp(7))
+        })
+        root.addView(text(
+            "Baseado no Nuvio Engine GPLv3: torrents transformados em HTTP local no próprio aparelho. " +
+            "Requer peers disponíveis, usa até 512 MB de cache e não pode transmitir " +
+            "diretamente ao Chromecast sem um proxy na rede. Desativado por padrão.",
+            13f,muted
+        ).apply {setPadding(0,0,0,dp(9))})
+        val nativeToggle=Switch(this).apply {
+            text="Ativar motor nativo P2P"
+            textSize=16f
+            setTextColor(Color.WHITE)
+            isChecked=nativeEngine.isEnabled()
+            setOnCheckedChangeListener { _,checked -> nativeEngine.setEnabled(checked) }
+        }
+        root.addView(nativeToggle)
+        root.addView(text("TorrServer alternativo",18f).apply {
+            setPadding(0,dp(18),0,dp(9))
+        })
         val enabled=Switch(this).apply {
-            text="Ativar reprodução P2P"
+            text="Ativar TorrServer P2P"
             textSize=17f
             setTextColor(Color.WHITE)
             isChecked=current.enabled
