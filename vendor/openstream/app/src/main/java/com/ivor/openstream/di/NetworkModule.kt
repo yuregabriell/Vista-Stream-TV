@@ -3,6 +3,7 @@ package com.ivor.openstream.di
 import android.content.Context
 import com.ivor.openstream.BuildConfig
 import com.ivor.openstream.data.cache.CacheBudget
+import com.ivor.openstream.presentation.tv.TvDetect
 import com.ivor.openstream.data.cache.ForceRefreshInterceptor
 import com.ivor.openstream.data.cache.MetadataCacheHeadersInterceptor
 import com.ivor.openstream.data.cache.StaleIfErrorInterceptor
@@ -102,7 +103,8 @@ object NetworkModule {
     @Singleton
     fun provideMetadataCache(@ApplicationContext context: Context, settings: AppSettingsStore): Cache {
         val directory = File(context.cacheDir, CacheBudget.METADATA_DIR)
-        return Cache(directory, CacheBudget.bytesFor(directory, settings.current.cacheSize.metadataBytes))
+        return Cache(directory, CacheBudget.bytesFor(directory, CacheBudget.metadataBudget(
+            settings.current.cacheSize.metadataBytes, TvDetect.isTv(context))))
     }
 
     /**

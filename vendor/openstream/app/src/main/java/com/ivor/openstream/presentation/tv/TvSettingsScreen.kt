@@ -5,6 +5,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -103,6 +104,13 @@ private sealed interface SettingRow {
         val value: String,
         val options: List<ChoiceOption>,
         val multi: Boolean = false
+    ) : SettingRow
+
+    /** Static device-specific guidance; not a fake settings control. */
+    class Info(
+        override val key: String,
+        override val title: String,
+        override val subtitle: String?
     ) : SettingRow
 
     class Action(
@@ -256,6 +264,20 @@ fun TvSettingsScreen(
 
 @Composable
 private fun SettingListItem(row: SettingRow, modifier: Modifier, onOpenChoice: () -> Unit) {
+    if (row is SettingRow.Info) {
+        Column(
+            // Keep the first row a real D-pad focus target for the right pane.
+            modifier = modifier.fillMaxWidth().focusable().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(row.title, style = MaterialTheme.typography.titleMedium)
+            row.subtitle?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        return
+    }
     ListItem(
         selected = false,
         onClick = {
@@ -263,6 +285,7 @@ private fun SettingListItem(row: SettingRow, modifier: Modifier, onOpenChoice: (
                 is SettingRow.Toggle -> row.onChange(!row.checked)
                 is SettingRow.Choice -> onOpenChoice()
                 is SettingRow.Action -> row.onClick()
+                is SettingRow.Info -> Unit
             }
         },
         headlineContent = { Text(row.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -275,6 +298,7 @@ private fun SettingListItem(row: SettingRow, modifier: Modifier, onOpenChoice: (
                     Text(row.value, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp))
                 }
+                is SettingRow.Info -> Unit
                 is SettingRow.Action -> Row(verticalAlignment = Alignment.CenterVertically) {
                     row.trailing?.let { Text(it, maxLines = 1) }
                     if (row.opensPage) Icon(Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp))
@@ -478,23 +502,17 @@ private fun settingRows(
         SettingsCategory.STORAGE -> {
             val cacheBytes by viewModel.cacheBytes.collectAsState()
             listOf(
-                SettingRow.Choice(
-                    key = "cache-size",
-                    title = stringResource(R.string.st_cache_limit),
-                    subtitle = stringResource(R.string.st_cache_limit_hint),
-                    value = cacheLabel(s.cacheSize),
-                    options = CacheSize.entries.map { size ->
-                        ChoiceOption(cacheLabel(size), size == s.cacheSize) { viewModel.setCacheSize(size) }
-                    }
-                ),
-                SettingRow.Toggle(
-                    "preload", stringResource(R.string.st_preload_artwork), stringResource(R.string.st_preload_artwork_hint),
-                    s.preloadArtwork, viewModel::setPreloadArtwork
+                SettingRow.Info(
+                    key = "tv-cache-automatic",
+                    title = "Cache otimizado para a TV",
+                    subtitle = "Até 24 MB de imagens e 16 MB de metadados. " +
+                        "O motor torrent usa até 64 MB temporários, eliminados " +
+                        "após parar a reprodução. Os downloads guardados não são apagados."
                 ),
                 SettingRow.Action(
                     key = "clear-cache",
                     title = stringResource(R.string.st_clear_all_cache),
-                    subtitle = cacheBytes?.let { stringResource(R.string.st_cache_used, "${it / (1024L * 1024L)} MB") },
+                    subtitle = cacheBytes?.let { "Cache temporário detetado: ${it / (1024L * 1024L)} MB" },
                     onClick = viewModel::clearCache
                 )
             )

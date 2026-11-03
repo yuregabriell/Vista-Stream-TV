@@ -852,6 +852,25 @@ class PlayerViewModel @Inject constructor(
         startResolution(identity, includeFallbacks = true)
     }
 
+    /** Stop source discovery immediately when TV details lose their visible lifecycle. */
+    fun cancelSourcePreview() {
+        resolutionJob?.cancel()
+        resolutionJob = null
+        // Metadata and artwork lookups for a non-visible title also stop here.
+        // Re-entering the details destination starts a fresh load.
+        loadJob?.cancel()
+    }
+
+    override fun onCleared() {
+        // A details route can prepare native torrent sources without ever opening
+        // Media3. Cancel the jobs and release their temporary pieces when the route
+        // is removed. PlaybackSession protects streams that another screen is using.
+        cancelSourcePreview()
+        loadJob?.cancel()
+        playbackSession.releaseAbandonedPreviewSources()
+        super.onCleared()
+    }
+
     private fun startResolution(identity: MediaIdentity, includeFallbacks: Boolean = false) {
         resolutionJob?.cancel()
         // Never erase a still-recent, playable candidate merely because refresh timed out.

@@ -80,17 +80,17 @@ class OpenStreamApp : Application(), SingletonImageLoader.Factory {
             // Keep its decoded-bitmaps LRU modest: evicted images still reload from disk.
             .memoryCache {
                 MemoryCache.Builder()
-                    .maxSizePercent(context, if (tvDevice) 0.08 else 0.25)
+                    .maxSizePercent(context, if (tvDevice) 0.06 else 0.25)
                     .build()
             }
             .components { add(OkHttpNetworkFetcherFactory(client)) }
             .diskCache {
                 DiskCache.Builder()
                     .directory(directory.toOkioPath())
-                    // Bound TV artwork to 48 MB regardless of the phone preset;
+                    // Bound TV artwork to 24 MB regardless of the phone preset;
                     // Android can evict it safely when storage is under pressure.
                     .maxSizeBytes(CacheBudget.bytesFor(directory,
-                        if (tvDevice) wanted.coerceAtMost(48L * 1024L * 1024L) else wanted))
+                        CacheBudget.artworkBudget(wanted, tvDevice)))
                     .build()
             }
             .build()

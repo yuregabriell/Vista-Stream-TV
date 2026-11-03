@@ -97,6 +97,9 @@ class ArtworkPrefetcher @Inject constructor(
     }
 
     private fun allowedNow(): Boolean {
+        // TV should not spend bandwidth, decode CPU or disk space fetching unseen rails
+        // while returning from a title; visible artwork still loads and is cached.
+        if (TvDetect.isTv(context)) return false
         if (!settings.current.preloadArtwork) return false
         return runCatching {
             val connectivity = context.getSystemService(ConnectivityManager::class.java) ?: return false
