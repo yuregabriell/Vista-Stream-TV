@@ -510,9 +510,9 @@ class PlaybackSession @Inject constructor(
      * The current URI is read AFTER the grace period: rapid back/forward and
      * episode changes must never delete the new playback's own torrent.
      */
-    private fun cleanupUnusedNativeVideo() {
+    private fun cleanupUnusedNativeVideo(gracePeriodMs: Long = 900L) {
         scope.launch {
-            delay(900L)
+            if (gracePeriodMs > 0L) delay(gracePeriodMs)
             runCatching {
                 val releasedUrls = nativeP2pBridge.releaseUnusedExcept(_nowPlaying.value?.mediaUri)
                 // A loopback stream may also have blocks in Media3's HTTP cache.
@@ -569,7 +569,7 @@ class PlaybackSession @Inject constructor(
     }
 
     /** Ends the session: saves where the user stopped and unloads the stream (on the TV too). */
-    fun stop() {
+    fun stop(immediateNativeCleanup: Boolean = false) {
         setSleepTimer(null)
         recordProgress(force = true)
         if (castConnected) {
@@ -595,7 +595,7 @@ class PlaybackSession @Inject constructor(
         requestHeaders = emptyMap()
         // TV back and mobile mini-player close both call stop().
         // Release only P2P sources, never Media3's shared cache or title artwork.
-        cleanupUnusedNativeVideo()
+        cleanupUnusedNativeVideo(if (immediateNativeCleanup) 0L else 900L)
     }
 
     /**
@@ -606,7 +606,7 @@ class PlaybackSession @Inject constructor(
     fun stopNativeP2pWhenTaskRemoved(): Boolean {
         val url = _nowPlaying.value?.mediaUri
         if (!nativeP2pBridge.isActiveNativeStream(url)) return false
-        stop()
+        stop(immediateNativeCleanup = true)
         return true
     }
 
