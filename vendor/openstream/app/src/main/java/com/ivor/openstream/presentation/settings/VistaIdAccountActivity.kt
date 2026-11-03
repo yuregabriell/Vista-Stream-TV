@@ -136,7 +136,7 @@ class VistaIdAccountActivity : ComponentActivity() {
         val credential = field(password, "Palavra-passe", true)
         gap(password, 13)
         button(password, "Entrar", true) {
-            runAsync({ cloud.signInPassword(identifier.text.toString(), credential.text.toString()); cloud.profile() }) {
+            runAsync({ cloud.signInPassword(identifier.text.toString(), credential.text.toString()); runCatching { cloud.markVistaStreamConnected() }; cloud.profile() }) {
                 lastUsername = it.username; draw()
             }
         }
@@ -151,7 +151,7 @@ class VistaIdAccountActivity : ComponentActivity() {
         val temporaryCode = field(code, "Código de 8 caracteres", false)
         gap(code, 12)
         button(code, "Entrar com código", true) {
-            runAsync({ cloud.signInCode(username.text.toString(), temporaryCode.text.toString()); cloud.profile() }) {
+            runAsync({ cloud.signInCode(username.text.toString(), temporaryCode.text.toString()); runCatching { cloud.markVistaStreamConnected() }; cloud.profile() }) {
                 lastUsername = it.username; draw()
             }
         }
