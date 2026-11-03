@@ -17,6 +17,8 @@ import com.ivor.openstream.data.settings.AppDns
 import com.ivor.openstream.data.settings.AppLocale
 import com.ivor.openstream.data.settings.AppSettingsStore
 import com.ivor.openstream.data.settings.CacheSize
+import com.ivor.openstream.data.streaming.providers.purgeNativeP2pTemporaryData
+import android.util.Log
 import dagger.hilt.android.HiltAndroidApp
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toOkioPath
@@ -42,6 +44,11 @@ class OpenStreamApp : Application(), SingletonImageLoader.Factory {
     override fun onCreate() {
         super.onCreate()
         Diagnostics.installCrashRecorder(this)
+        // A terminated process cannot run cleanup callbacks. Reclaim only our native
+        // engine's disposable torrent data before any player can be started again.
+        if (!purgeNativeP2pTemporaryData(cacheDir)) {
+            Log.w("VistaNativeP2p", "Could not fully remove stale P2P pieces at startup")
+        }
         // Daily episode check, only while the toggle is on.
         if (appSettingsStore.current.episodeNotifications &&
             !EpisodeAlarm.isScheduled(this)
