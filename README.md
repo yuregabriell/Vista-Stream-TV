@@ -21,4 +21,18 @@ A página de instalação é [Releases](https://github.com/yuregabriell/Vista-St
 
 Consulta [COMPATIBILITY.md](COMPATIBILITY.md) e [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-Nota: esta versão é uma integração inicial literal baseada no projeto Android do OpenStream. O código GoAnime é vendorizado para posterior adaptação, mas **não é um provider ativo no aplicativo**. Não inclui automaticamente catálogos de terceiros sem licenças explícitas.
+Nota: esta versão é uma integração inicial literal baseada no projeto Android do OpenStream. O código GoAnime é vendorizado, mas o executável Go **não corre dentro do Android**. O repositório
+`GoAnime · Fontes PT-BR` é agora registado como diretório atualizável, com os adaptadores Android
+experimentais AnimeFire e Goyabu (ativação manual). Não é uma conversão completa dos scrapers GoAnime.
+
+## Importação e exportação em lote
+
+Em **Extensões → Instaladas** ou **Extensões → Repositórios**, usa **Exportar em lote** para
+guardar `vistastream-extensoes.json`. O ficheiro inclui URLs de repositórios personalizados,
+extensões instaladas, estados ativados/desativados e ordem de pesquisa. **Importar em lote**
+restaura o backup sem apagar outras extensões e mostra entradas que não foi possível restaurar.
+
+O JSON não contém código executável nem vídeos. **Atenção:** URLs Stremio personalizados podem
+incluir chaves de serviços; trata o ficheiro como privado e não o publiques no GitHub.
+O diretório GoAnime é fornecido em:
+`https://raw.githubusercontent.com/yuregabriell/Vista-Stream-TV/main/extensions/goanime-catalog.json`.

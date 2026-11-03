@@ -1,5 +1,6 @@
 package com.ivor.openstream.domain.repository
 
+import com.ivor.openstream.data.extensions.ExtensionImportSummary
 import com.ivor.openstream.domain.model.ExtensionCatalog
 import com.ivor.openstream.domain.model.ExtensionRepo
 import com.ivor.openstream.domain.model.MarketplaceExtension
@@ -38,6 +39,12 @@ interface ExtensionRepository {
 
     /** Ranks installed sources: [keys] first, in this order. */
     fun setSourceOrder(keys: List<String>)
+
+    /** JSON backup of repositories, installed/disabled flags and source order. */
+    fun exportBackup(): String
+
+    /** Non-destructive merge of a portable backup, with per-item error reporting. */
+    suspend fun importBackup(raw: String): Result<ExtensionImportSummary>
 
     /** Records whether an extension produced a usable stream, feeding the reliability signal. */
     fun recordOutcome(key: String, success: Boolean)

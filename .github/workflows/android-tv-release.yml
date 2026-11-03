@@ -23,6 +23,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: true
+      - name: Validate GoAnime extension repository
+        run: python3 scripts/validate_goanime_catalog.py
       - name: Import pinned MIT sources
         run: bash scripts/vendor.sh
       - name: Adapt app identity
@@ -111,7 +113,7 @@ jobs:
           ./gradlew :app:assembleDebug --no-daemon
       - name: Test catalog, Cast, HLS and playback-engine diagnostics
         working-directory: vendor/openstream
-        run: ./gradlew :app:testDebugUnitTest --tests '*OfficialCatalogTest' --tests '*CastByteRangesTest' --tests '*CastHlsSupportTest' --tests '*VistaPlaybackEngineTest' --tests '*StremioTorrentIndexTest' --tests '*StremioMagnetCompatibilityTest' --tests '*StremioStreamLabelsTest' --no-daemon
+        run: ./gradlew :app:testDebugUnitTest --tests '*ExtensionBatchTransferTest' --tests '*OfficialCatalogTest' --tests '*CastByteRangesTest' --tests '*CastHlsSupportTest' --tests '*VistaPlaybackEngineTest' --tests '*StremioTorrentIndexTest' --tests '*StremioMagnetCompatibilityTest' --tests '*StremioStreamLabelsTest' --no-daemon
       - name: Select universal APK
         shell: bash
         run: |
@@ -134,8 +136,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          TAG="v0.17.3-build.${GITHUB_RUN_NUMBER}"
+          TAG="v0.17.4-build.${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "VistaStream-${GITHUB_RUN_NUMBER}.apk" \
             --target "$(git rev-parse HEAD)" --title "VistaStream — $TAG" \
-            --notes "VistaStream 0.17.3: Stremio magnets com hashes Base32 e Hex, trackers validados, correspondência IMDb/TMDB por episódio e seleção segura de ficheiros P2P multi-episódio. Compatibilidade validada por testes unitários; a disponibilidade de peers e a reprodução real dependem do motor configurado. Mantém Vista Source v1: importar e exportar ficheiros manifest.json de fontes pessoais no ecrã Vista ID; importar ficheiros do VistaBrowser com confirmação; suporte a fontes seguras na biblioteca e nos títulos correspondentes. Vista Connect fase 1: descoberta da TV por NSD/mDNS em Wi-Fi local para evitar inserir manualmente o IP e interface de ligação adaptada entre TV e telemóvel. Mantém o emparelhamento temporário de 12 caracteres e sincronização manual cifrada. A ligação permanente, o código de 6 dígitos, a sincronização contínua e a cloud Vista ID ainda não estão implementados. Sem partilha de cookies ou contas web. Funcionalidades anteriores de catálogo, Anime TV, Cast e reprodução mantidas." \
+            --notes "VistaStream 0.17.4: Stremio magnets com hashes Base32 e Hex, trackers validados, correspondência IMDb/TMDB por episódio e seleção segura de ficheiros P2P multi-episódio. Compatibilidade validada por testes unitários; a disponibilidade de peers e a reprodução real dependem do motor configurado. Adiciona o repositório GoAnime PT-BR (adaptadores Kotlin experimentais; código Go não é executado no Android) e importação/exportação em lote de extensões e repositórios em JSON, com ordem e estados preservados. Mantém Vista Source v1: importar e exportar ficheiros manifest.json de fontes pessoais no ecrã Vista ID; importar ficheiros do VistaBrowser com confirmação; suporte a fontes seguras na biblioteca e nos títulos correspondentes. Vista Connect fase 1: descoberta da TV por NSD/mDNS em Wi-Fi local para evitar inserir manualmente o IP e interface de ligação adaptada entre TV e telemóvel. Mantém o emparelhamento temporário de 12 caracteres e sincronização manual cifrada. A ligação permanente, o código de 6 dígitos, a sincronização contínua e a cloud Vista ID ainda não estão implementados. Sem partilha de cookies ou contas web. Funcionalidades anteriores de catálogo, Anime TV, Cast e reprodução mantidas." \
             --prerelease
