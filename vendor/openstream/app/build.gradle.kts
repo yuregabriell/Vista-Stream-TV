@@ -27,6 +27,11 @@ android {
         applicationId = "com.vistastream.tv"
         minSdk = 26
         targetSdk = 36
+        // Only Android phone/TV ARM ABIs. Avoid shipping Nuvio's x86 emulator
+        // native libraries inside the universal APK distributed via Releases.
+        ndk {
+            abiFilters += setOf("armeabi-v7a", "arm64-v8a")
+        }
         val vistaBuild = providers.environmentVariable("GITHUB_RUN_NUMBER").orNull
             ?.toIntOrNull()?.coerceAtLeast(1) ?: 7
         versionCode = vistaBuild
