@@ -157,10 +157,25 @@ class KeylessCatalogClient @Inject constructor(
         for (name in candidates) {
             val matches = runCatching { cinemeta("series", name, 1) }.getOrDefault(emptyList())
             val normalized = name.filter(Char::isLetterOrDigit).lowercase()
-            val found = matches.firstOrNull {
-                it.title.filter(Char::isLetterOrDigit).lowercase() == normalized ||
-                    it.alternateTitle?.filter(Char::isLetterOrDigit)?.lowercase() == normalized
-            }?.imdbId
+            val found = matches.asSequence()
+                .filter {
+                    it.title.filter(Char::isLetterOrDigit).lowercase() == normalized ||
+                        it.alternateTitle?.filter(Char::isLetterOrDigit)?.lowercase() == normalized
+                }
+                .filter { match ->
+                    // The live-action One Piece is not the 1999 animation.
+                    item.type != "anime" || match.genres.isEmpty() ||
+                        match.genres.any { it.equals("Animation", ignoreCase = true) }
+                }
+                .filter { match ->
+                    item.year == null || match.year == null ||
+                        kotlin.math.abs(match.year - item.year) <= 2
+                }
+                .minByOrNull { match ->
+                    if (item.year != null && match.year != null)
+                        kotlin.math.abs(match.year - item.year)
+                    else Int.MAX_VALUE
+                }?.imdbId
             if (found != null) return@withContext found
         }
         null

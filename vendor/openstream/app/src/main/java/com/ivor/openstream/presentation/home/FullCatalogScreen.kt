@@ -44,6 +44,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -66,6 +67,8 @@ import java.text.NumberFormat
 import java.util.Locale
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.launch
+import com.ivor.openstream.presentation.tv.TvAnimeTitleNavigationViewModel
 
 @Composable
 fun FullCatalogScreen(
@@ -73,13 +76,15 @@ fun FullCatalogScreen(
     onBack: () -> Unit,
     onOpenDetails: (String, Int) -> Unit,
     viewModel: FullCatalogViewModel = hiltViewModel(),
-    keylessViewModel: KeylessCatalogViewModel = hiltViewModel()
+    keylessViewModel: KeylessCatalogViewModel = hiltViewModel(),
+    titleNavigation: TvAnimeTitleNavigationViewModel = hiltViewModel()
 ) {
     var category by rememberSaveable { mutableStateOf(initialCategory) }
     var query by rememberSaveable { mutableStateOf("") }
     var typed by rememberSaveable { mutableStateOf("") }
     var yearInput by rememberSaveable { mutableStateOf("") }
     var selectedAniList by remember { mutableStateOf<KeylessTitle?>(null) }
+    val scope = rememberCoroutineScope()
     val state by viewModel.state.collectAsState()
     val keyboard = LocalSoftwareKeyboardController.current
 
@@ -93,6 +98,7 @@ fun FullCatalogScreen(
         KeylessCatalogScreen(
             viewModel = keylessViewModel,
             initialTitle = selectedAniList,
+            onOpenUnifiedTitle = onOpenDetails,
             onInitialDismiss = { selectedAniList = null }
         )
         return
@@ -298,7 +304,16 @@ fun FullCatalogScreen(
                 Column(modifier = Modifier
                     .clickable {
                         if (item.tmdbId != null) onOpenDetails(item.mediaType, item.tmdbId)
-                        else item.anilist?.let { selectedAniList = it }
+                        else item.anilist?.let { title ->
+                            scope.launch {
+                                val unified = titleNavigation.resolve(title)
+                                if (unified != null) {
+                                    onOpenDetails(unified.first, unified.second)
+                                } else {
+                                    selectedAniList = title
+                                }
+                            }
+                        }
                     },
                     verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     AsyncImage(

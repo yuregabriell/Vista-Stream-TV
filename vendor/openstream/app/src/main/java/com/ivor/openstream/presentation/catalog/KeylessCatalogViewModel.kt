@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.ivor.openstream.data.catalog.KeylessCatalogClient
 import com.ivor.openstream.data.catalog.KeylessTitle
 import com.ivor.openstream.data.catalog.KeylessEpisode
+import com.ivor.openstream.data.catalog.KeylessEpisodeList
 import com.ivor.openstream.data.catalog.VistaWatchHistory
 import com.ivor.openstream.domain.model.MediaIdentity
 import com.ivor.openstream.domain.model.VideoServer
@@ -215,14 +216,19 @@ class KeylessCatalogViewModel @Inject constructor(
             resolvedProviders = 0, totalProviders = 0, failedProviders = emptyList()
         )
         episodeJob = viewModelScope.launch {
-            val enriched = runCatching { client.enrich(item) }.getOrDefault(item)
+            val initiallyEnriched = runCatching { client.enrich(item) }.getOrDefault(item)
+            // AniList has no IMDb ID. Resolve it from Cinemeta first when possible,
+            // otherwise long-running titles such as One Piece look like one episode.
+            val identified = if (item.type == "anime" && !item.format.equals("MOVIE", ignoreCase = true) &&
+                initiallyEnriched.imdbId.isNullOrBlank()) {
+                val imdb = runCatching { client.findAnimeImdb(initiallyEnriched) }.getOrNull()
+                if (imdb != null) initiallyEnriched.copy(imdbId = imdb) else initiallyEnriched
+            } else initiallyEnriched
+            val enriched = if (identified.imdbId != initiallyEnriched.imdbId) {
+                runCatching { client.enrich(identified) }.getOrDefault(identified)
+            } else identified
             val remoteEpisodes = runCatching { client.episodes(enriched) }.getOrDefault(emptyList())
-            // AniList exposes episode counts but often has no per-episode metadata.
-            val list = if (remoteEpisodes.isNotEmpty()) remoteEpisodes else {
-                (1..(enriched.episodes ?: 1).coerceIn(1, 250)).map {
-                    KeylessEpisode(1, it, "Episódio $it")
-                }
-            }
+            val list = KeylessEpisodeList.forTitle(enriched, remoteEpisodes)
             if (_state.value.selected?.sourceId == item.sourceId) {
                 _state.value = _state.value.copy(selected = enriched, episodes = list)
                 // The user should not have to press a second button to search.
