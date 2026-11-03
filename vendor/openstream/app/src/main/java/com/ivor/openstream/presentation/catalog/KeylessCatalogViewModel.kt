@@ -219,7 +219,8 @@ class KeylessCatalogViewModel @Inject constructor(
             val initiallyEnriched = runCatching { client.enrich(item) }.getOrDefault(item)
             // AniList has no IMDb ID. Resolve it from Cinemeta first when possible,
             // otherwise long-running titles such as One Piece look like one episode.
-            val identified = if (item.type == "anime" && initiallyEnriched.imdbId.isNullOrBlank()) {
+            val identified = if (item.type == "anime" && !item.format.equals("MOVIE", ignoreCase = true) &&
+                initiallyEnriched.imdbId.isNullOrBlank()) {
                 val imdb = runCatching { client.findAnimeImdb(initiallyEnriched) }.getOrNull()
                 if (imdb != null) initiallyEnriched.copy(imdbId = imdb) else initiallyEnriched
             } else initiallyEnriched
