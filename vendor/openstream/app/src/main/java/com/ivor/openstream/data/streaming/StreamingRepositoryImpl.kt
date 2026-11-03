@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -83,12 +84,13 @@ class StreamingRepositoryImpl @Inject constructor(
     ): Flow<ServerResolution> = channelFlow {
         val installedProviders = withContext(Dispatchers.IO) { providerRegistry.activeProviders() }
         val providerPriorities = installedProviders.associate { it.id to it.priority }
-        // TVs cannot afford ongoing native-torrent discovery while Media3 buffers.
-        // Automatic TV searches stop at the first provider with usable candidates;
-        // the explicit Find more action still searches every enabled provider.
-        val inOrder = appSettings.current.sourceSearchMode == SourceSearchMode.IN_ORDER ||
-            SourceSearchPolicy.firstPlayableOnlyOnTv(TvDetect.isTv(context),
-                preferLastWorking, includeFallbacks)
+        // Automatic TV discovery races at most two workers at a time, then
+        // cancels the rest at the first result; it never runs through all addons
+        // while Media3 is buffering. Manual "Procurar mais" remains exhaustive.
+        val tvFirstOnly = SourceSearchPolicy.firstPlayableOnlyOnTv(
+            TvDetect.isTv(context), preferLastWorking, includeFallbacks
+        )
+        val inOrder = appSettings.current.sourceSearchMode == SourceSearchMode.IN_ORDER
         val cacheable = preferLastWorking && !includeFallbacks
         val sources = sourcesFingerprint(installedProviders, inOrder)
         var partialSeed: ServerResolution? = null
@@ -127,7 +129,8 @@ class StreamingRepositoryImpl @Inject constructor(
             !includeFallbacks && isBreakerOpen(provider.id)
         }
         // Not when everything is being searched on purpose ("Find more", failover).
-        val remembered = if (preferLastWorking && !includeFallbacks && inOrder) {
+        val remembered = if (preferLastWorking && !includeFallbacks &&
+            (inOrder || tvFirstOnly)) {
             lastWorkingSourceId(identity)?.let { id -> enabledProviders.firstOrNull { it.id == id } }
         } else {
             null
@@ -303,6 +306,15 @@ class StreamingRepositoryImpl @Inject constructor(
                     }
                     // Direct providers are all done and found nothing: fallbacks are the last hope.
                     if (pending == 0 && servers.isEmpty()) startFallbacks()
+                    if (tvFirstOnly && servers.isNotEmpty()) {
+                        publish(progress(servers, total - pending, total, failedProviders,
+                            isComplete = true))
+                        // The candidates have been delivered to Media3. Cancel all
+                        // queued/in-flight addon discoveries; those P2P threads must
+                        // not compete with video buffering for TV memory or bandwidth.
+                        currentCoroutineContext().cancelChildren()
+                        return@channelFlow
+                    }
                     publish(progress(servers, total - pending, total, failedProviders, isComplete = pending == 0))
                 }
             }
