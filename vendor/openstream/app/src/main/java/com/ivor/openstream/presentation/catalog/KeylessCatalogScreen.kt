@@ -1257,7 +1257,7 @@ private fun KeylessTitleDetails(
                         Column(Modifier.padding(15.dp)) {
                             Text("Episódios", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                "${episodes.size} listados",
+                                if (episodes.isEmpty()) "Lista não disponível" else "${episodes.size} listados",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1333,7 +1333,7 @@ private fun KeylessTitleDetails(
                     }
                 }
             }
-            if (title.type != "movie") {
+            if (title.type != "movie" && !title.format.equals("MOVIE", ignoreCase = true)) {
                 HorizontalDivider()
                 Text("Episódios", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 if (seasons.size > 1) {
@@ -1349,13 +1349,21 @@ private fun KeylessTitleDetails(
                         }
                     }
                 }
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    contentPadding = PaddingValues(bottom = 16.dp)
-                ) {
-                    items(currentSeasonEpisodes.ifEmpty {
-                        listOf(com.ivor.openstream.data.catalog.KeylessEpisode(season, episode, "Episódio $episode"))
-                    }, key = { "${it.season}:${it.number}" }) { ep ->
+                if (currentSeasonEpisodes.isEmpty()) {
+                    Text(
+                        if (episodes.isEmpty())
+                            "A lista de episódios ainda não foi encontrada nos metadados. " +
+                                "Não foi criado um episódio fictício."
+                        else "A temporada selecionada não tem episódios identificados.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(bottom = 16.dp)
+                    ) {
+                        items(currentSeasonEpisodes, key = { "${it.season}:${it.number}" }) { ep ->
                         val selected = ep.season == season && ep.number == episode
                         Column(
                             modifier = Modifier.width(190.dp)
@@ -1393,6 +1401,7 @@ private fun KeylessTitleDetails(
                             )
                         }
                     }
+                }
                 }
             }
             Spacer(Modifier.height(166.dp))
