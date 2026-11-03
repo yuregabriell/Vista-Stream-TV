@@ -98,26 +98,26 @@ class VistaCloudSync(
             }
             // Fixed caps, checked on encoded bytes, prevent user profiles from
             // growing into large JSONB rows or exceeding Supabase SQL constraints.
-            val favoritesSorted = favorites.values
-                .sortedByDescending { it.optLong("date") }.take(160).toMutableList()
-            val progressSorted = merged.entries
-                .sortedByDescending { it.value.optLong("u") }.take(175).toMutableList()
-            var favArray = JSONArray()
-            fun rebuildFav(): JSONArray = JSONArray().also { out ->
-                favoritesSorted.forEach { out.put(it) }
+            // Never silently truncate user libraries. If the Free-tier compact
+            // JSON budget is exhausted, leave BOTH local and cloud untouched.
+            if (favorites.size > 160 || merged.size > 175) {
+                throw IllegalStateException(
+                    "A biblioteca excedeu o limite compacto de sincronização. " +
+                    "Os dados locais foram preservados; é necessário aumentar o modelo cloud."
+                )
             }
-            favArray = rebuildFav()
-            while (favArray.toString().toByteArray(Charsets.UTF_8).size > 30_000 && favoritesSorted.isNotEmpty()) {
-                favoritesSorted.removeAt(favoritesSorted.lastIndex)
-                favArray = rebuildFav()
+            val favArray = JSONArray().also { out ->
+                favorites.values.sortedByDescending { it.optLong("date") }
+                    .forEach { out.put(it) }
             }
-            fun rebuildProgress(): JSONObject = JSONObject().also { out ->
-                progressSorted.forEach { out.put(it.key, it.value) }
+            val progressObject = JSONObject().also { out ->
+                merged.forEach { (id, value) -> out.put(id, value) }
             }
-            var progressObject = rebuildProgress()
-            while (progressObject.toString().toByteArray(Charsets.UTF_8).size > 60_000 && progressSorted.isNotEmpty()) {
-                progressSorted.removeAt(progressSorted.lastIndex)
-                progressObject = rebuildProgress()
+            if (favArray.toString().toByteArray(Charsets.UTF_8).size > 30_000 ||
+                progressObject.toString().toByteArray(Charsets.UTF_8).size > 60_000) {
+                throw IllegalStateException(
+                    "Os dados excederam o limite da nuvem. Nenhum favorito ou progresso foi apagado."
+                )
             }
             if (auth.patchCloudData(userId, version, favArray, progressObject)) {
                 finalFavorites = linkedMapOf<String, JSONObject>().apply {
