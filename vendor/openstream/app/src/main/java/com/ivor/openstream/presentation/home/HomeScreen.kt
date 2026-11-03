@@ -5,6 +5,7 @@ import com.ivor.openstream.data.catalog.KeylessTitle
 import com.ivor.openstream.presentation.shorts.ShortsScreen
 import com.ivor.openstream.presentation.catalog.KeylessCatalogScreen
 import com.ivor.openstream.presentation.catalog.KeylessCatalogViewModel
+import com.ivor.openstream.presentation.tv.TvAnimeTitleNavigationViewModel
 import com.ivor.openstream.presentation.components.SkeletonBox
 import com.ivor.openstream.presentation.components.AnimeCard
 import com.ivor.openstream.presentation.components.bottomContentPadding
@@ -122,13 +123,16 @@ fun HomeScreen(
     onSwitchProfile: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
     castViewModel: KeylessCastViewModel = hiltViewModel(),
-    keylessViewModel: KeylessCatalogViewModel = hiltViewModel()
+    keylessViewModel: KeylessCatalogViewModel = hiltViewModel(),
+    titleNavigation: TvAnimeTitleNavigationViewModel = hiltViewModel()
 ) {
+    val scope = rememberCoroutineScope()
     var hasVerifiedTmdbKey by remember { mutableStateOf(keylessViewModel.hasTmdbKey) }
     if (!hasVerifiedTmdbKey) {
         KeylessCatalogScreen(
             onOpenSources = onOpenSources,
             viewModel = keylessViewModel,
+            onOpenUnifiedTitle = onOpenDetails,
             onTmdbConfigured = {
                 hasVerifiedTmdbKey = true
                 viewModel.refresh()
@@ -158,6 +162,7 @@ fun HomeScreen(
             onOpenSources = onOpenSources,
             viewModel = keylessViewModel,
             initialTitle = selectedAniList,
+            onOpenUnifiedTitle = onOpenDetails,
             onInitialDismiss = { selectedAniList = null }
         )
         return
@@ -191,7 +196,6 @@ fun HomeScreen(
     val matches by viewModel.matches.collectAsState()
     val open: (AnimeDto) -> Unit = { onAnimeClick(it.id, if (it.isMovie) "movie" else "tv") }
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val undoLabel = stringResource(R.string.action_undo)
     val hide: (AnimeDto) -> Unit = { anime ->
@@ -246,7 +250,8 @@ fun HomeScreen(
             is HomeUiState.Error -> KeylessCatalogScreen(
                 onOpenSources = onOpenSources,
                 viewModel = keylessViewModel,
-                onTmdbConfigured = { viewModel.refresh() }
+                onTmdbConfigured = { viewModel.refresh() },
+                onOpenUnifiedTitle = onOpenDetails
             )
 
             is HomeUiState.Success -> PullToRefreshBox(
@@ -367,7 +372,20 @@ fun HomeScreen(
                             }
                             AniListPosterRail(
                                 items = keylessCatalogState.sections["anime"].orEmpty().take(22),
-                                onOpen = { selectedAniList = it }
+                                onOpen = { anime ->
+                                    // AniList ranks this rail, but the TMDB detail page owns
+                                    // seasons, episodes and playback for ALL matching titles.
+                                    scope.launch {
+                                        val unified = titleNavigation.resolve(anime)
+                                        if (unified != null) {
+                                            onOpenDetails(unified.first, unified.second)
+                                        } else {
+                                            // Only unmatched titles use the public metadata fallback.
+                                            // Never treat AniList IDs as TMDB identifiers.
+                                            selectedAniList = anime
+                                        }
+                                    }
+                                }
                             )
                         }
                     }
