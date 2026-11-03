@@ -16,6 +16,8 @@ internal fun sourceFailureSummary(error: Throwable): String {
             ?.groupValues?.getOrNull(1)?.toIntOrNull()
     }.firstOrNull()
     return when {
+        chain.any { it.message == "P2P_NATIVE_UNAVAILABLE" } ->
+            "Motor P2P nativo não encontrou peers ou não conseguiu preparar o vídeo"
         chain.any { it.message == "P2P_ENGINE_NOT_CONFIGURED" } ->
             "Motor P2P não configurado · ativa TorrServer em Definições > Fontes"
         httpCode == 404 || httpCode == 410 -> "HTTP $httpCode · endpoint indisponível"

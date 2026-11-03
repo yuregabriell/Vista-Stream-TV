@@ -19,6 +19,8 @@ jobs:
       - name: Android SDK
         run: |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" "build-tools;36.0.0" || "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
+      - name: Verify and install native P2P engine AAR
+        run: bash scripts/prepare-native-engine.sh
       - name: Kotlin compiler
         working-directory: vendor/openstream
         run: |

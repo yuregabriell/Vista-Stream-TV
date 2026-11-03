@@ -25,7 +25,7 @@ jobs:
           node --test web/test-addons.mjs
           node --check examples/stremio-torrent-catalog/build.mjs
           node --test examples/stremio-torrent-catalog/test.mjs
-          node -e "const fs=require('node:fs'); const c=JSON.parse(fs.readFileSync('extensions/vista-catalog.json','utf8')); if(c.extensions.length !== 6 || c.extensions.some(e => e.installedByDefault || !e.manifestUrl?.startsWith('https://'))) process.exit(1);"
+          node -e "const fs=require('node:fs'); const c=JSON.parse(fs.readFileSync('extensions/vista-catalog.json','utf8')); if(c.extensions.length < 11 || c.extensions.some(e => e.installedByDefault || !e.manifestUrl?.startsWith('https://'))) process.exit(1);"
 
   android:
     runs-on: ubuntu-latest
@@ -52,6 +52,8 @@ jobs:
           # API 37 is not yet published in the stable runner SDK index.
           # Verify the Kotlin/UI code against available API 36 without modifying repository sources.
           sed -i 's/compileSdk = 37/compileSdk = 36/' vendor/openstream/app/build.gradle.kts
+      - name: Download and verify GPLv3 native P2P engine
+        run: bash scripts/prepare-native-engine.sh
       - name: Compile mobile and TV Kotlin (without publishing an APK)
         working-directory: vendor/openstream
         run: |

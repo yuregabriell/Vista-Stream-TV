@@ -56,7 +56,8 @@ internal fun stremioToTorrServerIndex(index: Int?): Int? =
  * (`tt0133093`, or `tt0903747:1:1` for an episode) or, when the add-on accepts them, `tmdb:` ids.
  *
  * Direct URLs play with Media3; torrent hashes work only when an optional local/LAN
- * TorrServer is configured; if fileIdx is missing, the bridge may select the largest
+ * TorrServer or the opt-in native engine is configured; fileIdx can be supplied
+ * by the addon or selected from local metadata. The TorrServer bridge may select the largest
  * video file from server metadata. The Stremio
  * externalUrl field is a webpage link; only URLs clearly naming playable video
  * files are accepted, never arbitrary websites or protected players.
@@ -70,7 +71,8 @@ class StremioAddonProvider(
     private val baseUrl: String,
     private val client: OkHttpClient,
     private val json: Json,
-    private val torrentBridge: TorrServerBridge? = null
+    private val torrentBridge: TorrServerBridge? = null,
+    private val nativeBridge: VistaNativeP2pBridge? = null
 ) : StreamProvider {
     override val isEnabled: Boolean = true
 
@@ -128,19 +130,49 @@ class StremioAddonProvider(
             } == true
         }
         val torrentBase = if (hasTorrent) torrentBridge?.availableBase() else null
+        // Preparing every torrent during search would download unnecessary metadata
+        // and overload trackers. Prepare at most ONE native source per addon search.
+        val nativePrepared = mutableMapOf<String, String>()
+        if (hasTorrent && nativeBridge?.isEnabled() == true) {
+            val target = streams.asSequence().mapNotNull { it as? JsonObject }
+                .firstOrNull { it.text("infoHash")?.matches(Regex("(?i)[0-9a-f]{40}")) == true }
+            if (target != null) {
+                val hash = target.text("infoHash")!!
+                val hints = target["behaviorHints"] as? JsonObject
+                val ready = nativeBridge.prepare(
+                    hash,
+                    (target["fileIdx"] as? JsonPrimitive)?.intOrNull,
+                    hints?.text("filename")
+                )
+                if (ready != null) nativePrepared[hash.lowercase()] = ready
+            }
+        }
 
         // Add-ons often list one release several times, once per file host; keep one entry each.
         val releases = LinkedHashMap<String, MutableList<VideoServer>>()
         var missingFileIdLookups = 0
         streams.forEach { element ->
-            val candidate = (element as? JsonObject)?.let { stream ->
-                toCandidate(stream, title, torrentBase) { hash, filename ->
-                    // Metadata discovery is network-bound; limit it per addon search.
-                    if (missingFileIdLookups++ >= 3) null
-                    else torrentBase?.let { torrentBridge?.discoverFileIndex(it, hash, filename) }
+            val stream = element as? JsonObject ?: return@forEach
+            val nativeUrl = stream.text("infoHash")?.lowercase()?.let(nativePrepared::get)
+            val resolver: (String, String?) -> Int? = { hash, filename ->
+                // Metadata discovery is network-bound; limit it per addon search.
+                if (missingFileIdLookups++ >= 3) null
+                else torrentBase?.let { torrentBridge?.discoverFileIndex(it, hash, filename) }
+            }
+            val candidate = toCandidate(stream, title, torrentBase, nativeUrl, resolver)
+            if (candidate != null) {
+                releases.getOrPut(candidate.releaseKey) { mutableListOf() } += candidate.server
+            }
+            // A configured TorrServer and a native engine can be alternate mirrors.
+            // Leave the native source visible for manual fallback on the same device.
+            if (torrentBase != null && nativeUrl != null) {
+                val native = toCandidate(stream, title, null, nativeUrl, resolver)
+                if (native != null) {
+                    releases.getOrPut(native.releaseKey) { mutableListOf() } +=
+                        native.server.copy(id = native.server.id + "-native",
+                            name = native.server.name + " · nativo")
                 }
-            } ?: return@forEach
-            releases.getOrPut(candidate.releaseKey) { mutableListOf() } += candidate.server
+            }
         }
         val seenIds = HashSet<String>()
         val labelCounts = HashMap<String, Int>()
@@ -149,7 +181,10 @@ class StremioAddonProvider(
         val allMirrors = releases.values.flatMap { it }.distinctBy { it.url }
         // Do not present a missing optional P2P engine as "no episodes exist".
         if (allMirrors.isEmpty() && hasTorrent && torrentBase == null) {
-            throw IllegalStateException("P2P_ENGINE_NOT_CONFIGURED")
+            throw IllegalStateException(
+                if (nativeBridge?.isEnabled() == true) "P2P_NATIVE_UNAVAILABLE"
+                else "P2P_ENGINE_NOT_CONFIGURED"
+            )
         }
         return firstPlayableMirrors(allMirrors.map { listOf(it) }).map { server ->
             // Two releases with the same label still need different ids, and names to tell them apart.
@@ -224,6 +259,7 @@ class StremioAddonProvider(
         stream: JsonObject,
         title: String,
         torrentBase: String?,
+        nativeUrl: String?,
         missingFileIndex: (String, String?) -> Int?
     ): Candidate? {
         // Stremio externalUrl normally means a web page, NOT playable media.
@@ -244,10 +280,12 @@ class StremioAddonProvider(
         val discovered = if (direct == null && hash != null && torrentBase != null &&
             (filename != null || stremioIndex == null)) missingFileIndex(hash, filename) else null
         val torrServerIndex = discovered ?: stremioToTorrServerIndex(stremioIndex)
-        val p2p = direct == null && hash != null && torrServerIndex != null && torrentBase != null
-        val url = direct ?: if (p2p) torrentBridge?.playUrl(
+        val torrServerP2p = direct == null && hash != null &&
+            torrServerIndex != null && torrentBase != null
+        val p2p = torrServerP2p || (direct == null && nativeUrl != null)
+        val url = direct ?: if (torrServerP2p) torrentBridge?.playUrl(
             torrentBase!!, hash!!, torrServerIndex!!
-        ) else null
+        ) else nativeUrl
         if (url == null) return null
 
         val parts = StremioStreamLabels.Parts(

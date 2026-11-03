@@ -157,6 +157,9 @@ dependencies {
     debugImplementation(libs.okhttp.logging.interceptor)
     implementation(libs.okhttp.dnsoverhttps)
     implementation(libs.kotlinx.serialization.json)
+    // GPLv3 engine binary is fetched at build time by scripts/prepare-native-engine.sh,
+    // checked against the upstream SHA-256, and included only in this APK.
+    implementation(files("libs/nuvio-engine-android-0.1.6.aar"))
 
     // Local Database
     implementation(libs.androidx.room.runtime)
