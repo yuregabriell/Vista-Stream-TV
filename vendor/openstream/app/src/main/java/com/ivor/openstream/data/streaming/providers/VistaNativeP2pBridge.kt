@@ -61,10 +61,12 @@ class VistaNativeP2pBridge @Inject constructor(
                     active[key]?.let { return@withLock it }
                     val runtime = engine ?: NuvioEngine.create(
                         NuvioEngineConfig(
-                            dataDirectory = File(app.filesDir, "vista-p2p-engine").apply { mkdirs() },
+                            // Keep ALL P2P data in the app's disposable cache area,
+                            // never in persistent app files (watch history stays separate).
+                            dataDirectory = File(app.cacheDir, "vista-p2p-engine").apply { mkdirs() },
                             cacheDirectory = File(app.cacheDir, "vista-p2p-pieces").apply { mkdirs() },
                             memoryCacheCapacityBytes = 32L * 1024 * 1024,
-                            diskCacheCapacityBytes = 512L * 1024 * 1024,
+                            diskCacheCapacityBytes = 128L * 1024 * 1024,
                             torrentProfile = NuvioTorrentProfile.Balanced,
                             uploadMode = NuvioUploadMode.Disabled,
                             streamInactivityTimeoutMilliseconds = 0
