@@ -119,12 +119,15 @@ class StreamingRepositoryImpl @Inject constructor(
         // ALL_AT_ONCE means *all* installed extensions on the first request:
         // direct HTTP, Stremio, torrents and fallback engines. A fast HTTP answer
         // must not prevent torrents appearing alongside it in the picker.
-        val directProviders = if (includeFallbacks || !inOrder) {
+        val searchEveryProvider = SourceSearchPolicy.includeAllProviders(
+            appSettings.current.sourceSearchMode, includeFallbacks
+        )
+        val directProviders = if (searchEveryProvider) {
             otherProviders
         } else {
             otherProviders.filterNot(ExtensionStreamProvider::isFallback)
         }
-        val fallbackProviders = if (includeFallbacks || !inOrder) {
+        val fallbackProviders = if (searchEveryProvider) {
             emptyList()
         } else {
             otherProviders.filter(ExtensionStreamProvider::isFallback)
