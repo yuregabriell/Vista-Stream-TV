@@ -26,3 +26,9 @@
 O ficheiro `scripts/prepare-native-engine.sh` descarrega a release Android 0.1.6 com SHA-256 fixado; executar antes de compilar localmente. O CI faz isto automaticamente. Não armazenar chaves, cookies, torrents privados nem dados de sessão nos manifestos.
 
 A distribuição do APK com Nuvio Engine está sob GPLv3, enquanto os componentes MIT anteriores mantêm as suas licenças; consultar `LICENSE` e `THIRD_PARTY_NOTICES.md`.
+
+## Limpeza automática por vídeo (build seguinte à 393)
+
+Ao parar a sessão na TV ou fechar o mini-player no telemóvel, o VistaStream espera o Media3 e o Cast soltarem a ligação, invoca `stopStream()` e `removeTorrent()` no Nuvio Engine e elimina apenas o diretório `app.cacheDir/vista-p2p-pieces/payload/<hash>` do torrent desativado. Os URLs HTTP loopback removidos são igualmente eliminados, um a um, das chaves do cache Media3. Ao mudar de fonte ou episódio, preserva-se o torrent ainda em reprodução; sair do ecrã no telemóvel com o mini-player ativo **não** elimina o stream.
+
+A rotina nunca limpa a cache global, capas, metadados, legendas, histórico ou dados permanentes. Usa hashes validados e caminhos canónicos para impedir a eliminação de diretórios estranhos ao P2P. O teto de cache em disco continua a ser 128 MiB como proteção adicional. Não gere o cache de motores TorrServer externos. Se o Android matar abruptamente o processo sem executar o encerramento, a limpeza imediata não está garantida; a pasta continua na área de cache descartável do Android.
