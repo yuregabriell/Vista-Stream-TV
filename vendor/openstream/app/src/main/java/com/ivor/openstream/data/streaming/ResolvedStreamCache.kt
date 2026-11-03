@@ -28,7 +28,7 @@ class ResolvedStreamCache internal constructor(private val clock: () -> Long) {
             size > MAX_ENTRIES
     }
 
-    /** A complete resolution for [identity] found by [sources] less than [TTL_MS] ago, or null. */
+    /** Latest partial or complete discovery for the same sources and episode. */
     @Synchronized
     fun get(identity: MediaIdentity, sources: String): ServerResolution? {
         val key = identity.cacheKey
@@ -40,11 +40,19 @@ class ResolvedStreamCache internal constructor(private val clock: () -> Long) {
         return entry.resolution
     }
 
-    /** Only complete resolutions that found something are worth keeping. */
+    /**
+     * Keep the first playable candidate so reopening the title can start quickly.
+     * An incomplete entry seeds playback but never replaces a completed result or
+     * suppresses background discovery of the remaining sources.
+     */
     @Synchronized
     fun put(identity: MediaIdentity, sources: String, resolution: ServerResolution) {
-        if (!resolution.isComplete || resolution.servers.isEmpty()) return
-        entries[identity.cacheKey] = Entry(sources, resolution, clock())
+        if (resolution.servers.isEmpty()) return
+        val key = identity.cacheKey
+        val existing = entries[key]
+        if (existing?.sources == sources && existing.resolution.isComplete &&
+            !resolution.isComplete) return
+        entries[key] = Entry(sources, resolution, clock())
     }
 
     /**
