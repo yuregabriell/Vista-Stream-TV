@@ -171,27 +171,33 @@ class ExtensionRepositoryImpl @Inject constructor(
         }
 
         val available = _catalog.value.extensions.associateBy { it.key }
+        val existing = store.installs()
+        val changes = linkedMapOf<String, InstallRecord>()
         backup.installed.forEach { entry ->
             val extension = available[entry.key]
             if (extension == null || !extension.manifest.isSupported) {
                 skipped++
                 errors.add("Extensão indisponível: ${entry.key.take(100)}")
             } else {
-                if (!extension.isInstalled) {
-                    install(entry.key)
-                    extensionsInstalled++
-                } else {
-                    extensionsRestored++
-                }
-                setEnabled(entry.key, entry.enabled)
+                val previous = existing[entry.key]
+                if (previous == null) extensionsInstalled++ else extensionsRestored++
+                changes[entry.key] = InstallRecord(
+                    versionCode = previous?.versionCode ?: extension.manifest.versionCode,
+                    enabled = entry.enabled,
+                    installedAt = previous?.installedAt ?: System.currentTimeMillis()
+                )
             }
         }
-
-        val ordered = backup.sourceOrder.filter { it in available } +
-            backup.installed.map { it.key }.filter { it in available }
+        // One persistent write for all the imported entries; do not refresh the UI per item.
+        if (changes.isNotEmpty()) store.putInstalls(changes)
+        val ordered = (backup.sourceOrder + backup.installed.map { it.key })
+            .filter { it in available && (it in changes || it in existing) }
+            .distinct()
         if (ordered.isNotEmpty()) {
-            setSourceOrder(ordered.distinct())
+            val rest = store.sourceOrder().filterNot { it in ordered }
+            store.setSourceOrder(ordered + rest)
         }
+        publish(isSyncing = _catalog.value.isSyncing)
 
         ExtensionImportSummary(
             repositoriesAdded = repositoriesAdded,
