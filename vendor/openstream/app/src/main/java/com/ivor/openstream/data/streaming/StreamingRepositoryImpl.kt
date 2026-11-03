@@ -276,7 +276,7 @@ class StreamingRepositoryImpl @Inject constructor(
         val rememberedDeadline = if (remembered != null) {
             start(listOf(remembered))
             launch {
-                delay(REMEMBERED_HEAD_START_MS)
+                delay(if (tvFirstOnly) TV_REMEMBERED_HEAD_START_MS else REMEMBERED_HEAD_START_MS)
                 events.send(ResolutionEvent.RememberedDeadline)
             }
         } else {
@@ -474,6 +474,7 @@ class StreamingRepositoryImpl @Inject constructor(
 
         /** How long the source that played last time is waited on before the others start too. */
         const val REMEMBERED_HEAD_START_MS = 10_000L
+        const val TV_REMEMBERED_HEAD_START_MS = 1_500L
         const val WORKING_SOURCE_KEY = "last_working_source"
     }
 }
