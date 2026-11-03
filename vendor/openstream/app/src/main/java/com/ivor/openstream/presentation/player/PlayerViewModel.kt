@@ -789,9 +789,13 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun onPlaybackError(error: PlaybackException? = null) {
-        if (error != null) _playerEvents.tryEmit(
-            "Diagnóstico de reprodução: ${error.errorCodeName}"
-        )
+        if (error != null) {
+            val status = playbackHttpStatus(error)
+            _playerEvents.tryEmit(
+                status?.let(::playbackHttpAdvice)
+                    ?: "Diagnóstico de reprodução: ${error.errorCodeName}"
+            )
+        }
         val failed = _activeServer.value ?: return
         failedServerIds += failed.id
         // Its links may have expired: the next open of this episode searches the sources again.
