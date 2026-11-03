@@ -81,22 +81,22 @@ class StreamingRepositoryImpl @Inject constructor(
         val inOrder = appSettings.current.sourceSearchMode == SourceSearchMode.IN_ORDER
         val cacheable = preferLastWorking && !includeFallbacks
         val sources = sourcesFingerprint(installedProviders, inOrder)
+        var partialSeed: ServerResolution? = null
         if (cacheable) {
             streamCache.get(identity, sources)?.let { cached ->
-                // Ranked again: the user may have picked a different server since.
-                send(
-                    cached.copy(
-                        servers = ServerRanker.mergeAndRank(
-                            existing = emptyList(),
-                            incoming = cached.servers,
-                            providerPriorities = providerPriorities,
-                            preferredServerId = preferences.getString(preferenceKey(identity), null),
-                            providerFirst = inOrder,
-                            qualityCapHeight = appSettings.current.streamMaxHeight
-                        )
+                val ranked = cached.copy(
+                    servers = ServerRanker.mergeAndRank(
+                        existing = emptyList(),
+                        incoming = cached.servers,
+                        providerPriorities = providerPriorities,
+                        preferredServerId = preferences.getString(preferenceKey(identity), null),
+                        providerFirst = inOrder,
+                        qualityCapHeight = appSettings.current.streamMaxHeight
                     )
                 )
-                return@channelFlow
+                send(ranked)
+                if (ranked.isComplete) return@channelFlow
+                partialSeed = ranked
             }
         }
 
@@ -142,6 +142,7 @@ class StreamingRepositoryImpl @Inject constructor(
         // Shown straight away, before the id lookup, so the screen says sources are being searched.
         send(
             ServerResolution(
+                servers = partialSeed?.servers.orEmpty(),
                 totalProviders = when {
                     inOrder -> enabledProviders.size
                     remembered != null -> 1
@@ -158,7 +159,7 @@ class StreamingRepositoryImpl @Inject constructor(
         val enrichedIdentity = withTimeoutOrNull(ID_LOOKUP_TIMEOUT_MS) { idMappingService.enrich(identity) } ?: identity
         val preferredServerId = preferences.getString(preferenceKey(identity), null)
 
-        var servers = emptyList<VideoServer>()
+        var servers = partialSeed?.servers.orEmpty()
         val failedProviders = mutableListOf<String>()
 
         fun absorb(outcome: ResolutionEvent.Outcome) {
