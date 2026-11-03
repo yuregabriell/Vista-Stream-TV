@@ -179,6 +179,27 @@ class MarketplaceViewModel @Inject constructor(
         else context.getString(R.string.st_updated_count, count)
     }
 
+    fun exportExtensions(): String = repository.exportBackup()
+
+    fun importExtensions(raw: String) {
+        viewModelScope.launch {
+            repository.importBackup(raw)
+                .onSuccess { result ->
+                    message.value = "Importação concluída: ${result.repositoriesAdded} repositórios, " +
+                        "${result.extensionsInstalled} extensões instaladas e " +
+                        "${result.extensionsRestored} restauradas. " +
+                        if (result.skipped > 0) {
+                            "${result.skipped} ignoradas. ${result.errors.take(2).joinToString("; ")}"
+                        } else "Nenhuma duplicação."
+                }
+                .onFailure { message.value = "Não foi possível importar: ${it.message.orEmpty()}" }
+        }
+    }
+
+    fun showTransferMessage(text: String) {
+        message.value = text
+    }
+
     fun addRepo(url: String) {
         viewModelScope.launch {
             repository.addRepo(url)
