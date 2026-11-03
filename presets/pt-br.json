@@ -1,0 +1,107 @@
+{
+  "format": "vista-extensions",
+  "version": 1,
+  "presetId": "pt-br",
+  "name": "VistaStream · Preset PT-BR",
+  "description": "Seleção opt-in de fontes PT-BR exportada do VistaStream: fontes HTTP, Anime, addons Stremio e torrents P2P. Alguns provedores podem estar offline; instalar não garante reprodução.",
+  "repositories": [
+    "https://froststream.cloutteam.com/manifest.json",
+    "https://vista-magnet-studio-yure.amberdill2.chatgpt.site/manifest.json",
+    "https://pleiadesstream.duckdns.org/addon/torrents/manifest.json",
+    "https://animesub.duckdns.org/manifest.json",
+    "https://stremio-br-anime.onrender.com/manifest.json"
+  ],
+  "installed": [
+    {
+      "key": "raw-githubusercontent-com-ivorisnoob-openstream--3881019699/zeus",
+      "enabled": true
+    },
+    {
+      "key": "raw-githubusercontent-com-ivorisnoob-openstream--3881019699/froststream",
+      "enabled": true
+    },
+    {
+      "key": "raw-githubusercontent-com-ivorisnoob-openstream--3881019699/fenixflix",
+      "enabled": true
+    },
+    {
+      "key": "raw-githubusercontent-com-ivorisnoob-openstream--3881019699/yoru",
+      "enabled": true
+    },
+    {
+      "key": "raw-githubusercontent-com-ivorisnoob-openstream--3881019699/cypher",
+      "enabled": true
+    },
+    {
+      "key": "raw-githubusercontent-com-ivorisnoob-openstream--3881019699/vista-native-harvester",
+      "enabled": true
+    },
+    {
+      "key": "raw-githubusercontent-com-ivorisnoob-openstream--3881019699/vista-native-animefire",
+      "enabled": true
+    },
+    {
+      "key": "raw-githubusercontent-com-ivorisnoob-openstream--3881019699/vista-native-goyabu",
+      "enabled": true
+    },
+    {
+      "key": "froststream-cloutteam-com-manifest-json-1982450452/com-froststream",
+      "enabled": true
+    },
+    {
+      "key": "api-strem-io-addonscollection-json-268304020/stremio-imdb-ratings-local-f032be56",
+      "enabled": true
+    },
+    {
+      "key": "pleiadesstream-duckdns-org-addon-torrents-manife-3946380577/local-riq-pleiades-torrents",
+      "enabled": true
+    },
+    {
+      "key": "vista-magnet-studio-yure-amberdill2-chatgpt-site-735970690/org-vista-magnet-studio",
+      "enabled": true
+    },
+    {
+      "key": "raw-githubusercontent-com-yuregabriell-vista-str-3781536406/mico-leao-dublado",
+      "enabled": true
+    },
+    {
+      "key": "raw-githubusercontent-com-yuregabriell-vista-str-3781536406/cinetorrent",
+      "enabled": true
+    },
+    {
+      "key": "raw-githubusercontent-com-yuregabriell-vista-str-3781536406/selectavision",
+      "enabled": true
+    },
+    {
+      "key": "raw-githubusercontent-com-yuregabriell-vista-str-3781536406/magneto",
+      "enabled": true
+    },
+    {
+      "key": "raw-githubusercontent-com-yuregabriell-vista-str-3781536406/torrentio-brazuca",
+      "enabled": true
+    },
+    {
+      "key": "raw-githubusercontent-com-yuregabriell-vista-str-3781536406/torrentio",
+      "enabled": true
+    },
+    {
+      "key": "raw-githubusercontent-com-yuregabriell-vista-str-3781536406/mediafusion",
+      "enabled": true
+    },
+    {
+      "key": "raw-githubusercontent-com-yuregabriell-vista-str-3781536406/comet",
+      "enabled": true
+    },
+    {
+      "key": "raw-githubusercontent-com-yuregabriell-vista-str-3781536406/brazuca-torrents",
+      "enabled": true
+    }
+  ],
+  "sourceOrder": [
+    "raw-githubusercontent-com-ivorisnoob-openstream--3881019699/zeus",
+    "raw-githubusercontent-com-ivorisnoob-openstream--3881019699/froststream",
+    "raw-githubusercontent-com-ivorisnoob-openstream--3881019699/fenixflix",
+    "raw-githubusercontent-com-ivorisnoob-openstream--3881019699/yoru",
+    "raw-githubusercontent-com-ivorisnoob-openstream--3881019699/cypher"
+  ]
+}
