@@ -162,11 +162,12 @@ class VistaNativeP2pBridge @Inject constructor(
     suspend fun prepare(
         hashRaw: String,
         stremioFileIndex: Int?,
-        filename: String?
+        filename: String?,
+        trackers: List<String> = emptyList()
     ): String? = withContext(Dispatchers.IO) {
         if (!isEnabled()) return@withContext null
-        val hash = hashRaw.trim().lowercase(Locale.ROOT)
-        if (!hash.matches(Regex("[a-f0-9]{40}"))) return@withContext null
+        val hash = stremioBtih(hashRaw) ?: return@withContext null
+        val magnet = stremioMagnet(hash, trackers) ?: return@withContext null
         if (stremioFileIndex != null && stremioFileIndex !in 0..9_999) return@withContext null
         val preferredName = filename?.trim()?.takeIf { it.isNotEmpty() && it.length <= 255 }
         val key = "$hash/${stremioFileIndex ?: -1}/${preferredName.orEmpty()}"
@@ -188,7 +189,7 @@ class VistaNativeP2pBridge @Inject constructor(
                         )
                     ).also { engine = it }
                     attemptedHashes += hash
-                    val id = runtime.addMagnet("magnet:?xt=urn:btih:$hash")
+                    val id = runtime.addMagnet(magnet)
                     val prepared = runtime.prepareStream(
                         torrentId = id,
                         fileIndex = if (preferredName == null) stremioFileIndex else null,

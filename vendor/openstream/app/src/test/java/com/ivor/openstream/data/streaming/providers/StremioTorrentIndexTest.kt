@@ -38,6 +38,34 @@ class StremioTorrentIndexTest {
         assertNull(largestTorrServerVideoIndex(status, "Episode 03.mkv"))
     }
 
+    @Test fun selectsTheExactEpisodeEvenWhenItIsSmaller() {
+        val stat = """
+            {"file_stats":[
+                {"id":1,"path":"Season/Show.S01E02.mkv","length":9000},
+                {"id":2,"path":"Season/Show.S01E01.mkv","length":5000}
+            ]}
+        """.trimIndent()
+        assertEquals(2, safeTorrServerEpisodeVideoIndex(stat, 1, 1))
+        assertEquals(1, safeTorrServerEpisodeVideoIndex(stat, 1, 2))
+        assertNull(safeTorrServerEpisodeVideoIndex(stat, 1, 3))
+    }
+
+    @Test fun refusesToGuessWhenEpisodeCannotBeMatched() {
+        val stat = """
+            {"file_stats":[
+                {"id":1,"path":"part-a.mkv","length":9000},
+                {"id":2,"path":"part-b.mkv","length":5000}
+            ]}
+        """.trimIndent()
+        assertNull(safeTorrServerEpisodeVideoIndex(stat, 1, 2))
+        assertEquals(2, safeTorrServerEpisodeVideoIndex(stat, 1, 2, "part-b.mkv"))
+    }
+
+    @Test fun singleVideoTorrentCanBeUsedWithoutEpisodeName() {
+        val stat = """{"file_stats":[{"id":3,"path":"video.mkv","length":5000}]}"""
+        assertEquals(3, safeTorrServerEpisodeVideoIndex(stat, 1, 2))
+    }
+
     @Test fun rejectsEmptyOrUnrecognizedTorrentMetadata() {
         assertNull(largestTorrServerVideoIndex("not-json"))
         assertNull(largestTorrServerVideoIndex("""{"file_stats":[{"id":1,"path":"setup.exe","length":12000}]}"""))

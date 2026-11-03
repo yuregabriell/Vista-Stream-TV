@@ -20,6 +20,8 @@ internal fun sourceFailureSummary(error: Throwable): String {
             "Motor P2P nativo não encontrou peers ou não conseguiu preparar o vídeo"
         chain.any { it.message == "P2P_ENGINE_NOT_CONFIGURED" } ->
             "Motor P2P não configurado · ativa TorrServer em Definições > Fontes"
+        chain.any { it.message == "P2P_METADATA_UNAVAILABLE" } ->
+            "Metadados P2P indisponíveis ou episódio não identificado no torrent"
         httpCode == 404 || httpCode == 410 -> "HTTP $httpCode · endpoint indisponível"
         httpCode == 401 || httpCode == 403 -> "HTTP $httpCode · acesso recusado"
         httpCode == 429 -> "HTTP 429 · limite de pedidos"

@@ -46,6 +46,50 @@ internal fun largestTorrServerVideoIndex(response: String, preferredFilename: St
     }
 }.getOrNull()
 
+
+/**
+ * For a multi-video torrent, match the requested episode in the actual metadata.
+ * Refuse to guess by file size or by unverified torrent file order.
+ */
+internal fun safeTorrServerEpisodeVideoIndex(
+    response: String,
+    season: Int,
+    episode: Int,
+    preferredFilename: String? = null
+): Int? = runCatching {
+    if (season < 0 || episode < 1) return@runCatching null
+    val root = Json.parseToJsonElement(response) as? JsonObject ?: return@runCatching null
+    val videos = (root["file_stats"] as? JsonArray).orEmpty().mapNotNull { entry ->
+        val file = entry as? JsonObject ?: return@mapNotNull null
+        val id = (file["id"] as? JsonPrimitive)?.intOrNull ?: return@mapNotNull null
+        val path = (file["path"] as? JsonPrimitive)?.contentOrNull
+            ?.lowercase(Locale.ROOT)?.replace('\\', '/') ?: return@mapNotNull null
+        val length = (file["length"] as? JsonPrimitive)?.longOrNull ?: return@mapNotNull null
+        if (id !in 1..10_000 || length <= 0 ||
+            listOf(".mp4", ".mkv", ".webm", ".avi", ".mov", ".m4v", ".ts")
+                .none(path::endsWith)) return@mapNotNull null
+        id to path
+    }
+    val requested = preferredFilename?.substringAfterLast('/')?.substringAfterLast('\\')
+        ?.trim()?.lowercase(Locale.ROOT)?.takeIf { it.isNotEmpty() }
+    if (requested != null) {
+        return@runCatching videos.singleOrNull { it.second.substringAfterLast('/') == requested }?.first
+    }
+    // A torrent containing exactly one video needs no file-order guesswork.
+    if (videos.size == 1) return@runCatching videos[0].first
+    val sxe = Regex("(?i)(?:^|[^a-z0-9])s0*" + season +
+        "[._ -]*e0*" + episode + "(?:[^0-9]|$)")
+    val times = Regex("(?i)(?:^|[^a-z0-9])0*" + season +
+        "x0*" + episode + "(?:[^0-9]|$)")
+    val episodeLabel = Regex("(?i)(?:^|[^a-z0-9])(?:ep|episode)[._ -]*0*" +
+        episode + "(?:[^0-9]|$)")
+    val matches = videos.filter { (_, path) ->
+        sxe.containsMatchIn(path) || times.containsMatchIn(path) ||
+            episodeLabel.containsMatchIn(path)
+    }
+    matches.singleOrNull()?.first
+}.getOrNull()
+
 class TorrServerBridge(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("vs_torrserver_v1", Context.MODE_PRIVATE)
 
@@ -149,13 +193,17 @@ class TorrServerBridge(context: Context) {
     /** Select an exact filename when provided; otherwise largest plausible video.
      * The metadata request is bounded and never starts downloading full video.
      */
-    fun discoverFileIndex(base: String, rawHash: String, preferredFilename: String? = null): Int? {
-        val hash = rawHash.trim().lowercase(Locale.ROOT)
-        if (!hash.matches(Regex("[a-f0-9]{40}")) || canonicalAddress(base) != base) return null
-        val key = "$base/$hash/${preferredFilename.orEmpty().lowercase(Locale.ROOT)}"
+    fun discoverFileIndex(
+        base: String, rawHash: String, preferredFilename: String? = null,
+        season: Int? = null, episode: Int? = null, trackers: List<String> = emptyList()
+    ): Int? {
+        val hash = stremioBtih(rawHash) ?: return null
+        if (canonicalAddress(base) != base) return null
+        val magnet = stremioMagnet(hash, trackers) ?: return null
+        val key = "$base/$hash/${preferredFilename.orEmpty().lowercase(Locale.ROOT)}/$season/$episode"
         selectedFileIds[key]?.let { return it }
         val url = Uri.parse("$base/stream/video").buildUpon()
-            .appendQueryParameter("link", "magnet:?xt=urn:btih:$hash")
+            .appendQueryParameter("link", magnet)
             .appendQueryParameter("stat", "")
             .build().toString()
         val index = runCatching {
@@ -164,20 +212,22 @@ class TorrServerBridge(context: Context) {
             connection.readTimeout = 1_800
             try {
                 if (connection.responseCode != 200) null
-                else largestTorrServerVideoIndex(
-                    connection.inputStream.bufferedReader().use { it.readText() }, preferredFilename
-                )
+                else {
+                    val metadata = connection.inputStream.bufferedReader().use { it.readText() }
+                    if (season != null && episode != null)
+                        safeTorrServerEpisodeVideoIndex(metadata, season, episode, preferredFilename)
+                    else largestTorrServerVideoIndex(metadata, preferredFilename)
+                }
             } finally { connection.disconnect() }
         }.getOrNull()
         if (index != null) selectedFileIds[key] = index
         return index
     }
 
-    fun playUrl(base: String, rawHash: String, fileIndex: Int): String? {
-        val hash = rawHash.trim().lowercase(Locale.ROOT)
-        if (!hash.matches(Regex("[a-f0-9]{40}")) || fileIndex !in 0..10_000 ||
-            canonicalAddress(base) != base) return null
-        val magnet = "magnet:?xt=urn:btih:$hash"
+    fun playUrl(base: String, rawHash: String, fileIndex: Int, trackers: List<String> = emptyList()): String? {
+        val hash = stremioBtih(rawHash) ?: return null
+        if (fileIndex !in 1..10_000 || canonicalAddress(base) != base) return null
+        val magnet = stremioMagnet(hash, trackers) ?: return null
         return Uri.parse("$base/stream/video").buildUpon()
             .appendQueryParameter("link", magnet)
             .appendQueryParameter("index", fileIndex.toString())

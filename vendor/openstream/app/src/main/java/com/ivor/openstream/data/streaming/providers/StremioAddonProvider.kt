@@ -88,7 +88,7 @@ class StremioAddonProvider(
 
             // The add-on's preferred id scheme first; the next only when the first finds nothing.
             for (videoId in candidateIds(identity, info)) {
-                val servers = fetchStreams(type, videoId, identity.title)
+                val servers = fetchStreams(type, videoId, identity.title, identity.season, identity.episode)
                 if (servers.isNotEmpty()) return@withContext Result.success(servers)
             }
             Result.success(emptyList())
@@ -100,19 +100,29 @@ class StremioAddonProvider(
         }
     }
 
-    private fun candidateIds(identity: MediaIdentity, info: AddonInfo): List<String> {
-        val suffix = if (identity.tmdbType == "movie") "" else ":${identity.season}:${identity.episode}"
-        val prefixes = info.idPrefixes
-        val imdb = identity.imdbId?.takeIf { it.startsWith("tt") }
-        val takesImdb = prefixes == null || prefixes.any { it.startsWith("tt") || it == "imdb" }
-        val takesTmdb = prefixes != null && prefixes.any { it.startsWith("tmdb") }
-        return buildList {
-            if (imdb != null && takesImdb) add(imdb + suffix)
-            if (takesTmdb && identity.tmdbId > 0) add("tmdb:${identity.tmdbId}$suffix")
-        }
+    private fun candidateIds(identity: MediaIdentity, info: AddonInfo): List<String> =
+        stremioCandidateIds(identity, info.idPrefixes)
+
+    private fun torrentHash(stream: JsonObject): String? =
+        stremioBtih(stream.text("infoHash")) ?: stremioBtihFromMagnet(stream.text("url"))
+
+    private fun torrentTrackers(stream: JsonObject): List<String> =
+        stremioTrackerUrls(
+            (stream["sources"] as? JsonArray).orEmpty()
+                .mapNotNull { (it as? JsonPrimitive)?.contentOrNull },
+            stream.text("url")
+        )
+
+    private fun nativeKey(stream: JsonObject): String? {
+        val hash = torrentHash(stream) ?: return null
+        val hints = stream["behaviorHints"] as? JsonObject
+        val idx = (stream["fileIdx"] as? JsonPrimitive)?.intOrNull ?: -1
+        return hash + "/" + idx + "/" + hints?.text("filename").orEmpty()
     }
 
-    private suspend fun fetchStreams(type: String, videoId: String, title: String): List<VideoServer> {
+    private suspend fun fetchStreams(
+        type: String, videoId: String, title: String, season: Int, episode: Int
+    ): List<VideoServer> {
         val url = baseUrl.toHttpUrlOrNull()?.newBuilder()
             ?.addPathSegment("stream")
             ?.addPathSegment(type)
@@ -124,27 +134,27 @@ class StremioAddonProvider(
 
         // Optional: only use TorrServer when the addon returns torrent results.
         // /echo verifies the local/LAN engine without downloading a torrent.
-        val hasTorrent = streams.any { element ->
-            (element as? JsonObject)?.let {
-                it.text("infoHash") != null || it.text("url")?.startsWith("magnet:") == true
-            } == true
-        }
+        val hasTorrent = streams.any { (it as? JsonObject)?.let(::torrentHash) != null }
         val torrentBase = if (hasTorrent) torrentBridge?.availableBase() else null
-        // Preparing every torrent during search would download unnecessary metadata
-        // and overload trackers. Prepare at most ONE native source per addon search.
+        // Native metadata discovery is slow. If TorrServer is available it handles
+        // ALL results; otherwise try at most two distinct native candidates, so one
+        // stalled torrent does not starve every other provider in the global search.
         val nativePrepared = mutableMapOf<String, String>()
-        if (hasTorrent && nativeBridge?.isEnabled() == true) {
-            val target = streams.asSequence().mapNotNull { it as? JsonObject }
-                .firstOrNull { it.text("infoHash")?.matches(Regex("(?i)[0-9a-f]{40}")) == true }
-            if (target != null) {
-                val hash = target.text("infoHash")!!
+        if (hasTorrent && torrentBase == null && nativeBridge?.isEnabled() == true) {
+            val targets = streams.asSequence().mapNotNull { it as? JsonObject }
+                .filter { torrentHash(it) != null }.distinctBy { nativeKey(it) }.take(2)
+            for (target in targets) {
+                val hash = torrentHash(target) ?: continue
                 val hints = target["behaviorHints"] as? JsonObject
                 val ready = nativeBridge.prepare(
                     hash,
                     (target["fileIdx"] as? JsonPrimitive)?.intOrNull,
-                    hints?.text("filename")
+                    hints?.text("filename"),
+                    torrentTrackers(target)
                 )
-                if (ready != null) nativePrepared[hash.lowercase()] = ready
+                if (ready != null) {
+                    nativeKey(target)?.let { nativePrepared[it] = ready }
+                }
             }
         }
 
@@ -153,20 +163,27 @@ class StremioAddonProvider(
         var missingFileIdLookups = 0
         streams.forEach { element ->
             val stream = element as? JsonObject ?: return@forEach
-            val nativeUrl = stream.text("infoHash")?.lowercase()?.let(nativePrepared::get)
-            val resolver: (String, String?) -> Int? = { hash, filename ->
+            val nativeUrl = nativeKey(stream)?.let(nativePrepared::get)
+            val resolver: (String, String?, List<String>) -> Int? = { hash, filename, trackers ->
                 // Metadata discovery is network-bound; limit it per addon search.
                 if (missingFileIdLookups++ >= 3) null
-                else torrentBase?.let { torrentBridge?.discoverFileIndex(it, hash, filename) }
+                else torrentBase?.let {
+                    torrentBridge?.discoverFileIndex(
+                        it, hash, filename,
+                        if (type == "series") season else null,
+                        if (type == "series") episode else null,
+                        trackers
+                    )
+                }
             }
-            val candidate = toCandidate(stream, title, torrentBase, nativeUrl, resolver)
+            val candidate = toCandidate(stream, title, torrentBase, nativeUrl, resolver, type == "series")
             if (candidate != null) {
                 releases.getOrPut(candidate.releaseKey) { mutableListOf() } += candidate.server
             }
             // A configured TorrServer and a native engine can be alternate mirrors.
             // Leave the native source visible for manual fallback on the same device.
             if (torrentBase != null && nativeUrl != null) {
-                val native = toCandidate(stream, title, null, nativeUrl, resolver)
+                val native = toCandidate(stream, title, null, nativeUrl, resolver, type == "series")
                 if (native != null) {
                     releases.getOrPut(native.releaseKey) { mutableListOf() } +=
                         native.server.copy(id = native.server.id + "-native",
@@ -180,9 +197,10 @@ class StremioAddonProvider(
         // per release). Deduplicate identical URLs, never cap by a fixed source count.
         val allMirrors = releases.values.flatMap { it }.distinctBy { it.url }
         // Do not present a missing optional P2P engine as "no episodes exist".
-        if (allMirrors.isEmpty() && hasTorrent && torrentBase == null) {
+        if (allMirrors.isEmpty() && hasTorrent) {
             throw IllegalStateException(
-                if (nativeBridge?.isEnabled() == true) "P2P_NATIVE_UNAVAILABLE"
+                if (torrentBase != null) "P2P_METADATA_UNAVAILABLE"
+                else if (nativeBridge?.isEnabled() == true) "P2P_NATIVE_UNAVAILABLE"
                 else "P2P_ENGINE_NOT_CONFIGURED"
             )
         }
@@ -260,7 +278,8 @@ class StremioAddonProvider(
         title: String,
         torrentBase: String?,
         nativeUrl: String?,
-        missingFileIndex: (String, String?) -> Int?
+        missingFileIndex: (String, String?, List<String>) -> Int?,
+        isSeries: Boolean
     ): Candidate? {
         // Stremio externalUrl normally means a web page, NOT playable media.
         // A few addons return a genuine direct media URL here instead of under
@@ -269,22 +288,25 @@ class StremioAddonProvider(
         val direct = stream.text("url")?.trim()
             ?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
             ?: directMediaExternalUrl(stream.text("externalUrl"))
-        val rawMagnet = stream.text("url")?.takeIf { it.startsWith("magnet:?") }
-        val hash = stream.text("infoHash")
-            ?: rawMagnet?.let { Regex("(?i)urn:btih:([a-f0-9]{40})").find(it)?.groupValues?.getOrNull(1) }
+        val hash = torrentHash(stream)
+        val trackers = torrentTrackers(stream)
         val hints = stream["behaviorHints"] as? JsonObject
         val filename = hints?.text("filename")
         // Stremio fileIdx uses torrent order, while TorrServer enumerates files
         // sorted by filename. Prefer exact filename from TorrServer metadata.
         val stremioIndex = (stream["fileIdx"] as? JsonPrimitive)?.intOrNull
-        val discovered = if (direct == null && hash != null && torrentBase != null &&
-            (filename != null || stremioIndex == null)) missingFileIndex(hash, filename) else null
-        val torrServerIndex = discovered ?: stremioToTorrServerIndex(stremioIndex)
+        val discovered = if (direct == null && hash != null && torrentBase != null)
+            missingFileIndex(hash, filename, trackers) else null
+        // A naive fileIdx + 1 can select the wrong episode: TorrServer's file
+        // ordering need not be the add-on's torrent ordering. For TV require
+        // filename/episode verification from the server metadata before playback.
+        val torrServerIndex = discovered ?:
+            if (!isSeries) stremioToTorrServerIndex(stremioIndex) else null
         val torrServerP2p = direct == null && hash != null &&
             torrServerIndex != null && torrentBase != null
         val p2p = torrServerP2p || (direct == null && nativeUrl != null)
         val url = direct ?: if (torrServerP2p) torrentBridge?.playUrl(
-            torrentBase!!, hash!!, torrServerIndex!!
+            torrentBase!!, hash!!, torrServerIndex!!, trackers
         ) else nativeUrl
         if (url == null) return null
 
