@@ -5,6 +5,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -265,7 +266,8 @@ fun TvSettingsScreen(
 private fun SettingListItem(row: SettingRow, modifier: Modifier, onOpenChoice: () -> Unit) {
     if (row is SettingRow.Info) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            // Keep the first row a real D-pad focus target for the right pane.
+            modifier = modifier.fillMaxWidth().focusable().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(row.title, style = MaterialTheme.typography.titleMedium)
