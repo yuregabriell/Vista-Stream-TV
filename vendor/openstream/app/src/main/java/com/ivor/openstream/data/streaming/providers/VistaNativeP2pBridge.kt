@@ -48,6 +48,12 @@ internal fun isolatedTorrentPayloadDirectory(cacheDirectory: File, torrentId: St
     }.getOrNull()
 }
 
+/** A scoped delete with no effect on any other torrent, poster, or app cache. */
+internal fun purgeIsolatedTorrentPayload(cacheDirectory: File, torrentId: String): Boolean {
+    val target = isolatedTorrentPayloadDirectory(cacheDirectory, torrentId) ?: return false
+    return !target.exists() || target.deleteRecursively()
+}
+
 @Singleton
 class VistaNativeP2pBridge @Inject constructor(
     @ApplicationContext context: Context
@@ -111,10 +117,9 @@ class VistaNativeP2pBridge @Inject constructor(
 
                 active.entries.removeAll { it.value.torrentId == torrentId }
                 removedMediaUrls += sessions.map { it.url }
-                val payload = isolatedTorrentPayloadDirectory(
+                if (!purgeIsolatedTorrentPayload(
                     File(app.cacheDir, "vista-p2p-pieces"), torrentId
-                )
-                if (payload != null && payload.exists() && !payload.deleteRecursively()) {
+                )) {
                     Log.w("VistaNativeP2p", "Could not erase an isolated torrent payload")
                 }
             }
