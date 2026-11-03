@@ -145,12 +145,13 @@ class StremioAddonProvider(
         val hasTorrent = streams.any { (it as? JsonObject)?.let(::torrentHash) != null }
         val torrentBase = if (hasTorrent) torrentBridge?.availableBase() else null
         // Native metadata discovery is slow. If TorrServer is available it handles
-        // ALL results; otherwise try at most two distinct native candidates, so one
+        // ALL results; otherwise prepare only one candidate on a TV (two on mobile), so one
         // stalled torrent does not starve every other provider in the global search.
         val nativePrepared = mutableMapOf<String, String>()
         if (hasTorrent && torrentBase == null && nativeBridge?.isEnabled() == true) {
             val targets = streams.asSequence().mapNotNull { it as? JsonObject }
-                .filter { torrentHash(it) != null }.distinctBy { nativeKey(it) }.take(2)
+                .filter { torrentHash(it) != null }.distinctBy { nativeKey(it) }
+                .take(if (nativeBridge.isTelevisionDevice()) 1 else 2)
             for (target in targets) {
                 val hash = torrentHash(target) ?: continue
                 val hints = target["behaviorHints"] as? JsonObject
