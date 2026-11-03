@@ -3,6 +3,8 @@ package com.ivor.openstream.data.streaming.providers
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import com.ivor.openstream.data.cache.CacheBudget
+import com.ivor.openstream.presentation.tv.TvDetect
 import com.nuvio.engine.NuvioEngine
 import com.nuvio.engine.NuvioEngineConfig
 import com.nuvio.engine.NuvioTorrentProfile
@@ -236,8 +238,10 @@ class VistaNativeP2pBridge @Inject constructor(
                             // never in persistent app files (watch history stays separate).
                             dataDirectory = File(app.cacheDir, "vista-p2p-engine").apply { mkdirs() },
                             cacheDirectory = File(app.cacheDir, "vista-p2p-pieces").apply { mkdirs() },
-                            memoryCacheCapacityBytes = 32L * 1024 * 1024,
-                            diskCacheCapacityBytes = 128L * 1024 * 1024,
+                            memoryCacheCapacityBytes = if (TvDetect.isTv(app))
+                                CacheBudget.TV_P2P_MEMORY_MAX_BYTES else 32L * 1024 * 1024,
+                            diskCacheCapacityBytes = if (TvDetect.isTv(app))
+                                CacheBudget.TV_P2P_DISK_MAX_BYTES else 128L * 1024 * 1024,
                             torrentProfile = NuvioTorrentProfile.Balanced,
                             uploadMode = NuvioUploadMode.Disabled,
                             streamInactivityTimeoutMilliseconds = 0
