@@ -293,19 +293,24 @@ class StreamingRepositoryImpl @Inject constructor(
      */
     private suspend fun runProvider(provider: ExtensionStreamProvider, identity: MediaIdentity): ResolutionEvent.Outcome {
         val work = providerScope.async {
-            try {
-                provider.resolve(identity)
-            } catch (cancelled: CancellationException) {
-                // Its own internal timeout, not us cancelling it: that is a failure to report.
-                if (!isActive) throw cancelled
-                Result.failure(IOException("Timed out", cancelled))
-            } catch (error: Throwable) {
-                Result.failure(error)
+            providerSlots.withPermit {
+                try {
+                    // Timeout starts when a real worker slot becomes available, not
+                    // while waiting in the bounded queue.
+                    withTimeoutOrNull(PROVIDER_TIMEOUT_MS) {
+                        provider.resolve(identity)
+                    } ?: Result.failure(IOException("Provider timed out"))
+                } catch (cancelled: CancellationException) {
+                    if (!isActive) throw cancelled
+                    Result.failure(IOException("Cancelled", cancelled))
+                } catch (error: Exception) {
+                    Result.failure(error)
+                }
             }
         }
         try {
             val result = try {
-                withTimeoutOrNull(PROVIDER_TIMEOUT_MS) { work.await() }
+                withTimeoutOrNull(PROVIDER_TIMEOUT_MS + PROVIDER_QUEUE_TIMEOUT_MS) { work.await() }
                     ?: Result.failure(IOException("No answer within ${PROVIDER_TIMEOUT_MS / 1000} s"))
             } catch (cancelled: CancellationException) {
                 // Rethrows only if the caller is really gone; otherwise every provider must
@@ -417,6 +422,8 @@ class StreamingRepositoryImpl @Inject constructor(
         const val TAG = "StreamingRepository"
 
         /** Long enough for a WebView source (native hoster pass, then up to 17 s in the WebView). */
+        const val MAX_CONCURRENT_PROVIDERS = 8
+        const val PROVIDER_QUEUE_TIMEOUT_MS = 50_000L
         const val PROVIDER_TIMEOUT_MS = 25_000L
         const val ID_LOOKUP_TIMEOUT_MS = 8_000L
         const val FALLBACK_HEAD_START_MS = 8_000L
