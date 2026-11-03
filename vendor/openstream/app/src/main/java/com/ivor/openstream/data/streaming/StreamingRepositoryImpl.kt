@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
@@ -52,6 +54,8 @@ class StreamingRepositoryImpl @Inject constructor(
      * call can't hold the flow open past its deadline; it is cancelled when it stops mattering.
      */
     private val providerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Bound costly native torrent, WebView, and HTTP resolver work on Android TV.
+    private val providerSlots = Semaphore(MAX_CONCURRENT_PROVIDERS)
 
     /**
      * By default every installed provider runs at once and servers are sent as each one answers,
@@ -76,22 +80,22 @@ class StreamingRepositoryImpl @Inject constructor(
         val inOrder = appSettings.current.sourceSearchMode == SourceSearchMode.IN_ORDER
         val cacheable = preferLastWorking && !includeFallbacks
         val sources = sourcesFingerprint(installedProviders, inOrder)
+        var partialSeed: ServerResolution? = null
         if (cacheable) {
             streamCache.get(identity, sources)?.let { cached ->
-                // Ranked again: the user may have picked a different server since.
-                send(
-                    cached.copy(
-                        servers = ServerRanker.mergeAndRank(
-                            existing = emptyList(),
-                            incoming = cached.servers,
-                            providerPriorities = providerPriorities,
-                            preferredServerId = preferences.getString(preferenceKey(identity), null),
-                            providerFirst = inOrder,
-                            qualityCapHeight = appSettings.current.streamMaxHeight
-                        )
+                val ranked = cached.copy(
+                    servers = ServerRanker.mergeAndRank(
+                        existing = emptyList(),
+                        incoming = cached.servers,
+                        providerPriorities = providerPriorities,
+                        preferredServerId = preferences.getString(preferenceKey(identity), null),
+                        providerFirst = inOrder,
+                        qualityCapHeight = appSettings.current.streamMaxHeight
                     )
                 )
-                return@channelFlow
+                send(ranked)
+                if (ranked.isComplete) return@channelFlow
+                partialSeed = ranked
             }
         }
 
@@ -137,6 +141,7 @@ class StreamingRepositoryImpl @Inject constructor(
         // Shown straight away, before the id lookup, so the screen says sources are being searched.
         send(
             ServerResolution(
+                servers = partialSeed?.servers.orEmpty(),
                 totalProviders = when {
                     inOrder -> enabledProviders.size
                     remembered != null -> 1
@@ -150,10 +155,19 @@ class StreamingRepositoryImpl @Inject constructor(
         }
 
         // Providers that only know IMDb ids need this; the rest must not wait long on TMDB for it.
-        val enrichedIdentity = withTimeoutOrNull(ID_LOOKUP_TIMEOUT_MS) { idMappingService.enrich(identity) } ?: identity
+        // A slow IMDb mapping must not block HTTP/native resolvers that only need TMDB.
+        // Start the lookup lazily as soon as a Stremio provider requires it.
+        val enrichedIdentity by lazy {
+            // Instantiate only if an installed Stremio addon needs the IMDb ID.
+            async(Dispatchers.IO) {
+                withTimeoutOrNull(ID_LOOKUP_TIMEOUT_MS) { idMappingService.enrich(identity) } ?: identity
+            }
+        }
+        suspend fun identityFor(provider: ExtensionStreamProvider): MediaIdentity =
+            if (provider.requiresIdEnrichment) enrichedIdentity.await() else identity
         val preferredServerId = preferences.getString(preferenceKey(identity), null)
 
-        var servers = emptyList<VideoServer>()
+        var servers = partialSeed?.servers.orEmpty()
         val failedProviders = mutableListOf<String>()
 
         fun absorb(outcome: ResolutionEvent.Outcome) {
@@ -189,7 +203,7 @@ class StreamingRepositoryImpl @Inject constructor(
             // source that played last time jumps the queue.
             val ordered = listOfNotNull(remembered) + otherProviders
             ordered.forEachIndexed { index, provider ->
-                absorb(runProvider(provider, enrichedIdentity))
+                absorb(runProvider(provider, identityFor(provider)))
                 val found = servers.isNotEmpty()
                 publish(progress(servers, index + 1, ordered.size, failedProviders, isComplete = found || index == ordered.lastIndex))
                 if (found) return@channelFlow
@@ -208,7 +222,9 @@ class StreamingRepositoryImpl @Inject constructor(
         fun start(providers: List<ExtensionStreamProvider>) {
             pending += providers.size
             total += providers.size
-            providers.forEach { provider -> launch { events.send(runProvider(provider, enrichedIdentity)) } }
+            providers.forEach { provider ->
+                launch { events.send(runProvider(provider, identityFor(provider))) }
+            }
         }
 
         fun startFallbacks() {
@@ -279,19 +295,24 @@ class StreamingRepositoryImpl @Inject constructor(
      */
     private suspend fun runProvider(provider: ExtensionStreamProvider, identity: MediaIdentity): ResolutionEvent.Outcome {
         val work = providerScope.async {
-            try {
-                provider.resolve(identity)
-            } catch (cancelled: CancellationException) {
-                // Its own internal timeout, not us cancelling it: that is a failure to report.
-                if (!isActive) throw cancelled
-                Result.failure(IOException("Timed out", cancelled))
-            } catch (error: Throwable) {
-                Result.failure(error)
+            providerSlots.withPermit {
+                try {
+                    // Timeout starts when a real worker slot becomes available, not
+                    // while waiting in the bounded queue.
+                    withTimeoutOrNull(PROVIDER_TIMEOUT_MS) {
+                        provider.resolve(identity)
+                    } ?: Result.failure(IOException("Provider timed out"))
+                } catch (cancelled: CancellationException) {
+                    if (!isActive) throw cancelled
+                    Result.failure(IOException("Cancelled", cancelled))
+                } catch (error: Exception) {
+                    Result.failure(error)
+                }
             }
         }
         try {
             val result = try {
-                withTimeoutOrNull(PROVIDER_TIMEOUT_MS) { work.await() }
+                withTimeoutOrNull(PROVIDER_TIMEOUT_MS + PROVIDER_QUEUE_TIMEOUT_MS) { work.await() }
                     ?: Result.failure(IOException("No answer within ${PROVIDER_TIMEOUT_MS / 1000} s"))
             } catch (cancelled: CancellationException) {
                 // Rethrows only if the caller is really gone; otherwise every provider must
@@ -403,6 +424,8 @@ class StreamingRepositoryImpl @Inject constructor(
         const val TAG = "StreamingRepository"
 
         /** Long enough for a WebView source (native hoster pass, then up to 17 s in the WebView). */
+        const val MAX_CONCURRENT_PROVIDERS = 8
+        const val PROVIDER_QUEUE_TIMEOUT_MS = 50_000L
         const val PROVIDER_TIMEOUT_MS = 25_000L
         const val ID_LOOKUP_TIMEOUT_MS = 8_000L
         const val FALLBACK_HEAD_START_MS = 8_000L
