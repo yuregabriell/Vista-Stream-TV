@@ -569,7 +569,9 @@ class PlaybackSession @Inject constructor(
     }
 
     /** Ends the session: saves where the user stopped and unloads the stream (on the TV too). */
-    fun stop(immediateNativeCleanup: Boolean = false) {
+    fun stop() = stopInternal(immediateNativeCleanup = false)
+
+    private fun stopInternal(immediateNativeCleanup: Boolean) {
         setSleepTimer(null)
         recordProgress(force = true)
         if (castConnected) {
@@ -606,7 +608,7 @@ class PlaybackSession @Inject constructor(
     fun stopNativeP2pWhenTaskRemoved(): Boolean {
         val url = _nowPlaying.value?.mediaUri
         if (!nativeP2pBridge.isActiveNativeStream(url)) return false
-        stop(immediateNativeCleanup = true)
+        stopInternal(immediateNativeCleanup = true)
         return true
     }
 
