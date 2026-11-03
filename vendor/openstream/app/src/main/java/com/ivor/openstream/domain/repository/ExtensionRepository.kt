@@ -20,7 +20,7 @@ interface ExtensionRepository {
     suspend fun removeRepo(repoId: String): Result<Unit>
 
     /** Applies the opt-in PT-BR/default line-up; existing extra sources are retained but disabled. */
-    fun applyPortuguesePreset(): Int
+    suspend fun applyPortuguesePreset(): Result<com.ivor.openstream.data.extensions.ExtensionImportSummary>
 
     fun install(key: String)
 
