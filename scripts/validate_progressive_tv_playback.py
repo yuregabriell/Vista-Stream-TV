@@ -19,6 +19,8 @@ checks = {
     "Progressive first-candidate policy": "PlaybackSourcePolicy.select(" in player,
     "TV auto search always stops at first provider": "SourceSearchPolicy.firstPlayableOnlyOnTv" in streaming,
     "TV uses at most two concurrent provider workers": "TV_MAX_CONCURRENT_PROVIDERS = 2" in streaming,
+    "TV cancels unfinished discovery as soon as a stream is found": "currentCoroutineContext().cancelChildren()" in streaming,
+    "TV remembered source does not stall for ten seconds": "TV_REMEMBERED_HEAD_START_MS = 1_500L" in streaming,
     "TV player cancels outstanding discovery after playback starts": "stopTvBackgroundSourceDiscovery()" in player,
     "Explicit Find more remains full discovery": "fullScan = true" in player,
     "A failed first source does not restart unfinished discovery": "resolutionJob?.isActive == true" in player,
