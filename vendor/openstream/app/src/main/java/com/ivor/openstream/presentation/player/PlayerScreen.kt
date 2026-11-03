@@ -246,7 +246,9 @@ fun PlayerScreen(
     // failing over to another source before its actual format can be identified.
     val sourceToInspect = activeServer
     val sourceNeedsInspection = sourceToInspect != null && !isLocalOrDownloaded &&
-        (sourceToInspect.mimeType == null || sourceToInspect.isHls)
+        // Media3 already recognises .m3u8/.mp4/.mpd and explicit MIME hints.
+        // Do not block the first playable TV stream on unnecessary HTTP probes.
+        sourceToInspect.mimeType == null && sourceToInspect.streamType == "STREAM"
     var inspectingSource by remember(activeServer?.url, isLocalOrDownloaded) {
         mutableStateOf(sourceNeedsInspection)
     }
