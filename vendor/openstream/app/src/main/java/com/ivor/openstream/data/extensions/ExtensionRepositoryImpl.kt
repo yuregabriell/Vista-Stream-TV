@@ -126,6 +126,82 @@ class ExtensionRepositoryImpl @Inject constructor(
             }
     }
 
+    override fun exportBackup(): String {
+        ensureLoaded()
+        val current = _catalog.value
+        val installed = current.installed.map {
+            ExtensionBackupEntry(key = it.key, enabled = it.isEnabled)
+        }
+        return ExtensionBatchTransfer.encode(
+            ExtensionBackup(
+                exportedAt = System.currentTimeMillis(),
+                repositories = current.repos.filterNot { it.isBuiltIn }.map { it.url },
+                installed = installed,
+                sourceOrder = store.sourceOrder().filter { key ->
+                    current.extensions.any { it.key == key }
+                }
+            )
+        )
+    }
+
+    override suspend fun importBackup(raw: String): Result<ExtensionImportSummary> = runCatching {
+        ensureLoaded()
+        val backup = ExtensionBatchTransfer.decode(raw)
+        var repositoriesAdded = 0
+        var extensionsInstalled = 0
+        var extensionsRestored = 0
+        var skipped = 0
+        val errors = mutableListOf<String>()
+
+        val knownUrls = _catalog.value.repos.map { it.url }.toMutableSet()
+        backup.repositories.forEach { untrustedUrl ->
+            val normalized = RepoUrlNormalizer.normalize(untrustedUrl)
+            if (normalized == null) {
+                skipped++
+                errors.add("Link de repositório inválido")
+            } else if (normalized !in knownUrls) {
+                addRepo(normalized).onSuccess {
+                    knownUrls.add(normalized)
+                    repositoriesAdded++
+                }.onFailure {
+                    skipped++
+                    errors.add(it.message ?: "Não foi possível adicionar um repositório")
+                }
+            }
+        }
+
+        val available = _catalog.value.extensions.associateBy { it.key }
+        backup.installed.forEach { entry ->
+            val extension = available[entry.key]
+            if (extension == null || !extension.manifest.isSupported) {
+                skipped++
+                errors.add("Extensão indisponível: ${entry.key.take(100)}")
+            } else {
+                if (!extension.isInstalled) {
+                    install(entry.key)
+                    extensionsInstalled++
+                } else {
+                    extensionsRestored++
+                }
+                setEnabled(entry.key, entry.enabled)
+            }
+        }
+
+        val ordered = backup.sourceOrder.filter { it in available } +
+            backup.installed.map { it.key }.filter { it in available }
+        if (ordered.isNotEmpty()) {
+            setSourceOrder(ordered.distinct())
+        }
+
+        ExtensionImportSummary(
+            repositoriesAdded = repositoriesAdded,
+            extensionsInstalled = extensionsInstalled,
+            extensionsRestored = extensionsRestored,
+            skipped = skipped,
+            errors = errors.take(8)
+        )
+    }
+
     override suspend fun removeRepo(repoId: String): Result<Unit> {
         ensureLoaded()
         if (repoId in VistaRemoteRepositories.builtinIds) {
@@ -271,10 +347,16 @@ class ExtensionRepositoryImpl @Inject constructor(
                 val id = RepoUrlNormalizer.repoId(url)
                 snapshots[id] = cache.read(id) ?: CachedRepoSnapshot(
                     url = url,
-                    name = if (id == VistaRemoteRepositories.VISTA_ID) "Vista · Catálogo" else "Stremio · Community Addons",
-                    description = if (id == VistaRemoteRepositories.VISTA_ID)
-                        "Manifestos aprovados do GitHub Vista, sem atualizar o APK"
-                    else "Catálogo público de addons da comunidade Stremio"
+                    name = when (id) {
+                        VistaRemoteRepositories.VISTA_ID -> "Vista · Catálogo"
+                        VistaRemoteRepositories.GOANIME_ID -> "GoAnime · Fontes PT-BR"
+                        else -> "Stremio · Community Addons"
+                    },
+                    description = when (id) {
+                        VistaRemoteRepositories.VISTA_ID -> "Manifestos aprovados do GitHub Vista, sem atualizar o APK"
+                        VistaRemoteRepositories.GOANIME_ID -> "Adaptadores Android experimentais inspirados no GoAnime"
+                        else -> "Catálogo público de addons da comunidade Stremio"
+                    }
                 )
             }
 
