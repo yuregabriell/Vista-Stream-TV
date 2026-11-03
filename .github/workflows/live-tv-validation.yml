@@ -59,4 +59,4 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew :app:compileDebugKotlin --no-daemon --stacktrace
-          ./gradlew :app:testDebugUnitTest --tests '*VidkingSeedRequestTest' --tests '*SourceFailureDiagnosticsTest' --tests '*StremioExternalMediaTest' --tests '*StremioTorrentIndexTest' --tests '*VistaNativeP2pCleanupTest' --no-daemon --stacktrace -x :app:checkDebugAarMetadata
+          ./gradlew :app:testDebugUnitTest --tests '*VidkingSeedRequestTest' --tests '*SourceFailureDiagnosticsTest' --tests '*StremioExternalMediaTest' --tests '*StremioTorrentIndexTest' --tests '*VistaNativeP2pCleanupTest' --tests '*PlaybackHttpStatusTest' --no-daemon --stacktrace -x :app:checkDebugAarMetadata

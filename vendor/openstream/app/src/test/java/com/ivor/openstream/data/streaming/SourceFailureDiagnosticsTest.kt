@@ -30,6 +30,14 @@ class SourceFailureDiagnosticsTest {
     }
 
     @Test
+    fun missingImdbDoesNotMasqueradeAsNoStreamsFound() {
+        assertEquals(
+            "ID IMDb não encontrado · esta extensão exige identificador IMDb/Kitsu",
+            sourceFailureSummary(IllegalStateException("STREMIO_ID_MISSING"))
+        )
+    }
+
+    @Test
     fun missingTorrentEngineExplainsRequiredConfiguration() {
         assertEquals(
             "Motor P2P não configurado · ativa TorrServer em Definições > Fontes",
