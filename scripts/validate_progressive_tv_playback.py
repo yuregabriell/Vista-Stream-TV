@@ -16,6 +16,7 @@ checks = {
     "TV title does not start full source scan": "resolveStreams = false" in details,
     "Sources selection can start a scan": "playerViewModel.retryResolution()" in details,
     "Progressive first-candidate policy": "PlaybackSourcePolicy.select(" in player,
+    "A failed first source does not restart unfinished discovery": "resolutionJob?.isActive == true" in player,
     "Partial result cached and background scan continues": "partialSeed = ranked" in streaming,
     "Direct sources do not wait for IMDb": "if (provider.requiresIdEnrichment)" in streaming,
     "Concurrent providers bounded": "Semaphore(MAX_CONCURRENT_PROVIDERS)" in streaming,
