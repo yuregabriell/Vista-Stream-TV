@@ -69,6 +69,13 @@ fun TvEpisodeDetailsScreen(
     LaunchedEffect(mediaType, animeId, season, episode) {
         playerViewModel.loadSeasonDetails(mediaType, animeId, season, episode, resolveStreams = true)
     }
+    DisposableEffect(playerViewModel) {
+        onDispose {
+            // Do not let a hidden details page keep resolving 20+ add-ons while
+            // the TV is already rebuilding Home or starting its playback screen.
+            playerViewModel.cancelSourcePreview()
+        }
+    }
     val servers = when (val s = serversState) {
         is ServersState.Ready -> s.servers
         is ServersState.Resolving -> s.servers
