@@ -31,6 +31,43 @@ class VistaNativeP2pCleanupTest {
         }
     }
 
+    @Test fun clearsNativeTemporaryDataButPreservesSharedCachesAndDownloads() {
+        val root = Files.createTempDirectory("vista-p2p-startup-").toFile()
+        try {
+            val pieces = root.resolve("vista-p2p-pieces/payload/$videoA").apply { mkdirs() }
+            val engine = root.resolve("vista-p2p-engine/config").apply { mkdirs() }
+            pieces.resolve("segment.bin").writeText("torrent data")
+            engine.resolve("metadata.bin").writeText("torrent metadata")
+            root.resolve("shared-player-cache.bin").writeText("keep shared video cache")
+            root.resolve("poster.jpg").writeText("keep artwork")
+            root.resolve("downloads").apply { mkdirs() }.resolve("offline.mp4").writeText("keep downloads")
+
+            assertTrue(purgeNativeP2pTemporaryData(root))
+            assertFalse(root.resolve("vista-p2p-pieces").exists())
+            assertFalse(root.resolve("vista-p2p-engine").exists())
+            assertEquals("keep shared video cache", root.resolve("shared-player-cache.bin").readText())
+            assertEquals("keep artwork", root.resolve("poster.jpg").readText())
+            assertEquals("keep downloads", root.resolve("downloads/offline.mp4").readText())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun cleanupCannotFollowDirectorySymlinksOutsideCache() {
+        val root = Files.createTempDirectory("vista-p2p-symlink-").toFile()
+        val outside = Files.createTempDirectory("outside-vista-p2p-").toFile()
+        try {
+            outside.resolve("important.txt").writeText("untouched")
+            Files.createSymbolicLink(root.resolve("vista-p2p-engine").toPath(), outside.toPath())
+            assertFalse(purgeNativeP2pTemporaryData(root))
+            assertEquals("untouched", outside.resolve("important.txt").readText())
+        } finally {
+            root.resolve("vista-p2p-engine").delete()
+            root.deleteRecursively()
+            outside.deleteRecursively()
+        }
+    }
+
     @Test fun doesNotAcceptPathTraversalOrUnknownTorrentIds() {
         val root = Files.createTempDirectory("vista-p2p-test-").toFile()
         try {
