@@ -22,6 +22,14 @@ class SourceFailureDiagnosticsTest {
     }
 
     @Test
+    fun unavailableNativeTorrentReportsPeerOrEngineFailure() {
+        assertEquals(
+            "Motor P2P nativo não encontrou peers ou não conseguiu preparar o vídeo",
+            sourceFailureSummary(IllegalStateException("P2P_NATIVE_UNAVAILABLE"))
+        )
+    }
+
+    @Test
     fun missingTorrentEngineExplainsRequiredConfiguration() {
         assertEquals(
             "Motor P2P não configurado · ativa TorrServer em Definições > Fontes",
