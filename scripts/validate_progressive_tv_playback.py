@@ -26,7 +26,7 @@ checks = {
     "A failed first source does not restart unfinished discovery": "resolutionJob?.isActive == true" in player,
     "Partial result reusable for subsequent manual search": "partialSeed = ranked" in streaming,
     "Direct sources do not wait for IMDb": "if (provider.requiresIdEnrichment)" in streaming,
-    "Concurrent providers bounded": "Semaphore(MAX_CONCURRENT_PROVIDERS)" in streaming,
+    "Concurrent providers bounded on TV and phone": "TV_MAX_CONCURRENT_PROVIDERS = 2" in streaming and "MAX_CONCURRENT_PROVIDERS = 8" in streaming and "providerSlots = Semaphore(" in streaming,
     "Partial cache does not suppress full discovery": "existing.resolution.isComplete" in cache,
     "Addon probe has finite quick budget": "VERIFY_BUDGET_MS = 1_500L" in stremio,
     "Only one native torrent warms up on TV": "nativeBridge.isTelevisionDevice()) 1 else 2" in stremio,
