@@ -13,6 +13,7 @@ import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -83,6 +84,9 @@ class VistaNativeP2pBridge @Inject constructor(
                     prepared.url
                 }
             }
+        } catch (_: TimeoutCancellationException) {
+            // A tracker without peers must not cancel the other addon searches.
+            null
         } catch (cancel: CancellationException) {
             throw cancel
         } catch (error: Exception) {
