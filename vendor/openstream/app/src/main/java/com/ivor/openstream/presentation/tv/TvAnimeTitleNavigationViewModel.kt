@@ -85,19 +85,35 @@ class TvAnimeCatalogMatcher @Inject constructor(
                 // Keep trying alternate title and unsuffixed original name.
                 continue
             }
-            val candidate = results.firstOrNull { item ->
+            // Japanese animated adaptations take priority over identically named
+            // live-action adaptations. For example: One Piece (1999) vs One Piece (2023).
+            val ranked = results.sortedWith(compareBy<com.ivor.openstream.data.remote.model.AnimeDto> {
+                if (title.type == "anime" && it.originalLanguage.equals("ja", true) &&
+                    it.genreIds?.contains(16) == true) 0 else 1
+            }.thenBy {
+                val year = it.date.take(4).toIntOrNull()
+                if (year != null && title.year != null) kotlin.math.abs(year - title.year)
+                else Int.MAX_VALUE
+            })
+            val candidate = ranked.firstOrNull { item ->
                 val year = item.date.take(4).toIntOrNull()
                 val candidateKey = TvAnimeNames.key(item.name)
-                val exactOrSeason = candidateKey in originalKeys || isSeason
-                // Never map a distant spin-off to a short franchise prefix
-                // solely because it contains the same word (wrong episodes).
+                // Never map a distant spin-off to a short franchise prefix.
                 val meaningfulAlias = candidateKey.length >= 6 &&
                     candidateKey in expected &&
                     (candidateKey in originalKeys || candidateKey.length >=
                         (names.firstOrNull()?.let(TvAnimeNames::key)?.length ?: 0) * 0.45)
-                item.id > 0 && meaningfulAlias &&
-                    (exactOrSeason || title.year == null || year == null ||
-                        kotlin.math.abs(year - title.year) <= 2)
+                val isAnime = title.type == "anime"
+                val correctMedium = !isAnime ||
+                    ((item.genreIds == null || 16 in item.genreIds) &&
+                        (item.originalLanguage.isNullOrBlank() ||
+                            item.originalLanguage.equals("ja", ignoreCase = true)))
+                val yearMatches = title.year == null || year == null ||
+                    kotlin.math.abs(year - title.year) <= 2
+                // A distinct seasonal entry may legitimately map to a series
+                // that debuted years earlier; an identical unqualified title may not.
+                item.id > 0 && meaningfulAlias && correctMedium &&
+                    (isSeason || yearMatches)
             }
             if (candidate != null) {
                 val match = TvAnimeCatalogMatch(kind, candidate.id, candidate.backdropPath)
