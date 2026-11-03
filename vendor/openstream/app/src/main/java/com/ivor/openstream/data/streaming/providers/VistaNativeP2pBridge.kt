@@ -115,6 +115,11 @@ class VistaNativeP2pBridge @Inject constructor(
     // Maps prepared sources back to their exact torrent. Never delete the app-wide
     // cache, only a completed torrent's own verified payload directory.
     private val active = LinkedHashMap<String, PreparedStream>()
+    // Read by the Android task-removal callback without crossing the IO mutex.
+    @Volatile private var activeStreamUrls: Set<String> = emptySet()
+
+    fun isActiveNativeStream(url: String?): Boolean =
+        url != null && url in activeStreamUrls
     // Includes hashes whose metadata lookup failed before a stream could be
     // prepared, so an abandoned search cannot leave orphan payloads behind.
     private val attemptedHashes = LinkedHashSet<String>()
@@ -196,6 +201,7 @@ class VistaNativeP2pBridge @Inject constructor(
                         Log.w("VistaNativeP2p", "Native P2P temporary cache cleanup was incomplete")
                     }
             }
+            activeStreamUrls = active.values.map { it.url }.toSet()
             // Only these unique loopback URLs are safe to evict from Media3's
             // shared HTTP cache. Never use Cache.evictAll() on exit.
             removedMediaUrls.distinct()
@@ -253,6 +259,7 @@ class VistaNativeP2pBridge @Inject constructor(
                         streamId = prepared.id,
                         url = prepared.url
                     )
+                    activeStreamUrls = active.values.map { it.url }.toSet()
                     prepared.url
                 }
             }
