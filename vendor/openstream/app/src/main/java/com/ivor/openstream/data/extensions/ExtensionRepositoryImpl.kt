@@ -230,6 +230,10 @@ class ExtensionRepositoryImpl @Inject constructor(
      * A bundled copy is available offline. Existing installs are never cleared.
      */
     override suspend fun applyPortuguesePreset(): Result<ExtensionImportSummary> {
+        // Built-in repository entries may still be loading on first launch.
+        // Refresh them before resolving preset keys, or Vista community extensions
+        // would be incorrectly reported as missing.
+        runCatching { refresh(force = true) }
         val raw = runCatching { client.fetchPreset(PT_BR_PRESET_URL) }
             .getOrElse {
                 runCatching {
