@@ -261,8 +261,8 @@ fun SettingsScreen(
                         NavigationRow(
                             index = 0, count = 1,
                             icon = Icons.Default.People,
-                            title = "Associar Vista ID",
-                            supporting = "Modo local ou sem conta. Preserva biblioteca e histórico; cloud futura.",
+                            title = "Iniciar sessão · Vista ID",
+                            supporting = "Conta na nuvem (Supabase), QR e código temporário. Continuar sem conta é possível.",
                             onClick = {
                                 context.startActivity(Intent(context, VistaIdAccountActivity::class.java))
                             }
