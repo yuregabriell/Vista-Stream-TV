@@ -639,7 +639,7 @@ private fun BatchTransferActions(onImport: () -> Unit, onExport: () -> Unit) {
             )
             Text(
                 "Transfere vários repositórios e extensões de uma só vez, com ordem e estados ativados/desativados. " +
-                    "O backup JSON não inclui credenciais nem ficheiros de vídeo.",
+                    "O JSON não inclui vídeos; links Stremio configurados podem conter chaves. Guarda-o em segurança.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
