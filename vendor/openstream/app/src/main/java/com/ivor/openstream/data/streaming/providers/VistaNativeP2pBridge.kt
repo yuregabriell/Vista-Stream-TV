@@ -122,6 +122,9 @@ class VistaNativeP2pBridge @Inject constructor(
 
     fun isActiveNativeStream(url: String?): Boolean =
         url != null && url in activeStreamUrls
+
+    /** Low-resource TV devices should never warm multiple torrents per addon. */
+    fun isTelevisionDevice(): Boolean = TvDetect.isTv(app)
     // Includes hashes whose metadata lookup failed before a stream could be
     // prepared, so an abandoned search cannot leave orphan payloads behind.
     private val attemptedHashes = LinkedHashSet<String>()
