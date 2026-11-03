@@ -11,10 +11,7 @@ import javax.net.ssl.SSLException
  */
 internal fun sourceFailureSummary(error: Throwable): String {
     val chain = generateSequence(error) { it.cause }.take(8).toList()
-    val httpCode = chain.asSequence().mapNotNull { cause ->
-        Regex("""\bHTTP\s+(\d{3})\b""").find(cause.message.orEmpty())
-            ?.groupValues?.getOrNull(1)?.toIntOrNull()
-    }.firstOrNull()
+    val httpCode = ProviderFailureBackoff.httpCode(error)
     return when {
         chain.any { it.message == "P2P_NATIVE_UNAVAILABLE" } ->
             "Motor P2P nativo não encontrou peers ou não conseguiu preparar o vídeo"
@@ -22,9 +19,11 @@ internal fun sourceFailureSummary(error: Throwable): String {
             "Motor P2P não configurado · ativa TorrServer em Definições > Fontes"
         chain.any { it.message == "P2P_METADATA_UNAVAILABLE" } ->
             "Metadados P2P indisponíveis ou episódio não identificado no torrent"
-        httpCode == 404 || httpCode == 410 -> "HTTP $httpCode · endpoint indisponível"
+        httpCode == 404 || httpCode == 410 -> "HTTP $httpCode · título ou endpoint não encontrado"
         httpCode == 401 || httpCode == 403 -> "HTTP $httpCode · acesso recusado"
         httpCode == 429 -> "HTTP 429 · limite de pedidos"
+        httpCode == 504 -> "HTTP 504 · servidor demorou a responder"
+        httpCode == 502 || httpCode == 503 -> "HTTP $httpCode · servidor temporariamente indisponível"
         httpCode != null -> "HTTP $httpCode"
         chain.any { it is UnknownHostException } -> "Falha DNS / ligação"
         chain.any { it is SocketTimeoutException } -> "Tempo de espera esgotado"
