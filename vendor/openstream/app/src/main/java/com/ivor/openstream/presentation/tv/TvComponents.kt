@@ -83,7 +83,7 @@ const val TV_BACKDROP_BASE = "https://image.tmdb.org/t/p/w1280"
 /** A full-bleed backdrop that crossfades as the shown title changes. */
 @Composable
 fun TvBackdrop(url: String?, modifier: Modifier = Modifier) {
-    Crossfade(targetState = url, animationSpec = tween(400), label = "backdrop", modifier = modifier) { shown ->
+    Crossfade(targetState = url, animationSpec = tween(200), label = "backdrop", modifier = modifier) { shown ->
         if (shown != null) {
             AsyncImage(
                 model = shown,
