@@ -54,6 +54,7 @@ import com.ivor.openstream.data.playback.VolumeBooster
 import com.ivor.openstream.data.remote.model.SubtitleDto
 import com.ivor.openstream.data.settings.AppSettingsStore
 import com.ivor.openstream.data.streaming.DownloadRequestHeaderStore
+import com.ivor.openstream.data.streaming.providers.VistaNativeP2pBridge
 import com.ivor.openstream.data.streaming.BROWSER_USER_AGENT
 import com.ivor.openstream.data.streaming.ImagePrefixStrippingDataSource
 import com.ivor.openstream.domain.model.VideoServer
@@ -163,7 +164,8 @@ class PlaybackSession @Inject constructor(
     private val downloadHeaders: DownloadRequestHeaderStore,
     private val deviceDecoders: DeviceDecoders,
     private val streamDataGuard: StreamDataGuard,
-    private val appSettingsStore: AppSettingsStore
+    private val appSettingsStore: AppSettingsStore,
+    private val nativeP2pBridge: VistaNativeP2pBridge
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -500,6 +502,28 @@ class PlaybackSession @Inject constructor(
         requestHeaders = headers
     }
 
+    /**
+     * Release torrent pieces only after the shared player (including TV/Cast) has
+     * detached. Do not purge the mini player's still-active video when the user
+     * merely leaves the mobile fullscreen screen.
+     *
+     * The current URI is read AFTER the grace period: rapid back/forward and
+     * episode changes must never delete the new playback's own torrent.
+     */
+    private fun cleanupUnusedNativeVideo() {
+        scope.launch {
+            delay(900L)
+            runCatching {
+                val releasedUrls = nativeP2pBridge.releaseUnusedExcept(_nowPlaying.value?.mediaUri)
+                // A loopback stream may also have blocks in Media3's HTTP cache.
+                // Evict only the released stream keys, not the app-wide cache.
+                releasedUrls.forEach { uri ->
+                    runCatching { cache.removeResource(uri) }
+                }
+            }.onFailure { Log.w("PlaybackSession", "Native P2P cleanup failed", it) }
+        }
+    }
+
     /** Called by the player screen whenever the playing item or its metadata changes. */
     fun update(nowPlaying: NowPlaying) {
         val previous = _nowPlaying.value
@@ -510,6 +534,7 @@ class PlaybackSession @Inject constructor(
             endedBySleepTimer = false
         }
         _nowPlaying.value = nowPlaying
+        if (previous?.mediaUri != nowPlaying.mediaUri) cleanupUnusedNativeVideo()
         refreshSessionActivity()
         if (castConnected) syncCast()
     }
@@ -568,6 +593,9 @@ class PlaybackSession @Inject constructor(
         volumeBooster.release()
         _nowPlaying.value = null
         requestHeaders = emptyMap()
+        // TV back and mobile mini-player close both call stop().
+        // Release only P2P sources, never Media3's shared cache or title artwork.
+        cleanupUnusedNativeVideo()
     }
 
     // region Casting
