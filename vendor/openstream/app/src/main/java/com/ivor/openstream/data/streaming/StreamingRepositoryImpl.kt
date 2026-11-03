@@ -1,6 +1,8 @@
 package com.ivor.openstream.data.streaming
 
+import android.content.Context
 import android.content.SharedPreferences
+import com.ivor.openstream.presentation.tv.TvDetect
 import com.ivor.openstream.domain.model.MediaIdentity
 import com.ivor.openstream.domain.model.ServerResolution
 import com.ivor.openstream.domain.model.VideoServer
@@ -14,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -31,6 +34,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -42,7 +46,8 @@ class StreamingRepositoryImpl @Inject constructor(
     @Named("StreamingClient") private val client: OkHttpClient,
     private val preferences: SharedPreferences,
     private val appSettings: AppSettingsStore,
-    private val streamCache: ResolvedStreamCache
+    private val streamCache: ResolvedStreamCache,
+    @ApplicationContext private val context: Context
 ) : StreamingRepository {
     private val consecutiveFailures = ConcurrentHashMap<String, Int>()
 
@@ -55,7 +60,9 @@ class StreamingRepositoryImpl @Inject constructor(
      */
     private val providerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     // Bound costly native torrent, WebView, and HTTP resolver work on Android TV.
-    private val providerSlots = Semaphore(MAX_CONCURRENT_PROVIDERS)
+    private val providerSlots = Semaphore(
+        if (TvDetect.isTv(context)) TV_MAX_CONCURRENT_PROVIDERS else MAX_CONCURRENT_PROVIDERS
+    )
 
     /**
      * By default every installed provider runs at once and servers are sent as each one answers,
@@ -77,6 +84,12 @@ class StreamingRepositoryImpl @Inject constructor(
     ): Flow<ServerResolution> = channelFlow {
         val installedProviders = withContext(Dispatchers.IO) { providerRegistry.activeProviders() }
         val providerPriorities = installedProviders.associate { it.id to it.priority }
+        // Automatic TV discovery races at most two workers at a time, then
+        // cancels the rest at the first result; it never runs through all addons
+        // while Media3 is buffering. Manual "Procurar mais" remains exhaustive.
+        val tvFirstOnly = SourceSearchPolicy.firstPlayableOnlyOnTv(
+            TvDetect.isTv(context), preferLastWorking, includeFallbacks
+        )
         val inOrder = appSettings.current.sourceSearchMode == SourceSearchMode.IN_ORDER
         val cacheable = preferLastWorking && !includeFallbacks
         val sources = sourcesFingerprint(installedProviders, inOrder)
@@ -116,7 +129,8 @@ class StreamingRepositoryImpl @Inject constructor(
             !includeFallbacks && isBreakerOpen(provider.id)
         }
         // Not when everything is being searched on purpose ("Find more", failover).
-        val remembered = if (preferLastWorking && !includeFallbacks && inOrder) {
+        val remembered = if (preferLastWorking && !includeFallbacks &&
+            (inOrder || tvFirstOnly)) {
             lastWorkingSourceId(identity)?.let { id -> enabledProviders.firstOrNull { it.id == id } }
         } else {
             null
@@ -262,7 +276,7 @@ class StreamingRepositoryImpl @Inject constructor(
         val rememberedDeadline = if (remembered != null) {
             start(listOf(remembered))
             launch {
-                delay(REMEMBERED_HEAD_START_MS)
+                delay(if (tvFirstOnly) TV_REMEMBERED_HEAD_START_MS else REMEMBERED_HEAD_START_MS)
                 events.send(ResolutionEvent.RememberedDeadline)
             }
         } else {
@@ -292,6 +306,15 @@ class StreamingRepositoryImpl @Inject constructor(
                     }
                     // Direct providers are all done and found nothing: fallbacks are the last hope.
                     if (pending == 0 && servers.isEmpty()) startFallbacks()
+                    if (tvFirstOnly && servers.isNotEmpty()) {
+                        publish(progress(servers, total - pending, total, failedProviders,
+                            isComplete = true))
+                        // The candidates have been delivered to Media3. Cancel all
+                        // queued/in-flight addon discoveries; those P2P threads must
+                        // not compete with video buffering for TV memory or bandwidth.
+                        currentCoroutineContext().cancelChildren()
+                        return@channelFlow
+                    }
                     publish(progress(servers, total - pending, total, failedProviders, isComplete = pending == 0))
                 }
             }
@@ -443,6 +466,7 @@ class StreamingRepositoryImpl @Inject constructor(
 
         /** Long enough for a WebView source (native hoster pass, then up to 17 s in the WebView). */
         const val MAX_CONCURRENT_PROVIDERS = 8
+        const val TV_MAX_CONCURRENT_PROVIDERS = 2
         const val PROVIDER_QUEUE_TIMEOUT_MS = 50_000L
         const val PROVIDER_TIMEOUT_MS = 25_000L
         const val ID_LOOKUP_TIMEOUT_MS = 8_000L
@@ -450,6 +474,7 @@ class StreamingRepositoryImpl @Inject constructor(
 
         /** How long the source that played last time is waited on before the others start too. */
         const val REMEMBERED_HEAD_START_MS = 10_000L
+        const val TV_REMEMBERED_HEAD_START_MS = 1_500L
         const val WORKING_SOURCE_KEY = "last_working_source"
     }
 }

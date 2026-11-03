@@ -61,6 +61,7 @@ import java.time.LocalDate
 import androidx.media3.common.PlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import com.ivor.openstream.presentation.player.session.NowPlaying
+import com.ivor.openstream.presentation.tv.TvDetect
 import com.ivor.openstream.presentation.player.session.PlaybackSession
 import io.github.ivorisnoob.smoothmotion.media3.SmoothMotion
 import com.ivor.openstream.data.settings.AppSettings
@@ -429,6 +430,7 @@ class PlayerViewModel @Inject constructor(
     private var currentIdentity: MediaIdentity? = null
     private var loadJob: Job? = null
     private var resolutionJob: Job? = null
+    private var lastCleanedTvSourceUrl: String? = null
     private val failedServerIds = linkedSetOf<String>()
     private var automaticFailovers = 0
     private var backupSourcesSearched = false
@@ -602,6 +604,7 @@ class PlayerViewModel @Inject constructor(
         failedServerIds.clear()
         automaticFailovers = 0
         backupSourcesSearched = false
+        lastCleanedTvSourceUrl = null
         switchedFrom = null
 
         val continuing = playbackSession.nowPlaying.value
@@ -776,10 +779,36 @@ class PlayerViewModel @Inject constructor(
 
     fun onPlaybackReady() {
         playbackStarted = true
+        val server = _activeServer.value
+        if (TvDetect.isTv(context)) {
+            // Media3 now has its video. Any pending manual/addon source discovery
+            // must not continue consuming P2P bandwidth, CPU or memory on a TV.
+            stopTvBackgroundSourceDiscovery()
+            if (server != null && lastCleanedTvSourceUrl != server.url) {
+                lastCleanedTvSourceUrl = server.url
+                playbackSession.releaseAbandonedPreviewSources()
+            }
+        }
         val identity = currentIdentity ?: return
-        val server = _activeServer.value ?: return
+        if (server == null) return
         streamingRepository.rememberServer(identity, server)
         streamingRepository.rememberWorkingSource(identity, server)
+    }
+
+    /** Stop only source lookups, not Media3 or its selected native torrent stream. */
+    private fun stopTvBackgroundSourceDiscovery() {
+        if (!TvDetect.isTv(context)) return
+        resolutionJob?.cancel()
+        resolutionJob = null
+        val previous = _serversState.value
+        if (previous is ServersState.Resolving && previous.servers.isNotEmpty()) {
+            _serversState.value = ServersState.Ready(
+                servers = previous.servers,
+                activeId = previous.activeId,
+                failedProviders = previous.failedProviders,
+                previousCount = previous.previousCount
+            )
+        }
     }
 
     /** Safe user-facing failure detail; signed URLs and headers are never included. */
@@ -855,8 +884,10 @@ class PlayerViewModel @Inject constructor(
         failedServerIds.clear()
         automaticFailovers = 0
         backupSourcesSearched = true
-        _activeServer.value = null
-        startResolution(identity, includeFallbacks = true)
+        if (!(TvDetect.isTv(context) && playbackStarted && _activeServer.value != null)) {
+            _activeServer.value = null
+        }
+        startResolution(identity, includeFallbacks = true, fullScan = true)
     }
 
     /** Stop source discovery immediately when TV details lose their visible lifecycle. */
@@ -880,7 +911,11 @@ class PlayerViewModel @Inject constructor(
         super.onCleared()
     }
 
-    private fun startResolution(identity: MediaIdentity, includeFallbacks: Boolean = false) {
+    private fun startResolution(
+        identity: MediaIdentity,
+        includeFallbacks: Boolean = false,
+        fullScan: Boolean = false
+    ) {
         resolutionJob?.cancel()
         // Never erase a still-recent, playable candidate merely because refresh timed out.
         // Keep old URLs only in memory; never persist tokens/headers to storage.
@@ -919,7 +954,8 @@ class PlayerViewModel @Inject constructor(
                     .distinctBy { it.id }
                 // Before refresh completes, wait for fresh links; don't autoplay an old
                 // signed URL solely because the provider has not answered yet.
-                val eligible = if (progress.isComplete) healthyServers else healthyServers.filter {
+                val eligible = if (progress.isComplete ||
+                    (TvDetect.isTv(context) && playbackStarted)) healthyServers else healthyServers.filter {
                     it.id in latestIds || adoptedServer?.id == it.id
                 }
                 val active = PlaybackSourcePolicy.select(
@@ -948,6 +984,13 @@ class PlayerViewModel @Inject constructor(
                             failedProviders = progress.failedProviders,
                             previousCount = oldCount
                         )
+                }
+                if (TvDetect.isTv(context) && !fullScan && active != null &&
+                    !progress.isComplete) {
+                    // First candidate has been handed to Media3. End automatic
+                    // discovery here instead of running the rest during buffering.
+                    // Explicit "Procurar mais" uses fullScan=true and is user-driven.
+                    stopTvBackgroundSourceDiscovery()
                 }
             }
         }
