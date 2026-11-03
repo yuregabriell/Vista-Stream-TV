@@ -894,9 +894,6 @@ class PlayerViewModel @Inject constructor(
                 val rememberedId = currentIdentity?.let { streamingRepository.getRememberedServerId(it) }
                 // Keep the first usable source steady while the rest are still arriving.
                 // Re-ranking a later provider must never restart an already buffering video.
-                val targetServerId = userChosenServerId
-                    ?: _activeServer.value?.id?.takeIf { it !in failedServerIds }
-                    ?: rememberedId.takeUnless { playbackStarted }
                 // Keep the stream the mini player is already playing at the top of the list.
                 // A fresh response replaces the same URL/ID from the old search. Other
                 // candidates stay visible until they fail, expire or the viewer leaves.
@@ -918,9 +915,13 @@ class PlayerViewModel @Inject constructor(
                 val eligible = if (progress.isComplete) healthyServers else healthyServers.filter {
                     it.id in latestIds || adoptedServer?.id == it.id
                 }
-                val active = eligible.firstOrNull { it.id == targetServerId }
-                    ?: _activeServer.value?.takeIf { current -> eligible.any { it.id == current.id } }
-                    ?: eligible.firstOrNull()
+                val active = PlaybackSourcePolicy.select(
+                    eligible = eligible,
+                    userChosenId = userChosenServerId,
+                    currentActiveId = _activeServer.value?.id?.takeIf { it !in failedServerIds },
+                    rememberedId = rememberedId,
+                    playbackStarted = playbackStarted
+                )
                 _activeServer.value = active
 
                 val oldCount = healthyServers.count { old ->
