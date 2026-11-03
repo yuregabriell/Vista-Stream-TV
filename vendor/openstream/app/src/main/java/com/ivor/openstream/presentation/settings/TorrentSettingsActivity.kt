@@ -41,13 +41,14 @@ class TorrentSettingsActivity : Activity() {
             "Reproduz torrents de add-ons Stremio por um TorrServer local ou na rede. " +
             "Não descarrega o filme completo para o VS. Usa apenas torrents que podes partilhar legalmente.",
             14f,muted).apply {setPadding(0,dp(8),0,dp(18))})
-        root.addView(text("Motor nativo do VistaStream (experimental)",18f).apply {
+        root.addView(text("Motor nativo do VistaStream",18f).apply {
             setPadding(0,dp(10),0,dp(7))
         })
         root.addView(text(
-            "Baseado no Nuvio Engine GPLv3: torrents transformados em HTTP local no próprio aparelho. " +
-            "Requer peers disponíveis, usa até 128 MB de cache e não pode transmitir " +
-            "diretamente ao Chromecast sem um proxy na rede. Desativado por padrão.",
+            "Baseado no Nuvio Engine GPLv3: reproduz torrents no próprio aparelho e está ativo por padrão. " +
+            "Requer peers disponíveis; os dados temporários P2P são eliminados ao fechar a " +
+            "reprodução, e restos de encerramentos inesperados são limpos no próximo arranque. " +
+            "O Chromecast requer um proxy acessível na rede.",
             13f,muted
         ).apply {setPadding(0,0,0,dp(9))})
         val nativeToggle=Switch(this).apply {
