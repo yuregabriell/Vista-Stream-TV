@@ -1,0 +1,45 @@
+name: Vista ID / VistaStream Auth Android CI
+on:
+  pull_request:
+    paths:
+      - 'vendor/openstream/app/**'
+      - '.github/workflows/vista-id-auth-ci.yml'
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" "build-tools;36.0.0" || "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
+      - name: Native P2P pinned dependency
+        run: bash scripts/prepare-native-engine.sh
+      - name: Static contract checks
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path("vendor/openstream/app/src/main/java/com/ivor/openstream")
+          api=(root/"data/auth/VistaCloudAuth.kt").read_text()
+          ui=(root/"presentation/settings/VistaIdAccountActivity.kt").read_text()
+          assert all(x in api for x in ("pair_create", "pair_redeem", "code_login", "username_password", "/auth/v1/verify", "AndroidKeyStore"))
+          assert all(x in ui for x in ("Entrar com QR Code", "Entrar com código", "Sem conta", "schedulePoll"))
+          assert "sb_secret_" not in api and "service_role" not in api
+          print("VistaCloud Auth contract checks passed")
+          PY
+      - name: Compile debug APK
+        working-directory: vendor/openstream
+        env:
+          GRADLE_OPTS: '-Dorg.gradle.jvmargs=-Xmx5g'
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug --no-daemon --stacktrace

@@ -546,9 +546,9 @@ private fun settingRows(
         SettingsCategory.VISTA_ID -> {
             val context = LocalContext.current
             listOf(SettingRow.Action(
-                key = "vista-id-local",
+                key = "vista-id-cloud",
                 title = "Vista ID (opcional)",
-                subtitle = "Associar perfil local. Sem apagar dados ou alterar o cache de streaming.",
+                subtitle = "Entrar por senha, código de 30 segundos ou QR. Conta Supabase opcional.",
                 onClick = { context.startActivity(Intent(context, com.ivor.openstream.presentation.settings.VistaIdAccountActivity::class.java)) }
             ))
         }
