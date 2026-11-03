@@ -849,11 +849,10 @@ fun PlayerScreen(
                                 val backdropScrim = MaterialTheme.colorScheme.scrim
                                 if (backdropPath != null) {
                                     AsyncImage(
-                                        model = "https://image.tmdb.org/t/p/w1280$backdropPath",
+                                        model = "https://image.tmdb.org/t/p/${if (tvControls) "w780" else "w1280"}$backdropPath",
                                         contentDescription = null,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .blur(20.dp)
+                                        modifier = (if (tvControls) Modifier.fillMaxSize()
+                                            else Modifier.fillMaxSize().blur(20.dp))
                                             .drawWithContent {
                                                 drawContent()
                                                 drawRect(
