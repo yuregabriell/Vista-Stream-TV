@@ -25,7 +25,7 @@ jobs:
           node --test web/test-addons.mjs
           node --check examples/stremio-torrent-catalog/build.mjs
           node --test examples/stremio-torrent-catalog/test.mjs
-          node -e "const fs=require('node:fs'); const c=JSON.parse(fs.readFileSync('extensions/vista-catalog.json','utf8')); if(c.extensions.length !== 6 || c.extensions.some(e => e.installedByDefault || !e.manifestUrl?.startsWith('https://'))) process.exit(1);"
+          node -e "const fs=require('node:fs'); const c=JSON.parse(fs.readFileSync('extensions/vista-catalog.json','utf8')); if(c.extensions.length < 11 || c.extensions.some(e => e.installedByDefault || !e.manifestUrl?.startsWith('https://'))) process.exit(1);"
 
   android:
     runs-on: ubuntu-latest
