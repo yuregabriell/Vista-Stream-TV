@@ -10,6 +10,7 @@ import com.nuvio.engine.NuvioUploadMode
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.util.Locale
+import java.nio.file.Files
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
@@ -28,6 +29,25 @@ import kotlinx.coroutines.withTimeout
  * torrents are opened before the switch is deliberately enabled.
  * Loopback URLs work on-device only, not directly on an external Chromecast.
  */
+/**
+ * The Nuvio Engine stores pieces at <cacheDirectory>/payload/<torrentHash>.
+ * Keep deletion constrained to a direct, non-symlinked hashed child.
+ */
+internal fun isolatedTorrentPayloadDirectory(cacheDirectory: File, torrentId: String): File? {
+    val hash = torrentId.lowercase(Locale.ROOT)
+    if (!hash.matches(Regex("[0-9a-f]{40}|[0-9a-f]{64}"))) return null
+    return runCatching {
+        val parent = File(cacheDirectory, "payload")
+        val target = File(parent, hash)
+        if (Files.isSymbolicLink(parent.toPath()) || Files.isSymbolicLink(target.toPath())) {
+            return@runCatching null
+        }
+        val canonical = target.canonicalFile
+        if (canonical.parentFile != parent.canonicalFile) return@runCatching null
+        canonical
+    }.getOrNull()
+}
+
 @Singleton
 class VistaNativeP2pBridge @Inject constructor(
     @ApplicationContext context: Context
@@ -36,7 +56,71 @@ class VistaNativeP2pBridge @Inject constructor(
     private val prefs = app.getSharedPreferences("vs_native_p2p_v1", Context.MODE_PRIVATE)
     private val mutex = Mutex()
     private var engine: NuvioEngine? = null
-    private val active = LinkedHashMap<String, String>()
+
+    private data class PreparedStream(
+        val torrentId: String,
+        val streamId: String,
+        val url: String
+    )
+
+    // Maps prepared sources back to their exact torrent. Never delete the app-wide
+    // cache, only a completed torrent's own verified payload directory.
+    private val active = LinkedHashMap<String, PreparedStream>()
+
+
+    /**
+     * After Media3 has stopped or switched streams, release only native torrents
+     * no longer referenced by the active video. A source retained in the mobile
+     * mini player is kept alive. This never touches posters, downloads, library
+     * files or shared HTTP/Media3 caches.
+     *
+     * Nuvio's removeTorrent() stops the native handle but intentionally preserves
+     * downloaded payload; its per-torrent directory is therefore removed here
+     * ONLY after the native removed event has been received.
+     */
+    suspend fun releaseUnusedExcept(currentMediaUrl: String?) = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val runtime = engine ?: return@withLock
+            val unused = active.filterValues { it.url != currentMediaUrl }
+            if (unused.isEmpty()) return@withLock
+            val stillInUse = active.values.filter { it.url == currentMediaUrl }
+                .map { it.torrentId }.toSet()
+
+            for ((torrentId, sessions) in unused.values.groupBy { it.torrentId }) {
+                for (stream in sessions.distinctBy { it.streamId }) {
+                    // Nuvio can already have stopped an expired HTTP stream.
+                    runCatching { runtime.stopStream(stream.streamId) }
+                }
+                if (torrentId in stillInUse) {
+                    active.entries.removeAll { it.value.torrentId == torrentId &&
+                        it.value.url != currentMediaUrl }
+                    continue
+                }
+
+                val removed = runCatching {
+                    runtime.removeTorrent(torrentId)
+                    true
+                }.getOrElse {
+                    Log.w("VistaNativeP2p", "Cannot release torrent: ${it.javaClass.simpleName}")
+                    false
+                }
+                if (!removed) continue
+
+                active.entries.removeAll { it.value.torrentId == torrentId }
+                val payload = isolatedTorrentPayloadDirectory(
+                    File(app.cacheDir, "vista-p2p-pieces"), torrentId
+                )
+                if (payload != null && payload.exists() && !payload.deleteRecursively()) {
+                    Log.w("VistaNativeP2p", "Could not erase an isolated torrent payload")
+                }
+            }
+            if (active.isEmpty()) {
+                // Avoid holding libtorrent, sockets and memory caches after exit.
+                runtime.close()
+                engine = null
+            }
+        }
+    }
 
     fun isEnabled(): Boolean = prefs.getBoolean("enabled", false)
 
@@ -58,7 +142,7 @@ class VistaNativeP2pBridge @Inject constructor(
         try {
             withTimeout(16_000L) {
                 mutex.withLock {
-                    active[key]?.let { return@withLock it }
+                    active[key]?.let { return@withLock it.url }
                     val runtime = engine ?: NuvioEngine.create(
                         NuvioEngineConfig(
                             // Keep ALL P2P data in the app's disposable cache area,
@@ -82,7 +166,11 @@ class VistaNativeP2pBridge @Inject constructor(
                     if (uri.scheme != "http" || uri.host != "127.0.0.1" ||
                         uri.port !in 1..65_535 || uri.path?.startsWith("/stream/") != true
                     ) return@withLock null
-                    active[key] = prepared.url
+                    active[key] = PreparedStream(
+                        torrentId = prepared.torrentId,
+                        streamId = prepared.id,
+                        url = prepared.url
+                    )
                     prepared.url
                 }
             }
