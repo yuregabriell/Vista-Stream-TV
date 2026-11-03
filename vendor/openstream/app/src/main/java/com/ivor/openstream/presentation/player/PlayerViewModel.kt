@@ -856,6 +856,9 @@ class PlayerViewModel @Inject constructor(
     fun cancelSourcePreview() {
         resolutionJob?.cancel()
         resolutionJob = null
+        // Metadata and artwork lookups for a non-visible title also stop here.
+        // Re-entering the details destination starts a fresh load.
+        loadJob?.cancel()
     }
 
     override fun onCleared() {
