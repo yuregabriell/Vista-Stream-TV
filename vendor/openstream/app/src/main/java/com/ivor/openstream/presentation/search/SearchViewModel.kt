@@ -109,8 +109,8 @@ data class SearchUiState(
         get() = results.filter { item ->
             val typeMatches = when (filter) {
                 SearchFilter.ALL -> true
-                SearchFilter.MOVIES -> item.isMovie
-                SearchFilter.SERIES -> !item.isMovie
+                SearchFilter.MOVIES -> item.isMovie && !item.isAnime()
+                SearchFilter.SERIES -> !item.isMovie && !item.isAnime()
                 SearchFilter.ANIME -> item.isAnime()
             }
             typeMatches && filters.matches(item)
@@ -165,7 +165,7 @@ class SearchViewModel @Inject constructor(
             it.copy(
                 query = "",
                 genre = genre,
-                filter = if (genre.isAnime) SearchFilter.ALL else it.filter
+                filter = if (genre.isAnime) SearchFilter.ANIME else it.filter
             )
         }
         searchJob?.cancel()
@@ -175,7 +175,8 @@ class SearchViewModel @Inject constructor(
     fun clear() {
         searchJob?.cancel()
         _uiState.update {
-            it.copy(query = "", genre = null, results = emptyList(), isLoading = false, error = null, endReached = false)
+            it.copy(query = "", genre = null, filter = SearchFilter.ALL,
+                results = emptyList(), isLoading = false, error = null, endReached = false)
         }
     }
 
@@ -261,7 +262,7 @@ class SearchViewModel @Inject constructor(
     /** With filters on, keeps fetching (a few pages at most) until there's a screenful to show. */
     private fun fillFilteredResults() {
         val state = _uiState.value
-        if (state.filters.activeCount == 0 || state.isBrowsing) return
+        if (state.filters.activeCount == 0 && state.filter != SearchFilter.ANIME || state.isBrowsing) return
         if (state.isLoading || state.isLoadingMore || state.endReached) return
         if (state.visibleResults.size >= MIN_FILTERED_RESULTS || autoLoadedPages >= MAX_AUTO_PAGES) return
         autoLoadedPages++
