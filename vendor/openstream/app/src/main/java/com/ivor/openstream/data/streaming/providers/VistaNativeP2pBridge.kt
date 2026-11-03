@@ -72,6 +72,9 @@ class VistaNativeP2pBridge @Inject constructor(
     // Maps prepared sources back to their exact torrent. Never delete the app-wide
     // cache, only a completed torrent's own verified payload directory.
     private val active = LinkedHashMap<String, PreparedStream>()
+    // Includes hashes whose metadata lookup failed before a stream could be
+    // prepared, so an abandoned search cannot leave orphan payloads behind.
+    private val attemptedHashes = LinkedHashSet<String>()
 
 
     /**
@@ -89,7 +92,19 @@ class VistaNativeP2pBridge @Inject constructor(
         mutex.withLock {
             val runtime = engine ?: return@withLock emptyList()
             val unused = active.filterValues { it.url != currentMediaUrl }
-            if (unused.isEmpty()) return@withLock emptyList()
+            if (unused.isEmpty()) {
+                if (active.isEmpty() && currentMediaUrl == null) {
+                    // Source searches can time out before prepareStream() returns.
+                    // Their hashes still belong exclusively to this P2P cache.
+                    runtime.close()
+                    engine = null
+                    attemptedHashes.forEach { id ->
+                        purgeIsolatedTorrentPayload(File(app.cacheDir, "vista-p2p-pieces"), id)
+                    }
+                    attemptedHashes.clear()
+                }
+                return@withLock emptyList()
+            }
             val removedMediaUrls = mutableListOf<String>()
             val stillInUse = active.values.filter { it.url == currentMediaUrl }
                 .map { it.torrentId }.toSet()
@@ -127,6 +142,10 @@ class VistaNativeP2pBridge @Inject constructor(
                 // Avoid holding libtorrent, sockets and memory caches after exit.
                 runtime.close()
                 engine = null
+                attemptedHashes.forEach { id ->
+                    purgeIsolatedTorrentPayload(File(app.cacheDir, "vista-p2p-pieces"), id)
+                }
+                attemptedHashes.clear()
             }
             // Only these unique loopback URLs are safe to evict from Media3's
             // shared HTTP cache. Never use Cache.evictAll() on exit.
@@ -168,6 +187,7 @@ class VistaNativeP2pBridge @Inject constructor(
                             streamInactivityTimeoutMilliseconds = 0
                         )
                     ).also { engine = it }
+                    attemptedHashes += hash
                     val id = runtime.addMagnet("magnet:?xt=urn:btih:$hash")
                     val prepared = runtime.prepareStream(
                         torrentId = id,
