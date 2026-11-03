@@ -10,7 +10,7 @@ class SourceFailureDiagnosticsTest {
     @Test
     fun http404IsVisibleWithoutExposingPrivateUrl() {
         val text = sourceFailureSummary(IOException("https://example.org/api?token=SECRET returned HTTP 404"))
-        assertEquals("HTTP 404 · endpoint indisponível", text)
+        assertEquals("HTTP 404 · título ou endpoint não encontrado", text)
         assertFalse(text.contains("SECRET"))
     }
 
@@ -41,4 +41,12 @@ class SourceFailureDiagnosticsTest {
     fun otherErrorsDoNotEchoServerBodiesOrTokens() {
         assertEquals("Erro de comunicação ou resposta inválida", sourceFailureSummary(IOException("token=SECRET")))
     }
+    @Test
+    fun gatewayTimeoutExplainsSlowUpstream() {
+        assertEquals(
+            "HTTP 504 · servidor demorou a responder",
+            sourceFailureSummary(IOException("Brazuca returned HTTP 504"))
+        )
+    }
+
 }
