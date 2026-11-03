@@ -9,6 +9,7 @@ import android.util.Log
 import com.ivor.openstream.data.settings.AppSettingsStore
 import com.ivor.openstream.data.settings.SourceSearchMode
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -23,6 +24,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
@@ -52,6 +55,8 @@ class StreamingRepositoryImpl @Inject constructor(
      * call can't hold the flow open past its deadline; it is cancelled when it stops mattering.
      */
     private val providerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Bound costly native torrent, WebView, and HTTP resolver work on Android TV.
+    private val providerSlots = Semaphore(MAX_CONCURRENT_PROVIDERS)
 
     /**
      * By default every installed provider runs at once and servers are sent as each one answers,
