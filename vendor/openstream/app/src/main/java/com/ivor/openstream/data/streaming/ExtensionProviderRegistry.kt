@@ -18,6 +18,7 @@ import com.ivor.openstream.data.streaming.anime.ReAnimeProvider
 import com.ivor.openstream.data.streaming.providers.VidkingDirectApi
 import com.ivor.openstream.data.streaming.providers.StremioAddonProvider
 import com.ivor.openstream.data.streaming.providers.TorrServerBridge
+import com.ivor.openstream.data.streaming.providers.VistaNativeP2pBridge
 import com.ivor.openstream.data.streaming.providers.VidkingDirectProvider
 import com.ivor.openstream.data.streaming.providers.VidkingServerSpec
 import com.ivor.openstream.data.streaming.providers.WebEmbedProvider
@@ -78,7 +79,8 @@ class ExtensionProviderRegistry @Inject constructor(
     private val hosterExtractors: HosterExtractors,
     @Named("StreamingClient") private val streamingClient: OkHttpClient,
     private val json: Json,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val nativeP2pBridge: VistaNativeP2pBridge
 ) {
     private val cache = ConcurrentHashMap<String, StreamProvider>()
 
@@ -187,7 +189,8 @@ class ExtensionProviderRegistry @Inject constructor(
                 baseUrl = engine.endpoint.removeSuffix("/manifest.json").trimEnd('/'),
                 client = streamingClient,
                 json = json,
-                torrentBridge = TorrServerBridge(context)
+                torrentBridge = TorrServerBridge(context),
+                nativeBridge = nativeP2pBridge
             )
             ExtensionEngineType.UNSUPPORTED -> return null
         }
