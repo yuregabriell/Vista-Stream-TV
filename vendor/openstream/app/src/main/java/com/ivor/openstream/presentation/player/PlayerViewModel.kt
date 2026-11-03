@@ -829,6 +829,14 @@ class PlayerViewModel @Inject constructor(
             _activeServer.value = next
             setActiveId(next.id)
             _playerEvents.tryEmit(context.getString(R.string.details_failed_trying_next, failed.name, next.name))
+        } else if (_serversState.value is ServersState.Resolving &&
+            resolutionJob?.isActive == true) {
+            // The first link failed before the other addons finished: keep their
+            // ongoing discovery instead of cancelling and restarting 20+ sources.
+            // The collector will automatically choose the next viable response.
+            _activeServer.value = null
+            setActiveId(null)
+            _playerEvents.tryEmit("Fonte indisponível. A procurar a próxima sem reiniciar.")
         } else if (!backupSourcesSearched && currentIdentity != null) {
             // Every direct link failed to play: widen the search to the backup sources once.
             backupSourcesSearched = true
