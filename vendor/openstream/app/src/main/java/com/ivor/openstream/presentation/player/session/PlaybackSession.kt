@@ -524,6 +524,16 @@ class PlaybackSession @Inject constructor(
         }
     }
 
+    /**
+     * An Android TV title page may resolve torrent candidates before playback begins.
+     * When that page is popped, release those unused candidate sessions after a short
+     * grace period. A player opened immediately afterwards is protected by the live
+     * nowPlaying URI, so its torrent must never be deleted.
+     */
+    fun releaseAbandonedPreviewSources() {
+        cleanupUnusedNativeVideo(gracePeriodMs = 1_500L)
+    }
+
     /** Called by the player screen whenever the playing item or its metadata changes. */
     fun update(nowPlaying: NowPlaying) {
         val previous = _nowPlaying.value
