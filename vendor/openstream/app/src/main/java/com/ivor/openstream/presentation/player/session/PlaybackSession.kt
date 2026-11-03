@@ -598,6 +598,18 @@ class PlaybackSession @Inject constructor(
         cleanupUnusedNativeVideo()
     }
 
+    /**
+     * Removing the app from recent tasks means the native P2P stream should not
+     * keep downloading in a headless media service. Merely pressing Home/locking
+     * the screen still follows the user's background playback preference.
+     */
+    fun stopNativeP2pWhenTaskRemoved(): Boolean {
+        val url = _nowPlaying.value?.mediaUri
+        if (!nativeP2pBridge.isActiveNativeStream(url)) return false
+        stop()
+        return true
+    }
+
     // region Casting
 
     /**
