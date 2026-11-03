@@ -86,8 +86,14 @@ class StremioAddonProvider(
             val type = if (identity.tmdbType == "movie") "movie" else "series"
             if (info.types.isNotEmpty() && type !in info.types) return@withContext Result.success(emptyList())
 
-            // The add-on's preferred id scheme first; the next only when the first finds nothing.
-            for (videoId in candidateIds(identity, info)) {
+            // IMDb-only addons (including Torrentio) cannot resolve a TMDB or AniList
+            // ID unless metadata has first provided a matching IMDb identifier.
+            // Report this as an ID-mapping failure rather than claiming 0 streams.
+            val ids = candidateIds(identity, info)
+            if (ids.isEmpty()) {
+                return@withContext Result.failure(IllegalStateException("STREMIO_ID_MISSING"))
+            }
+            for (videoId in ids) {
                 val servers = fetchStreams(type, videoId, identity.title)
                 if (servers.isNotEmpty()) return@withContext Result.success(servers)
             }
