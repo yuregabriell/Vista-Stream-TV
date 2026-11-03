@@ -50,6 +50,9 @@ class ExtensionStreamProvider(
     override val isEnabled: Boolean = delegate.isEnabled
     override val isFallback: Boolean = delegate.isFallback
 
+    /** Stremio commonly requires IMDb. Other resolvers can begin from TMDB immediately. */
+    val requiresIdEnrichment: Boolean = delegate is StremioAddonProvider
+
     override suspend fun resolve(identity: MediaIdentity): Result<List<VideoServer>> {
         // Embedded websites and Vidking routes require a real numeric TMDB ID.
         // Passing 0 used to manufacture dead links such as .../tv/0/1/1.
