@@ -117,7 +117,7 @@ jobs:
           ./gradlew :app:assembleDebug --no-daemon
       - name: Test catalog, Cast, HLS and playback-engine diagnostics
         working-directory: vendor/openstream
-        run: ./gradlew :app:testDebugUnitTest --tests '*UnifiedSearchTest' --tests '*SourceSearchPolicyTest' --tests '*CacheBudgetTvTest' --tests '*ExtensionBatchTransferTest' --tests '*KeylessEpisodeListTest' --tests '*TvAnimeCanonicalMatchTest' --tests '*OfficialCatalogTest' --tests '*CastByteRangesTest' --tests '*CastHlsSupportTest' --tests '*VistaPlaybackEngineTest' --tests '*StremioTorrentIndexTest' --tests '*StremioMagnetCompatibilityTest' --tests '*StremioStreamLabelsTest' --no-daemon
+        run: ./gradlew :app:testDebugUnitTest --tests '*CacheBudgetTest' --tests '*UnifiedSearchTest' --tests '*SourceSearchPolicyTest' --tests '*CacheBudgetTvTest' --tests '*ExtensionBatchTransferTest' --tests '*KeylessEpisodeListTest' --tests '*TvAnimeCanonicalMatchTest' --tests '*OfficialCatalogTest' --tests '*CastByteRangesTest' --tests '*CastHlsSupportTest' --tests '*VistaPlaybackEngineTest' --tests '*StremioTorrentIndexTest' --tests '*StremioMagnetCompatibilityTest' --tests '*StremioStreamLabelsTest' --no-daemon
       - name: Select universal APK
         shell: bash
         run: |
