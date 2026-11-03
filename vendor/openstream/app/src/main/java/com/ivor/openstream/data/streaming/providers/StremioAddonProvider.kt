@@ -420,8 +420,8 @@ class StremioAddonProvider(
     private companion object {
         const val TAG = "StremioAddon"
         const val MAX_LABEL_LENGTH = 110
-        const val VERIFY_PARALLELISM = 8
-        const val VERIFY_BUDGET_MS = 8_000L
+        const val VERIFY_PARALLELISM = 3
+        const val VERIFY_BUDGET_MS = 1_500L
         const val PROBE_TIMEOUT_MS = 4_000L
     }
 }
