@@ -92,7 +92,6 @@ class ExtensionRepositoryImpl @Inject constructor(
             }
             store.setLastSyncedAt(System.currentTimeMillis())
             synchronized(lock) { rebuildManifests() }
-            seedDefaultInstalls()
             publish(isSyncing = false)
         }
     }
@@ -119,8 +118,8 @@ class ExtensionRepositoryImpl @Inject constructor(
                     rebuildManifests()
                     toRepo(repoId, snapshot)
                 }
-                // A pasted Stremio add-on is ready to use without a separate install step.
-                seedDefaultInstalls()
+                // Adding a repository only imports its catalog. Playback extensions require
+                // explicit installation or a deliberate preset selection.
                 publish(isSyncing = false)
                 repo
             }
@@ -227,38 +226,19 @@ class ExtensionRepositoryImpl @Inject constructor(
 
 
     /**
-     * Explicit action for existing installations. It enables the compact PT preset,
-     * disables optional installed sources (without deleting them), and remembers
-     * the new order. This never runs automatically for upgrading users.
+     * User-triggered PT-BR preset; remote definition can be updated without a new APK.
+     * A bundled copy is available offline. Existing installs are never cleared.
      */
-    override fun applyPortuguesePreset(): Int {
-        ensureLoaded()
-        val recommended = manifests
-            .filter(PortugueseExtensionPreset::includes)
-            .sortedWith(compareBy<ExtensionManifest> {
-                PortugueseExtensionPreset.rank(it)
-            }.thenBy { it.engine.priority })
-        if (recommended.isEmpty()) return 0
-        val currentlyInstalled = store.installs()
-        val now = System.currentTimeMillis()
-        val recommendedKeys = recommended.map { it.key }.toSet()
-        val updated = currentlyInstalled.mapValues { (_, record) ->
-            record.copy(enabled = false)
-        }.toMutableMap()
-        recommended.forEach { manifest ->
-            updated[manifest.key] = (
-                currentlyInstalled[manifest.key]
-                    ?: InstallRecord(versionCode = manifest.versionCode, installedAt = now)
-                ).copy(enabled = true)
-        }
-        store.putInstalls(updated)
-        store.markSeeded(recommendedKeys)
-        store.setSourceOrder(
-            recommended.map { it.key } +
-                store.sourceOrder().filterNot { it in recommendedKeys }
-        )
-        publish(isSyncing = _catalog.value.isSyncing)
-        return recommended.size
+    override suspend fun applyPortuguesePreset(): Result<ExtensionImportSummary> {
+        val raw = runCatching { client.fetchPreset(PT_BR_PRESET_URL) }
+            .getOrElse {
+                runCatching {
+                    context.assets.open(PT_BR_PRESET_ASSET).bufferedReader().use { reader ->
+                        reader.readText()
+                    }
+                }.getOrElse { error -> return Result.failure(error) }
+            }
+        return importBackup(raw)
     }
 
     override fun install(key: String) {
@@ -374,7 +354,6 @@ class ExtensionRepositoryImpl @Inject constructor(
             loaded = true
         }
         migrateLegacyInstalls()
-        seedDefaultInstalls()
         publish(isSyncing = _catalog.value.isSyncing)
     }
 
@@ -399,45 +378,8 @@ class ExtensionRepositoryImpl @Inject constructor(
         store.clearLegacyState(official.map { it.id })
     }
 
-    /**
-     * Extensions flagged `installedByDefault` are installed once, then the user is in charge —
-     * a default that was removed must not come back on the next repository refresh.
-     */
-    private fun seedDefaultInstalls() {
-        val installs = store.installs()
-        val alreadySeeded = store.seededKeys()
-        // The remote repository's old installedByDefault flags are not our preset:
-        // they previously installed unrelated languages and many fallback engines.
-        val candidates = manifests.filter { manifest ->
-            PortugueseExtensionPreset.includes(manifest) ||
-                (manifest.repoId != BundledExtensionCatalog.OFFICIAL_REPO_ID &&
-                    manifest.installedByDefault && manifest.isSupported)
-        }
-        // Upgrades must not silently re-enable a Portuguese source a user had
-        // previously declined. Existing users can opt in through Installed > PT-BR.
-        val existingLineup = alreadySeeded.isNotEmpty()
-        val seeded = candidates
-            .filter { manifest ->
-                !installs.containsKey(manifest.key) &&
-                    manifest.key !in alreadySeeded &&
-                    (!existingLineup || manifest.repoId != BundledExtensionCatalog.OFFICIAL_REPO_ID)
-            }
-            .associate { manifest ->
-                manifest.key to InstallRecord(
-                    versionCode = manifest.versionCode,
-                    enabled = true,
-                    installedAt = System.currentTimeMillis()
-                )
-            }
-        if (seeded.isNotEmpty()) store.putInstalls(seeded)
-        store.markSeeded(candidates.map { it.key })
-        if (store.sourceOrder().isEmpty() && seeded.isNotEmpty()) {
-            val curated = candidates.filter(PortugueseExtensionPreset::includes)
-                .sortedBy(PortugueseExtensionPreset::rank)
-                .map { it.key }
-            if (curated.isNotEmpty()) store.setSourceOrder(curated)
-        }
-    }
+    // A fresh installation intentionally has no enabled sources. The full catalogs
+    // remain browsable; installation happens through manual selection or a preset.
 
     private fun rebuildManifests() {
         manifests = snapshots.entries
@@ -500,6 +442,8 @@ class ExtensionRepositoryImpl @Inject constructor(
     )
 
     private companion object {
+        const val PT_BR_PRESET_URL = "https://raw.githubusercontent.com/yuregabriell/Vista-Stream-TV/main/presets/pt-br.json"
+        const val PT_BR_PRESET_ASSET = "presets/pt-br.json"
         val STALE_WINDOW_MS = 5 * 60 * 1000L
     }
 }
