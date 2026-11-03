@@ -36,6 +36,13 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        // Swiping the app away must stop a native torrent and schedule its piece cleanup.
+        // Pressing Home or locking the phone does not remove the task.
+        if (playbackSession.stopNativeP2pWhenTaskRemoved()) {
+            stopSelf()
+            super.onTaskRemoved(rootIntent)
+            return
+        }
         // While casting, the Chromecast still depends on this process's HTTP proxy.
         // The local player is intentionally stopped, so it cannot decide service lifetime.
         if (playbackSession.castStatus.value.isCasting) return

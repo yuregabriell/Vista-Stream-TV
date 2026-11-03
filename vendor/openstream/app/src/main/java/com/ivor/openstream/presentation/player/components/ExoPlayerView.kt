@@ -303,6 +303,15 @@ fun ExoPlayerView(
     var activeVideoHeight by remember { mutableIntStateOf(0) }
     var subtitleOptions by remember { mutableStateOf<List<SubtitleOption>>(emptyList()) }
     var audioOptions by remember { mutableStateOf<List<AudioOption>>(emptyList()) }
+    // Track availability is source-specific, unlike the shared Media3 player.
+    var audioRecoveryAttempted by remember(videoUrl) { mutableStateOf(false) }
+    var audioHealthWarning by remember(videoUrl) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(audioHealthWarning) {
+        audioHealthWarning?.let { message ->
+            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
     var selectedSubtitle by remember { mutableStateOf<SubtitleOption?>(null) }
 
     // Subtitle rendering state -- rendered in Compose, not PlayerView
@@ -814,6 +823,48 @@ fun ExoPlayerView(
         }
     }
 
+    /**
+     * A source may expose an audio track which the device cannot decode, or keep a
+     * stale selection from the previous source. Recover a supported track once,
+     * otherwise explain why picture can play without sound.
+     */
+    fun verifyAudioTracks(tracks: Tracks) {
+        if (exoPlayer.playbackState != Player.STATE_READY) return
+        val groups = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+        val supported = groups.flatMap { group ->
+            (0 until group.length)
+                .filter { group.isTrackSupported(it) }
+                .map { index -> group to index }
+        }
+        val selected = groups.any { group ->
+            (0 until group.length).any { index ->
+                group.isTrackSupported(index) && group.isTrackSelected(index)
+            }
+        }
+        audioHealthWarning = when {
+            groups.isEmpty() -> "Esta fonte não apresenta nenhuma faixa de áudio. Tenta outra fonte."
+            supported.isEmpty() -> {
+                val codec = groups.first().getTrackFormat(0).sampleMimeType
+                    ?: groups.first().getTrackFormat(0).codecs ?: "desconhecido"
+                "Áudio incompatível com este aparelho ($codec). Escolhe outra fonte ou um ficheiro com AAC."
+            }
+            exoPlayer.volume <= 0f -> "O volume do player está a zero. Aumenta o volume para ouvir o vídeo."
+            !selected && !audioRecoveryAttempted -> {
+                audioRecoveryAttempted = true
+                val (group, index) = supported.first()
+                exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+                    .buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                    .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                    .addOverride(TrackSelectionOverride(group.mediaTrackGroup, listOf(index)))
+                    .build()
+                null
+            }
+            !selected -> "Não foi possível selecionar o áudio desta fonte. Experimenta outra faixa ou fonte."
+            else -> null
+        }
+    }
+
     /** Shows [option] (null turns subtitles off), whether it is a stream track or a sideloaded file. */
     fun applySubtitle(option: SubtitleOption?) {
         selectedSubtitle = option
@@ -913,6 +964,13 @@ fun ExoPlayerView(
 
         // CASE 1: Video URL changed (Episode switch) -> Full Reset
         if (currentUri != newUri) {
+            // A previous torrent's audio override must not silence another file.
+            // Preserve the preferred language while returning track selection to Auto.
+            exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                .build()
             applyRequestHeaders(requestHeaders)
             val mediaItemBuilder = buildMediaItem()
             val configs = buildSubtitleConfigs(remoteSubtitles)
@@ -1040,6 +1098,7 @@ fun ExoPlayerView(
                     Player.STATE_READY -> {
                         isBuffering = false
                         totalTime = exoPlayer.duration
+                        verifyAudioTracks(exoPlayer.currentTracks)
                         latestPlaybackReady()
                     }
                     Player.STATE_ENDED -> {
@@ -1072,6 +1131,7 @@ fun ExoPlayerView(
 
             override fun onTracksChanged(tracks: Tracks) {
                 parseTracksFromPlayer(tracks)
+                verifyAudioTracks(tracks)
             }
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
@@ -1099,6 +1159,7 @@ fun ExoPlayerView(
         isPlaying = exoPlayer.isPlaying
         if (exoPlayer.playbackState == Player.STATE_READY) isBuffering = false
         parseTracksFromPlayer(exoPlayer.currentTracks)
+        verifyAudioTracks(exoPlayer.currentTracks)
         onDispose {
             latestPositionChanged(exoPlayer.currentPosition.coerceAtLeast(0L))
             latestProgressChanged(
@@ -2115,19 +2176,23 @@ fun ExoPlayerView(
                 onZoomToFillChange = { zoomToFill = it },
                 onAudioSelected = { option ->
                     val tracks = exoPlayer.currentTracks
-                    if (option.groupIndex < tracks.groups.size) {
-                        exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
-                            .buildUpon()
-                            .setPreferredAudioLanguage(option.language)
-                            .setOverrideForType(
-                                TrackSelectionOverride(
-                                    tracks.groups[option.groupIndex].mediaTrackGroup,
-                                    listOf(option.trackIndex)
+                    if (option.groupIndex in tracks.groups.indices) {
+                        val group = tracks.groups[option.groupIndex]
+                        if (option.trackIndex in 0 until group.length &&
+                            group.isTrackSupported(option.trackIndex)
+                        ) {
+                            exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+                                .buildUpon()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                                .setPreferredAudioLanguage(option.language)
+                                .setOverrideForType(
+                                    TrackSelectionOverride(group.mediaTrackGroup, listOf(option.trackIndex))
                                 )
-                            )
-                            .build()
+                                .build()
+                            audioHealthWarning = null
+                            onAudioLanguageChosen(option.language)
+                        }
                     }
-                    onAudioLanguageChosen(option.language)
                 }
             )
         )

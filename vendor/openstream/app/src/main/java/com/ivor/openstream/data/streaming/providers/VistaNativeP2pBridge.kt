@@ -11,6 +11,11 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.util.Locale
 import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.FileVisitResult
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.attribute.BasicFileAttributes
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
@@ -48,6 +53,44 @@ internal fun isolatedTorrentPayloadDirectory(cacheDirectory: File, torrentId: St
     }.getOrNull()
 }
 
+/**
+ * Remove only the native torrent engine's disposable on-disk directories.
+ * Called on fresh process startup (after a forced close/crash) and when the final
+ * native torrent is released. Never traverse symlinks or touch Media3's shared
+ * cache, artwork, offline downloads or watch history.
+ */
+internal fun purgeNativeP2pTemporaryData(appCacheDir: File): Boolean {
+    val root = runCatching { appCacheDir.canonicalFile }.getOrNull() ?: return false
+    if (!root.isDirectory) return false
+    var success = true
+    for (name in listOf("vista-p2p-pieces", "vista-p2p-engine")) {
+        val directory = File(root, name)
+        val path = directory.toPath()
+        if (!Files.exists(path) && !Files.isSymbolicLink(path)) continue
+        if (Files.isSymbolicLink(path) || directory.canonicalFile.parentFile != root) {
+            success = false
+            continue
+        }
+        val removed = runCatching {
+            // walkFileTree does not follow symbolic links by default.
+            Files.walkFileTree(path, object : SimpleFileVisitor<Path>() {
+                override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                    Files.deleteIfExists(file)
+                    return FileVisitResult.CONTINUE
+                }
+                override fun postVisitDirectory(dir: Path, error: IOException?): FileVisitResult {
+                    if (error != null) throw error
+                    Files.deleteIfExists(dir)
+                    return FileVisitResult.CONTINUE
+                }
+            })
+            true
+        }.getOrDefault(false)
+        if (!removed) success = false
+    }
+    return success
+}
+
 /** A scoped delete with no effect on any other torrent, poster, or app cache. */
 internal fun purgeIsolatedTorrentPayload(cacheDirectory: File, torrentId: String): Boolean {
     val target = isolatedTorrentPayloadDirectory(cacheDirectory, torrentId) ?: return false
@@ -72,6 +115,11 @@ class VistaNativeP2pBridge @Inject constructor(
     // Maps prepared sources back to their exact torrent. Never delete the app-wide
     // cache, only a completed torrent's own verified payload directory.
     private val active = LinkedHashMap<String, PreparedStream>()
+    // Read by the Android task-removal callback without crossing the IO mutex.
+    @Volatile private var activeStreamUrls: Set<String> = emptySet()
+
+    fun isActiveNativeStream(url: String?): Boolean =
+        url != null && url in activeStreamUrls
     // Includes hashes whose metadata lookup failed before a stream could be
     // prepared, so an abandoned search cannot leave orphan payloads behind.
     private val attemptedHashes = LinkedHashSet<String>()
@@ -102,6 +150,9 @@ class VistaNativeP2pBridge @Inject constructor(
                         purgeIsolatedTorrentPayload(File(app.cacheDir, "vista-p2p-pieces"), id)
                     }
                     attemptedHashes.clear()
+                    if (!purgeNativeP2pTemporaryData(app.cacheDir)) {
+                        Log.w("VistaNativeP2p", "Native P2P temporary cache cleanup was incomplete")
+                    }
                 }
                 return@withLock emptyList()
             }
@@ -146,14 +197,18 @@ class VistaNativeP2pBridge @Inject constructor(
                     purgeIsolatedTorrentPayload(File(app.cacheDir, "vista-p2p-pieces"), id)
                 }
                 attemptedHashes.clear()
+                    if (!purgeNativeP2pTemporaryData(app.cacheDir)) {
+                        Log.w("VistaNativeP2p", "Native P2P temporary cache cleanup was incomplete")
+                    }
             }
+            activeStreamUrls = active.values.map { it.url }.toSet()
             // Only these unique loopback URLs are safe to evict from Media3's
             // shared HTTP cache. Never use Cache.evictAll() on exit.
             removedMediaUrls.distinct()
         }
     }
 
-    fun isEnabled(): Boolean = prefs.getBoolean("enabled", false)
+    fun isEnabled(): Boolean = prefs.getBoolean("enabled", true)
 
     fun setEnabled(enabled: Boolean) {
         prefs.edit().putBoolean("enabled", enabled).apply()
@@ -204,6 +259,7 @@ class VistaNativeP2pBridge @Inject constructor(
                         streamId = prepared.id,
                         url = prepared.url
                     )
+                    activeStreamUrls = active.values.map { it.url }.toSet()
                     prepared.url
                 }
             }
