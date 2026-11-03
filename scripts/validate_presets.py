@@ -20,3 +20,11 @@ assert all(k in {e["key"] for e in installed} for k in order)
 assert len(order) == 5
 assert all(u.startswith("https://") for u in repos)
 print(f"Validated opt-in PT-BR preset: {len(installed)} sources, {len(repos)} additional repositories")
+
+# The Android TV UI must expose the same opt-in preset as the phone marketplace.
+tv = Path("vendor/openstream/app/src/main/java/com/ivor/openstream/presentation/tv/TvExtensionsScreen.kt").read_text(encoding="utf-8")
+assert '"Presets"' in tv
+assert 'viewModel.applyPortuguesePreset()' in tv
+assert 'viewModel.presetInstalling.collectAsState()' in tv
+assert 'TvConfirmPanel(' in tv
+print("Verified Android TV preset tab and explicit confirmation wiring.")

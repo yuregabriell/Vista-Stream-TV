@@ -83,6 +83,7 @@ fun TvExtensionsScreen(
     val uriHandler = LocalUriHandler.current
     val state by viewModel.state.collectAsState()
     val searchMode by viewModel.searchMode.collectAsState()
+    val presetInstalling by viewModel.presetInstalling.collectAsState()
     val officialProvidersEnabled by providersViewModel.enabled.collectAsState()
     LaunchedEffect(viewModel) { viewModel.liveRefreshWhileVisible() }
     // Separate UX surfaces: native integrations, installed playback sources and discovery.
@@ -90,6 +91,7 @@ fun TvExtensionsScreen(
     val showInstalled = area == 1
     var sourceCategory by remember { mutableStateOf(0) }
     var showAddRepo by remember { mutableStateOf(false) }
+    var confirmPreset by remember { mutableStateOf(false) }
     var repoInput by remember { mutableStateOf("") }
     var selectedKey by remember { mutableStateOf<String?>(null) }
     var pendingRemove by remember { mutableStateOf<MarketplaceExtension?>(null) }
@@ -115,12 +117,14 @@ fun TvExtensionsScreen(
     val rowRequesters = remember { mutableMapOf<String, FocusRequester>() }
     fun rowRequester(key: String) = rowRequesters.getOrPut(key) { FocusRequester() }
     val firstPill = remember { FocusRequester() }
+    val presetAction = remember { FocusRequester() }
     val detailAction = remember { FocusRequester() }
 
     LaunchedEffect(area) {
         withFrameNanos { }
         withFrameNanos { }
-        runCatching { firstPill.requestFocus() }
+        if (area == 3) runCatching { presetAction.requestFocus() }
+        else runCatching { firstPill.requestFocus() }
     }
     BackHandler(enabled = area != 0 && detailHasFocus && pendingRemove == null && selected != null) {
         runCatching { rowRequester(selected!!.key).requestFocus() }
@@ -180,6 +184,11 @@ fun TvExtensionsScreen(
                     "Explorar",
                     selected = area == 2,
                     onClick = { area = 2 }
+                )
+                TvPill(
+                    "Presets",
+                    selected = area == 3,
+                    onClick = { area = 3 }
                 )
             }
 
@@ -265,6 +274,113 @@ fun TvExtensionsScreen(
                             )
                             Spacer(Modifier.height(8.dp))
                             Text("Integrado", color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            } else if (area == 3) {
+                // TV has a separate UX from phone; both use the same repository preset
+                // and install-state store. Presets are only applied after a D-pad action.
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(
+                        start = TvLayout.ContentStart,
+                        end = TvLayout.ContentEnd,
+                        bottom = 32.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        "Presets de extensões",
+                        style = MaterialTheme.typography.headlineMedium,
+                        modifier = Modifier.semantics { heading() }
+                    )
+                    Text(
+                        "As fontes são opcionais. O catálogo de filmes, séries e animes " +
+                            "continua disponível sem instalar extensões.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(18.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1.7f)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    RoundedCornerShape(22.dp)
+                                ).padding(24.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Text(
+                                "PT-BR · Filmes, séries e animes",
+                                style = MaterialTheme.typography.headlineSmall
+                            )
+                            Text(
+                                "21 extensões selecionadas · 5 repositórios adicionais",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                "Inclui fontes HTTP, addons Stremio e torrents/P2P. " +
+                                    "O preset utiliza o mesmo ficheiro JSON da versão móvel. " +
+                                    "Nenhuma destas fontes é ativada numa instalação nova " +
+                                    "até escolheres instalá-las.",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Button(
+                                    onClick = { confirmPreset = true },
+                                    enabled = !presetInstalling,
+                                    modifier = Modifier.focusRequester(presetAction),
+                                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding
+                                ) {
+                                    Icon(
+                                        Icons.Default.Add, null,
+                                        modifier = Modifier.size(ButtonDefaults.IconSize)
+                                    )
+                                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                                    Text(
+                                        if (presetInstalling) "A instalar…"
+                                        else if (state.installed.isEmpty()) "Instalar preset PT-BR"
+                                        else "Aplicar preset PT-BR"
+                                    )
+                                }
+                                OutlinedButton(onClick = { area = 1 }) {
+                                    Text("Ver instaladas")
+                                }
+                            }
+                        }
+                        Column(
+                            modifier = Modifier.weight(1f)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceContainerLow,
+                                    RoundedCornerShape(22.dp)
+                                ).padding(24.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text("As tuas fontes", style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                "${state.installed.size} instaladas · " +
+                                    "${state.installed.count { it.isEnabled }} ativas",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                "O preset acrescenta e reativa fontes sem remover as já " +
+                                    "instaladas. Addons offline ou incompatíveis podem " +
+                                    "não funcionar; a instalação não garante reprodução.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            state.message?.takeIf {
+                                it.startsWith("Preset PT-BR:") ||
+                                    it.startsWith("Erro ao instalar preset PT-BR:")
+                            }?.let { message ->
+                                Text(
+                                    message,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                     }
                 }
@@ -409,6 +525,21 @@ fun TvExtensionsScreen(
                     }
                 }
             }
+        }
+
+        if (confirmPreset) {
+            TvConfirmPanel(
+                title = "Instalar preset PT-BR?",
+                message = "Instalar as 21 extensões e adicionar os 5 repositórios " +
+                    "do preset PT-BR? Os addons podem estar indisponíveis. " +
+                    "As fontes já instaladas serão preservadas.",
+                confirmLabel = "Instalar",
+                onConfirm = {
+                    confirmPreset = false
+                    viewModel.applyPortuguesePreset()
+                },
+                onCancel = { confirmPreset = false }
+            )
         }
 
         if (showAddRepo) {
