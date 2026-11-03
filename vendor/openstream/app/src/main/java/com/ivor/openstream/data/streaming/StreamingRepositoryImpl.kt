@@ -156,7 +156,13 @@ class StreamingRepositoryImpl @Inject constructor(
         }
 
         // Providers that only know IMDb ids need this; the rest must not wait long on TMDB for it.
-        val enrichedIdentity = withTimeoutOrNull(ID_LOOKUP_TIMEOUT_MS) { idMappingService.enrich(identity) } ?: identity
+        // A slow IMDb mapping must not block HTTP/native resolvers that only need TMDB.
+        // Start the lookup lazily as soon as a Stremio provider requires it.
+        val enrichedIdentity = async(Dispatchers.IO, start = CoroutineStart.LAZY) {
+            withTimeoutOrNull(ID_LOOKUP_TIMEOUT_MS) { idMappingService.enrich(identity) } ?: identity
+        }
+        suspend fun identityFor(provider: ExtensionStreamProvider): MediaIdentity =
+            if (provider.requiresIdEnrichment) enrichedIdentity.await() else identity
         val preferredServerId = preferences.getString(preferenceKey(identity), null)
 
         var servers = partialSeed?.servers.orEmpty()
@@ -195,7 +201,7 @@ class StreamingRepositoryImpl @Inject constructor(
             // source that played last time jumps the queue.
             val ordered = listOfNotNull(remembered) + otherProviders
             ordered.forEachIndexed { index, provider ->
-                absorb(runProvider(provider, enrichedIdentity))
+                absorb(runProvider(provider, identityFor(provider)))
                 val found = servers.isNotEmpty()
                 publish(progress(servers, index + 1, ordered.size, failedProviders, isComplete = found || index == ordered.lastIndex))
                 if (found) return@channelFlow
@@ -214,7 +220,9 @@ class StreamingRepositoryImpl @Inject constructor(
         fun start(providers: List<ExtensionStreamProvider>) {
             pending += providers.size
             total += providers.size
-            providers.forEach { provider -> launch { events.send(runProvider(provider, enrichedIdentity)) } }
+            providers.forEach { provider ->
+                launch { events.send(runProvider(provider, identityFor(provider))) }
+            }
         }
 
         fun startFallbacks() {
