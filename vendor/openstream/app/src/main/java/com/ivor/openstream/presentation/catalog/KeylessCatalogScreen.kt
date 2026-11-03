@@ -13,7 +13,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -74,6 +76,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import com.ivor.openstream.data.catalog.KeylessTitle
+import com.ivor.openstream.presentation.tv.TvAnimeTitleNavigationViewModel
 import com.ivor.openstream.presentation.tv.TvAnimeDetails
 import com.ivor.openstream.presentation.tv.TvDpadTextInput
 import com.ivor.openstream.presentation.tv.rememberTvMode
@@ -177,9 +180,32 @@ fun KeylessCatalogScreen(
     castViewModel: KeylessCastViewModel = hiltViewModel(),
     onTmdbConfigured: () -> Unit = {},
     initialTitle: com.ivor.openstream.data.catalog.KeylessTitle? = null,
-    onInitialDismiss: () -> Unit = {}
+    onInitialDismiss: () -> Unit = {},
+    onOpenUnifiedTitle: ((String, Int) -> Unit)? = null,
+    titleNavigation: TvAnimeTitleNavigationViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
+    val openScope = rememberCoroutineScope()
+    val openTitle: (KeylessTitle) -> Unit = { title ->
+        // Whether the card comes from AniList, Cinemeta, search or history,
+        // a matched TMDB identity must open the same premium details screen.
+        val navigate = onOpenUnifiedTitle
+        if (navigate == null) {
+            viewModel.select(title)
+        } else {
+            openScope.launch {
+                val matched = try {
+                    titleNavigation.resolve(title)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    null
+                }
+                if (matched != null) navigate(matched.first, matched.second)
+                else viewModel.select(title) // Truly unmatched metadata fallback.
+            }
+        }
+    }
     var hadInitialSelection by remember(initialTitle?.sourceId) { mutableStateOf(false) }
     LaunchedEffect(initialTitle?.sourceId) {
         initialTitle?.let { viewModel.select(it) }
@@ -771,7 +797,7 @@ fun KeylessCatalogScreen(
                             Modifier.fillMaxWidth().padding(horizontal = 20.dp)
                                 .height(if (wideLayout) 320.dp else 235.dp)
                                 .background(MaterialTheme.colorScheme.surfaceContainer, RoundedCornerShape(18.dp))
-                                .clickable { viewModel.select(featured) }
+                                .clickable { openTitle(featured) }
                         ) {
                             AsyncImage(
                                 model = featured.background ?: featured.poster,
@@ -854,7 +880,7 @@ fun KeylessCatalogScreen(
                     ) {
                         items(continueWatching, key = { it.sourceId }) { title ->
                             Column(
-                                Modifier.width(posterWidth).clickable { viewModel.select(title) },
+                                Modifier.width(posterWidth).clickable { openTitle(title) },
                                 verticalArrangement = Arrangement.spacedBy(7.dp)
                             ) {
                                 AsyncImage(
@@ -915,7 +941,7 @@ fun KeylessCatalogScreen(
                             items(titles.take(45), key = { it.sourceId }) { title ->
                                 Column(
                                     modifier = Modifier.width(posterWidth)
-                                        .clickable { viewModel.select(title) },
+                                        .clickable { openTitle(title) },
                                     verticalArrangement = Arrangement.spacedBy(7.dp)
                                 ) {
                                     AsyncImage(
@@ -956,7 +982,7 @@ fun KeylessCatalogScreen(
                         Column(
                             modifier = Modifier.weight(1f).clickable {
                                 focusManager.clearFocus()
-                                viewModel.select(title)
+                                openTitle(title)
                             },
                             verticalArrangement = Arrangement.spacedBy(7.dp)
                         ) {
