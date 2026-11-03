@@ -25,13 +25,22 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.MultiFormatWriter
 import com.google.zxing.common.BitMatrix
 import com.ivor.openstream.data.auth.VistaCloudAuth
+import com.ivor.openstream.data.auth.VistaCloudSync
+import com.ivor.openstream.data.local.AppDatabase
+import com.ivor.openstream.data.settings.AppSettingsStore
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
+import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 
 /**
  * VistaStream account screen for Android phone + TV D-pad.
  * No password is sent to the Vista ID app, and no cloud account is required to play.
  */
+@AndroidEntryPoint
 class VistaIdAccountActivity : ComponentActivity() {
+    @Inject lateinit var database: AppDatabase
+    @Inject lateinit var settingsStore: AppSettingsStore
     private val cloud by lazy { VistaCloudAuth(this) }
     private val handler = Handler(Looper.getMainLooper())
     private val bg = Color.rgb(9, 14, 28)
@@ -188,6 +197,24 @@ class VistaIdAccountActivity : ComponentActivity() {
                 data.optJSONObject("progress").let { it?.length() ?: 0 } + " títulos na nuvem"
         }
         gap(card, 14)
+        button(card, "Sincronizar favoritos e progresso agora", true) {
+            AlertDialog.Builder(this)
+                .setTitle("Sincronizar este perfil?")
+                .setMessage("Combinar favoritos e episódios do perfil local selecionado com os do Vista Cloud. Mantém os dados no aparelho e transfere apenas metadados pequenos. Se houver conflito de progresso, prevalece o mais recente.")
+                .setNegativeButton("Cancelar", null)
+                .setPositiveButton("Sincronizar", { _, _ ->
+                    runAsync({
+                        runBlocking {
+                            VistaCloudSync(applicationContext, database, settingsStore, cloud).sync()
+                        }
+                    }) { result ->
+                        Toast.makeText(this, "Sincronizados " + result.favorites +
+                            " favoritos e " + result.progress + " episódios", Toast.LENGTH_LONG).show()
+                        draw()
+                    }
+                }).show()
+        }
+        gap(card, 10)
         button(card, "Consultar dados sincronizados", false) {
             runAsync({ cloud.cloudData() }) { data ->
                 AlertDialog.Builder(this).setTitle("Vista Cloud · VS")
