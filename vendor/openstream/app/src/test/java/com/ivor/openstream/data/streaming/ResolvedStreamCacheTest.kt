@@ -44,11 +44,16 @@ class ResolvedStreamCacheTest {
     }
 
     @Test
-    fun keepsOnlyCompleteSearchesThatFoundSomething() {
-        cache.put(episode, "p@1", found.copy(isComplete = false))
-        assertNull(cache.get(episode, "p@1"))
+    fun keepsPartialPlayableSearchesWithoutMistakingThemForComplete() {
+        val partial = found.copy(isComplete = false)
+        cache.put(episode, "p@1", partial)
+        assertEquals(partial, cache.get(episode, "p@1"))
+        // An empty transient response must not erase the already discovered link.
         cache.put(episode, "p@1", found.copy(servers = emptyList()))
-        assertNull(cache.get(episode, "p@1"))
+        assertEquals(partial, cache.get(episode, "p@1"))
+        // The complete result supersedes the partial one.
+        cache.put(episode, "p@1", found)
+        assertEquals(found, cache.get(episode, "p@1"))
     }
 
     @Test
