@@ -4,8 +4,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
- * Portable *configuration* backup, not an executable plugin bundle. No tokens, credentials,
- * stream URLs, cached content or third-party code are included.
+ * Portable *configuration* backup, not an executable plugin bundle. It may contain private
+ * credentials embedded in configured Stremio repository URLs. Treat backups as sensitive;
+ * no cached videos or executable third-party plugins are included.
  */
 @Serializable
 data class ExtensionBackup(
