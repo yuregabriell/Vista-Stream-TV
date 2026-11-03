@@ -86,12 +86,20 @@ class StremioAddonProvider(
             val type = if (identity.tmdbType == "movie") "movie" else "series"
             if (info.types.isNotEmpty() && type !in info.types) return@withContext Result.success(emptyList())
 
-            // The add-on's preferred id scheme first; the next only when the first finds nothing.
+            // A failed IMDb endpoint must not prevent the TMDB fallback for the
+            // SAME title/episode. Keep errors until every advertised ID has failed.
+            var firstFailure: Exception? = null
             for (videoId in candidateIds(identity, info)) {
-                val servers = fetchStreams(type, videoId, identity.title, identity.season, identity.episode)
-                if (servers.isNotEmpty()) return@withContext Result.success(servers)
+                try {
+                    val servers = fetchStreams(type, videoId, identity.title, identity.season, identity.episode)
+                    if (servers.isNotEmpty()) return@withContext Result.success(servers)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    if (firstFailure == null) firstFailure = error
+                }
             }
-            Result.success(emptyList())
+            firstFailure?.let { Result.failure(it) } ?: Result.success(emptyList())
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
@@ -166,7 +174,7 @@ class StremioAddonProvider(
             val nativeUrl = nativeKey(stream)?.let(nativePrepared::get)
             val resolver: (String, String?, List<String>) -> Int? = { hash, filename, trackers ->
                 // Metadata discovery is network-bound; limit it per addon search.
-                if (missingFileIdLookups++ >= 3) null
+                if (missingFileIdLookups++ >= 8) null
                 else torrentBase?.let {
                     torrentBridge?.discoverFileIndex(
                         it, hash, filename,

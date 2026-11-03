@@ -20,7 +20,7 @@ internal object StremioStreamLabels {
     ) {
         private val firstDetail = detailLines.firstOrNull().orEmpty()
 
-        val size: String? = SIZE.find(firstDetail)?.value?.let { raw ->
+        val size: String? = SIZE.find((nameLines + detailLines + listOfNotNull(filename)).joinToString(" "))?.value?.let { raw ->
             raw.replace(Regex("\\s+"), "").replace(Regex("(?i)([GM]B)$")) { " " + it.value.uppercase(Locale.ROOT) }
         }
 
@@ -38,7 +38,8 @@ internal object StremioStreamLabels {
     }
 
     fun label(parts: Parts, title: String, fallback: String): String {
-        val text = (parts.nameLines + parts.body + listOfNotNull(parts.filename)).joinToString(" ")
+        // The actual file name is more trustworthy than a site's download-button label.
+        val text = (listOfNotNull(parts.filename) + parts.nameLines + parts.body).joinToString(" ")
         val facts = facts(text).toMutableList()
         if (facts.size < 2) {
             val hasLanguage = tokens(text).any { it in LANGUAGES }
