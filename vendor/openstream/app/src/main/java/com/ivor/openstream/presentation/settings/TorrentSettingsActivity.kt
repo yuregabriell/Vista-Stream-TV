@@ -46,7 +46,7 @@ class TorrentSettingsActivity : Activity() {
         })
         root.addView(text(
             "Baseado no Nuvio Engine GPLv3: torrents transformados em HTTP local no próprio aparelho. " +
-            "Requer peers disponíveis, usa até 512 MB de cache e não pode transmitir " +
+            "Requer peers disponíveis, usa até 128 MB de cache e não pode transmitir " +
             "diretamente ao Chromecast sem um proxy na rede. Desativado por padrão.",
             13f,muted
         ).apply {setPadding(0,0,0,dp(9))})
