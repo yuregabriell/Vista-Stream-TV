@@ -1,0 +1,74 @@
+{
+  "manifestVersion": 1,
+  "name": "GoAnime · Fontes PT-BR (experimental)",
+  "description": "Fontes Android declarativas inspiradas nos provedores do projeto GoAnime (MIT). Não executa o binário Go. A disponibilidade de reprodução varia.",
+  "website": "https://github.com/alvarorichard/GoAnime",
+  "extensions": [
+    {
+      "id": "goanime-animefire",
+      "name": "GoAnime · AnimeFire PT-BR",
+      "description": "Adaptador nativo Android para procurar episódios e fontes diretas públicas de AnimeFire. Experimental, sem contornar DRM ou bloqueios.",
+      "version": "1.0.0",
+      "versionCode": 1,
+      "apiVersion": 1,
+      "authors": [
+        "VistaStream",
+        "GoAnime (referência MIT)"
+      ],
+      "language": "Português (Brasil)",
+      "contentTypes": [
+        "anime",
+        "series"
+      ],
+      "tags": [
+        "anime",
+        "portuguese",
+        "goanime",
+        "experimental"
+      ],
+      "status": 3,
+      "installedByDefault": false,
+      "homepage": "https://github.com/alvarorichard/GoAnime",
+      "engine": {
+        "type": "native-anime-html",
+        "endpoint": "https://animefire.io",
+        "qualityFilter": "animefire",
+        "priority": 34,
+        "language": "pt-BR"
+      }
+    },
+    {
+      "id": "goanime-goyabu",
+      "name": "GoAnime · Goyabu PT-BR",
+      "description": "Adaptador HTML nativo experimental. Pode não funcionar quando o site exige verificações ou bloqueios.",
+      "version": "1.0.0",
+      "versionCode": 1,
+      "apiVersion": 1,
+      "authors": [
+        "VistaStream",
+        "GoAnime (referência MIT)"
+      ],
+      "language": "Português (Brasil)",
+      "contentTypes": [
+        "anime",
+        "series"
+      ],
+      "tags": [
+        "anime",
+        "portuguese",
+        "goanime",
+        "experimental"
+      ],
+      "status": 3,
+      "installedByDefault": false,
+      "homepage": "https://github.com/alvarorichard/GoAnime",
+      "engine": {
+        "type": "native-anime-html",
+        "endpoint": "https://goyabu.io",
+        "qualityFilter": "goyabu",
+        "priority": 39,
+        "language": "pt-BR"
+      }
+    }
+  ]
+}
