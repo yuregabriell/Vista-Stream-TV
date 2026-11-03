@@ -3,7 +3,7 @@
 | Project | Source license | Actual status | Manual addition |
 |---|---|---|---|
 | OpenStream | MIT | Literal imported Android base; TV intent, Media3, Compose, JSON extension catalogs and Stremio support | OpenStream compatible repositories/manifests via app |
-| GoAnime | MIT | Literal Go sources in vendor; **not** running on Android | No Go plugins; needs port to Kotlin or Go bridge |
+| GoAnime | MIT | Código Go vendorizado (não executado no Android); repositório PT-BR com adaptadores Kotlin experimentais AnimeFire/Goyabu | Catálogo GoAnime incluído no marketplace; streams dependem do site e do adaptador nativo |
 | SaimoPlayer | Unspecified | Not copied; different Swift/macOS technology | Not available |
 | CloudstreamExtensions | Unspecified | Not copied; .cs3 binary ABI is incompatible with OpenStream | No direct .cs3 installation |
 | IPTV M3U | Varies | Separate adapter needed; not claiming native import in this OpenStream-derived build | Not yet |
