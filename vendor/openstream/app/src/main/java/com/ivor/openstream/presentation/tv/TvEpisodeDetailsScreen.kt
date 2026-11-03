@@ -68,7 +68,7 @@ fun TvEpisodeDetailsScreen(
     var navigatingToPlayer by remember { mutableStateOf(false) }
 
     LaunchedEffect(mediaType, animeId, season, episode) {
-        playerViewModel.loadSeasonDetails(mediaType, animeId, season, episode, resolveStreams = true)
+        playerViewModel.loadSeasonDetails(mediaType, animeId, season, episode, resolveStreams = false)
     }
     DisposableEffect(playerViewModel) {
         onDispose {
@@ -307,9 +307,13 @@ fun TvEpisodeDetailsScreen(
                             TvEpisodeMenuAction(
                                 icon = Icons.Default.Dns,
                                 label = "Fontes",
-                                supporting = "${servers.size} disponíveis" +
-                                    if (serversState is ServersState.Resolving) " · A procurar" else "",
-                                onClick = { activePanel = TvEpisodePanel.SOURCES }
+                                supporting = if (serversState is ServersState.Idle) "Consultar fontes ao abrir"
+                                    else "${servers.size} disponíveis" +
+                                        if (serversState is ServersState.Resolving) " · A procurar" else "",
+                                onClick = {
+                                    if (serversState is ServersState.Idle) playerViewModel.retryResolution()
+                                    activePanel = TvEpisodePanel.SOURCES
+                                }
                             )
                             TvEpisodeMenuAction(
                                 icon = Icons.Default.ClosedCaption,
