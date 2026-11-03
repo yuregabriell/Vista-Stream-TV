@@ -87,7 +87,8 @@ class StreamingRepositoryImpl @Inject constructor(
         // Automatic TV searches stop at the first provider with usable candidates;
         // the explicit Find more action still searches every enabled provider.
         val inOrder = appSettings.current.sourceSearchMode == SourceSearchMode.IN_ORDER ||
-            (TvDetect.isTv(context) && preferLastWorking && !includeFallbacks)
+            SourceSearchPolicy.firstPlayableOnlyOnTv(TvDetect.isTv(context),
+                preferLastWorking, includeFallbacks)
         val cacheable = preferLastWorking && !includeFallbacks
         val sources = sourcesFingerprint(installedProviders, inOrder)
         var partialSeed: ServerResolution? = null
