@@ -137,16 +137,10 @@ fun SearchScreen(
         return
     }
     val state by viewModel.uiState.collectAsState()
-    val appContext = androidx.compose.ui.platform.LocalContext.current
-    // Search honours the last premium Home mode, without permanently locking
-    // the user to anime: filter chips remain fully editable.
+    // Search always starts from Tudo, independent of the last Home category.
+    // Filters remain user-selectable while this screen is open.
     LaunchedEffect(Unit) {
-        val savedMode = appContext.getSharedPreferences(
-            "vista_home_mode_v1", android.content.Context.MODE_PRIVATE
-        ).getString("mode", "")
-        if (savedMode == "ANIME" && viewModel.uiState.value.filter == SearchFilter.ALL) {
-            viewModel.onFilterSelected(SearchFilter.ANIME)
-        }
+        viewModel.onFilterSelected(SearchFilter.ALL)
     }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -251,20 +245,16 @@ fun SearchScreen(
                             shape = ExpressiveShapes.small
                         )
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        ChoiceChips(
-                            options = if (state.genre?.isAnime == true) {
-                                listOf(SearchFilter.ALL, SearchFilter.MOVIES, SearchFilter.SERIES)
-                            } else {
-                                SearchFilter.entries
-                            },
-                            selected = state.filter,
-                            label = { stringResource(it.labelRes) },
-                            onSelect = viewModel::onFilterSelected,
-                            modifier = Modifier.weight(1f)
-                        )
-                        SortMenu(state.sort, onSelect = viewModel::onSortSelected)
-                    }
+                    // Keep all four categories visible in the available width.
+                    // The previous same-row SortMenu hid Animes on narrow phones.
+                    ChoiceChips(
+                        options = SearchFilter.entries,
+                        selected = state.filter,
+                        label = { stringResource(it.labelRes) },
+                        onSelect = viewModel::onFilterSelected,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    SortMenu(state.sort, onSelect = viewModel::onSortSelected)
                     ActiveFiltersRow(
                         filters = state.filters,
                         onOpen = { showFilters = true },
