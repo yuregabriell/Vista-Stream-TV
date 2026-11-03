@@ -78,11 +78,13 @@ class VistaNativeP2pBridge @Inject constructor(
      * downloaded payload; its per-torrent directory is therefore removed here
      * ONLY after the native removed event has been received.
      */
-    suspend fun releaseUnusedExcept(currentMediaUrl: String?) = withContext(Dispatchers.IO) {
+    suspend fun releaseUnusedExcept(currentMediaUrl: String?): List<String> =
+        withContext(Dispatchers.IO) {
         mutex.withLock {
-            val runtime = engine ?: return@withLock
+            val runtime = engine ?: return@withLock emptyList()
             val unused = active.filterValues { it.url != currentMediaUrl }
-            if (unused.isEmpty()) return@withLock
+            if (unused.isEmpty()) return@withLock emptyList()
+            val removedMediaUrls = mutableListOf<String>()
             val stillInUse = active.values.filter { it.url == currentMediaUrl }
                 .map { it.torrentId }.toSet()
 
@@ -92,6 +94,7 @@ class VistaNativeP2pBridge @Inject constructor(
                     runCatching { runtime.stopStream(stream.streamId) }
                 }
                 if (torrentId in stillInUse) {
+                    removedMediaUrls += sessions.map { it.url }
                     active.entries.removeAll { it.value.torrentId == torrentId &&
                         it.value.url != currentMediaUrl }
                     continue
@@ -107,6 +110,7 @@ class VistaNativeP2pBridge @Inject constructor(
                 if (!removed) continue
 
                 active.entries.removeAll { it.value.torrentId == torrentId }
+                removedMediaUrls += sessions.map { it.url }
                 val payload = isolatedTorrentPayloadDirectory(
                     File(app.cacheDir, "vista-p2p-pieces"), torrentId
                 )
@@ -119,6 +123,9 @@ class VistaNativeP2pBridge @Inject constructor(
                 runtime.close()
                 engine = null
             }
+            // Only these unique loopback URLs are safe to evict from Media3's
+            // shared HTTP cache. Never use Cache.evictAll() on exit.
+            removedMediaUrls.distinct()
         }
     }
 
