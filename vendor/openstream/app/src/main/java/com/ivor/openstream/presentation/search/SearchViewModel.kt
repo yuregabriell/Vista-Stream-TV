@@ -6,6 +6,8 @@ import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ivor.openstream.R
+import com.ivor.openstream.data.catalog.KeylessCatalogClient
+import com.ivor.openstream.data.catalog.KeylessTitle
 import com.ivor.openstream.data.remote.model.AnimeDto
 import com.ivor.openstream.domain.model.BrowseGenre
 import com.ivor.openstream.domain.repository.AnimeRepository
@@ -93,6 +95,7 @@ data class SearchUiState(
     val genre: BrowseGenre? = null,
     val recent: List<String> = emptyList(),
     val results: List<AnimeDto> = emptyList(),
+    val animeMatches: List<KeylessTitle> = emptyList(),
     val filter: SearchFilter = SearchFilter.ALL,
     val sort: SortOption = SortOption.BEST_MATCH,
     val filters: ResultFilters = ResultFilters(),
@@ -105,17 +108,35 @@ data class SearchUiState(
     val isBrowsing: Boolean get() = query.isBlank() && genre == null
 
     /** Results after the client-side filters (anime, year, rating and language aren't TMDB search filters). */
+    val visibleAnimeMatches: List<KeylessTitle>
+        get() {
+            if (filter != SearchFilter.ALL && filter != SearchFilter.ANIME) return emptyList()
+            if (filters.minRating != MinRating.ANY) return emptyList()
+            if (filters.language != null && filters.language != "ja") return emptyList()
+            val tmdbTitles = results.filter { it.isAnime() }
+                .map { searchTitleKey(it.name) }.toSet()
+            return animeMatches.filter { anime ->
+                val yearOk = filters.year.years?.let { range ->
+                    anime.year != null && anime.year in range
+                } ?: true
+                yearOk && searchTitleKey(anime.title) !in tmdbTitles
+            }
+        }
+
     val visibleResults: List<AnimeDto>
         get() = results.filter { item ->
             val typeMatches = when (filter) {
                 SearchFilter.ALL -> true
-                SearchFilter.MOVIES -> item.isMovie
-                SearchFilter.SERIES -> !item.isMovie
+                SearchFilter.MOVIES -> item.isMovie && !item.isAnime()
+                SearchFilter.SERIES -> !item.isMovie && !item.isAnime()
                 SearchFilter.ANIME -> item.isAnime()
             }
             typeMatches && filters.matches(item)
         }
 }
+
+private fun searchTitleKey(value: String): String =
+    value.lowercase(java.util.Locale.ROOT).filter(Char::isLetterOrDigit)
 
 private fun AnimeDto.isAnime(): Boolean =
     16 in genreIds.orEmpty() && originalLanguage.equals("ja", ignoreCase = true)
@@ -123,6 +144,7 @@ private fun AnimeDto.isAnime(): Boolean =
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val repository: AnimeRepository,
+    private val aniList: KeylessCatalogClient,
     private val sharedPreferences: SharedPreferences,
     private val json: Json,
     @ApplicationContext private val context: Context
@@ -132,6 +154,7 @@ class SearchViewModel @Inject constructor(
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
     private var searchJob: Job? = null
+    private var animeJob: Job? = null
     private var page = 1
     /** Pages fetched only because filters hid most results; capped so a rare filter can't page forever. */
     private var autoLoadedPages = 0
@@ -140,6 +163,8 @@ class SearchViewModel @Inject constructor(
     fun onQueryChange(value: String) {
         _uiState.update { it.copy(query = value, genre = null) }
         searchJob?.cancel()
+        animeJob?.cancel()
+        _uiState.update { it.copy(animeMatches = emptyList()) }
         if (value.trim().length < MIN_QUERY_LENGTH) {
             _uiState.update { it.copy(results = emptyList(), isLoading = false, error = null, endReached = false) }
             return
@@ -154,7 +179,8 @@ class SearchViewModel @Inject constructor(
     fun submit(value: String = _uiState.value.query) {
         val query = value.trim()
         if (query.isEmpty()) return
-        _uiState.update { it.copy(query = query, genre = null) }
+        _uiState.update { it.copy(query = query, genre = null, animeMatches = emptyList()) }
+        animeJob?.cancel()
         rememberQuery(query)
         searchJob?.cancel()
         searchJob = viewModelScope.launch { loadPage(1) }
@@ -165,17 +191,22 @@ class SearchViewModel @Inject constructor(
             it.copy(
                 query = "",
                 genre = genre,
-                filter = if (genre.isAnime) SearchFilter.ALL else it.filter
+                filter = if (genre.isAnime) SearchFilter.ANIME else it.filter
             )
         }
         searchJob?.cancel()
+        animeJob?.cancel()
+        _uiState.update { it.copy(animeMatches = emptyList()) }
         searchJob = viewModelScope.launch { loadPage(1) }
     }
 
     fun clear() {
         searchJob?.cancel()
+        animeJob?.cancel()
         _uiState.update {
-            it.copy(query = "", genre = null, results = emptyList(), isLoading = false, error = null, endReached = false)
+            it.copy(query = "", genre = null, filter = SearchFilter.ALL,
+                results = emptyList(), animeMatches = emptyList(),
+                isLoading = false, error = null, endReached = false)
         }
     }
 
@@ -218,6 +249,7 @@ class SearchViewModel @Inject constructor(
         _uiState.update {
             if (target == 1) it.copy(isLoading = true, error = null, endReached = false) else it.copy(isLoadingMore = true)
         }
+        if (target == 1) loadAniListMatches(state)
         val genre = state.genre
         val result = if (genre != null) {
             repository.discoverByGenre(genre, target).map { list ->
@@ -258,10 +290,29 @@ class SearchViewModel @Inject constructor(
         )
     }
 
+    /** The AniList index supplements titles missing from TMDB, without replacing TMDB IDs. */
+    private fun loadAniListMatches(state: SearchUiState) {
+        animeJob?.cancel()
+        val query = state.query.trim()
+        if (state.genre != null || query.length < MIN_QUERY_LENGTH ||
+            state.filter == SearchFilter.MOVIES || state.filter == SearchFilter.SERIES) {
+            _uiState.update { it.copy(animeMatches = emptyList()) }
+            return
+        }
+        animeJob = viewModelScope.launch {
+            val found = runCatching { aniList.titles("anime", query = query) }
+                .getOrDefault(emptyList())
+            if (_uiState.value.query.trim() == query &&
+                _uiState.value.genre == null) {
+                _uiState.update { it.copy(animeMatches = found) }
+            }
+        }
+    }
+
     /** With filters on, keeps fetching (a few pages at most) until there's a screenful to show. */
     private fun fillFilteredResults() {
         val state = _uiState.value
-        if (state.filters.activeCount == 0 || state.isBrowsing) return
+        if (state.filters.activeCount == 0 && state.filter != SearchFilter.ANIME || state.isBrowsing) return
         if (state.isLoading || state.isLoadingMore || state.endReached) return
         if (state.visibleResults.size >= MIN_FILTERED_RESULTS || autoLoadedPages >= MAX_AUTO_PAGES) return
         autoLoadedPages++

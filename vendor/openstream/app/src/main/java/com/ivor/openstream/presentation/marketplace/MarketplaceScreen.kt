@@ -115,7 +115,6 @@ fun MarketplaceScreen(
 ) {
     val state by viewModel.state.collectAsState()
     var selectedTab by rememberSaveable { mutableStateOf(MarketplaceTab.BROWSE) }
-    var confirmPreset by remember { mutableStateOf(false) }
     var detailsFor by remember { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -277,7 +276,6 @@ fun MarketplaceScreen(
                     viewModel = viewModel,
                     onOpenDetails = { detailsFor = it.key },
                     onBrowse = { selectedTab = MarketplaceTab.BROWSE },
-                    onApplyPreset = { confirmPreset = true },
                     onImport = beginImport,
                     onExport = beginExport
                 )
@@ -290,30 +288,6 @@ fun MarketplaceScreen(
                 )
             }
         }
-    }
-
-    if (confirmPreset) {
-        AlertDialog(
-            onDismissRequest = { confirmPreset = false },
-            title = { Text("Ativar padrão em português?") },
-            text = {
-                Text(
-                    "Ativa as fontes em português identificadas no catálogo e " +
-                        "as rotas principais de reprodução. As restantes extensões " +
-                        "instaladas serão desativadas, mas continuarão disponíveis " +
-                        "para reativação a qualquer momento."
-                )
-            },
-            confirmButton = {
-                Button(onClick = {
-                    confirmPreset = false
-                    viewModel.applyPortuguesePreset()
-                }) { Text("Aplicar padrão") }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmPreset = false }) { Text("Cancelar") }
-            }
-        )
     }
 
     val details = detailsFor?.let { key -> state.catalog.extensions.firstOrNull { it.key == key } }
@@ -496,7 +470,6 @@ private fun InstalledTab(
     viewModel: MarketplaceViewModel,
     onOpenDetails: (MarketplaceExtension) -> Unit,
     onBrowse: () -> Unit,
-    onApplyPreset: () -> Unit,
     onImport: () -> Unit,
     onExport: () -> Unit
 ) {
@@ -516,34 +489,6 @@ private fun InstalledTab(
 
             item(key = "batch-transfer-installed") {
                 BatchTransferActions(onImport, onExport)
-            }
-
-            item(key = "portuguese-preset") {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = ExpressiveShapes.large,
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh
-                ) {
-                    Column(
-                        modifier = Modifier.padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "Padrão português",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            "Fontes em português e as rotas principais ativas por padrão. " +
-                                "As outras são opcionais. Podes sempre ativá-las manualmente.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Button(onClick = onApplyPreset, modifier = Modifier.fillMaxWidth()) {
-                            Text("Aplicar padrão PT-BR")
-                        }
-                    }
-                }
             }
 
             if (state.installed.size > 1) {
@@ -703,6 +648,65 @@ private fun SearchOrderCard(mode: SourceSearchMode, onModeChange: (SourceSearchM
     }
 }
 
+/**
+ * Catalogs and repositories are visible before this is installed. Applying the
+ * preset explicitly enables the user's saved PT-BR and P2P lineup.
+ */
+@Composable
+private fun PortuguesePresetCard(
+    installed: Int,
+    isInstalling: Boolean,
+    onInstall: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = ExpressiveShapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text("Presets", style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Black)
+            Text("Configurações de extensões prontas a instalar.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Surface(
+                shape = ExpressiveShapes.medium,
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                ) {
+                    Text("PT-BR · Filmes, séries e animes",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold)
+                    Text("21 extensões · 5 repositórios adicionais · HTTP e Torrent/P2P",
+                        style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "Baseado na seleção exportada do VistaStream. Alguns addons " +
+                            "podem estar offline; instalar o preset não garante fontes " +
+                            "para todos os títulos. As fontes não são ativadas automaticamente " +
+                            "ao instalar o aplicativo.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Button(
+                        onClick = onInstall,
+                        enabled = !isInstalling,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = ExpressiveShapes.small
+                    ) {
+                        Text(if (isInstalling) "A instalar preset…" else
+                            if (installed == 0) "Instalar preset PT-BR" else "Aplicar preset PT-BR")
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun RepositoriesTab(
     state: MarketplaceUiState,
@@ -710,6 +714,7 @@ private fun RepositoriesTab(
     onImport: () -> Unit,
     onExport: () -> Unit
 ) {
+    val installingPreset by viewModel.presetInstalling.collectAsState()
     var repoUrl by rememberSaveable { mutableStateOf("") }
     val links = LocalUriHandler.current
 
@@ -719,6 +724,14 @@ private fun RepositoriesTab(
             contentPadding = PaddingValues(start = gutter, end = gutter, top = 22.dp, bottom = 192.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            item(key = "preset-pt-br") {
+                PortuguesePresetCard(
+                    installed = state.installed.size,
+                    isInstalling = installingPreset,
+                    onInstall = viewModel::applyPortuguesePreset
+                )
+            }
+
             item(key = "batch-transfer-repositories") {
                 BatchTransferActions(onImport, onExport)
             }

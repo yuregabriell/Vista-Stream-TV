@@ -91,6 +91,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -112,7 +113,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil3.compose.AsyncImage
+import com.ivor.openstream.data.catalog.KeylessTitle
 import com.ivor.openstream.data.remote.model.AnimeDto
+import com.ivor.openstream.presentation.tv.TvAnimeTitleNavigationViewModel
+import kotlinx.coroutines.launch
 import com.ivor.openstream.domain.model.BrowseGenre
 import com.ivor.openstream.presentation.components.ChoiceChips
 import com.ivor.openstream.presentation.components.ConnectedChoiceGroup
@@ -130,30 +134,49 @@ fun SearchScreen(
     focusTrigger: Long = 0L,
     onOpenSources: () -> Unit = {},
     keylessViewModel: KeylessCatalogViewModel = hiltViewModel(),
-    viewModel: SearchViewModel = hiltViewModel()
+    viewModel: SearchViewModel = hiltViewModel(),
+    titleNavigation: TvAnimeTitleNavigationViewModel = hiltViewModel()
 ) {
     if (!keylessViewModel.hasTmdbKey) {
         KeylessCatalogScreen(onOpenSources = onOpenSources, searchFirst = true, viewModel = keylessViewModel)
         return
     }
     val state by viewModel.uiState.collectAsState()
-    val appContext = androidx.compose.ui.platform.LocalContext.current
-    // Search honours the last premium Home mode, without permanently locking
-    // the user to anime: filter chips remain fully editable.
+    // Search always starts from Tudo, independent of the last Home category.
+    // Filters remain user-selectable while this screen is open.
     LaunchedEffect(Unit) {
-        val savedMode = appContext.getSharedPreferences(
-            "vista_home_mode_v1", android.content.Context.MODE_PRIVATE
-        ).getString("mode", "")
-        if (savedMode == "ANIME" && viewModel.uiState.value.filter == SearchFilter.ALL) {
-            viewModel.onFilterSelected(SearchFilter.ANIME)
-        }
+        viewModel.onFilterSelected(SearchFilter.ALL)
     }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val gridState = rememberLazyGridState()
     val open: (AnimeDto) -> Unit = { onAnimeClick(it.id, if (it.isMovie) "movie" else "tv") }
     val results = state.visibleResults
+    val animeMatches = state.visibleAnimeMatches
+    val scope = rememberCoroutineScope()
+    var selectedKeylessAnime by remember { mutableStateOf<KeylessTitle?>(null) }
+    val openExtraAnime: (KeylessTitle) -> Unit = { anime ->
+        scope.launch {
+            val matched = runCatching { titleNavigation.resolve(anime) }.getOrNull()
+            if (matched != null) {
+                onAnimeClick(matched.second, matched.first)
+            } else {
+                selectedKeylessAnime = anime
+            }
+        }
+    }
     var showFilters by rememberSaveable { mutableStateOf(false) }
+
+    if (selectedKeylessAnime != null) {
+        KeylessCatalogScreen(
+            initialTitle = selectedKeylessAnime,
+            onOpenSources = onOpenSources,
+            viewModel = keylessViewModel,
+            onOpenUnifiedTitle = { mediaType, tmdbId -> onAnimeClick(tmdbId, mediaType) },
+            onInitialDismiss = { selectedKeylessAnime = null }
+        )
+        return
+    }
 
     if (showFilters) {
         FiltersSheet(
@@ -251,20 +274,16 @@ fun SearchScreen(
                             shape = ExpressiveShapes.small
                         )
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        ChoiceChips(
-                            options = if (state.genre?.isAnime == true) {
-                                listOf(SearchFilter.ALL, SearchFilter.MOVIES, SearchFilter.SERIES)
-                            } else {
-                                SearchFilter.entries
-                            },
-                            selected = state.filter,
-                            label = { stringResource(it.labelRes) },
-                            onSelect = viewModel::onFilterSelected,
-                            modifier = Modifier.weight(1f)
-                        )
-                        SortMenu(state.sort, onSelect = viewModel::onSortSelected)
-                    }
+                    // Keep all four categories visible in the available width.
+                    // The previous same-row SortMenu hid Animes on narrow phones.
+                    ChoiceChips(
+                        options = SearchFilter.entries,
+                        selected = state.filter,
+                        label = { stringResource(it.labelRes) },
+                        onSelect = viewModel::onFilterSelected,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    SortMenu(state.sort, onSelect = viewModel::onSortSelected)
                     ActiveFiltersRow(
                         filters = state.filters,
                         onOpen = { showFilters = true },
@@ -302,7 +321,7 @@ fun SearchScreen(
                 }
             }
 
-            state.error != null -> item(key = "error", span = FullWidth) {
+            state.error != null && animeMatches.isEmpty() -> item(key = "error", span = FullWidth) {
                 LibraryEmptyState(
                     icon = Icons.Default.SearchOff,
                     title = stringResource(R.string.search_failed),
@@ -311,7 +330,9 @@ fun SearchScreen(
                 )
             }
 
-            results.isEmpty() && state.filters.activeCount > 0 && !state.isLoadingMore -> item(key = "no-filtered-results", span = FullWidth) {
+            results.isEmpty() && animeMatches.isEmpty() &&
+                state.filters.activeCount > 0 && !state.isLoadingMore ->
+                item(key = "no-filtered-results", span = FullWidth) {
                 LibraryEmptyState(
                     icon = Icons.Default.FilterAltOff,
                     title = stringResource(R.string.search_nothing_matches_filters),
@@ -320,7 +341,8 @@ fun SearchScreen(
                 )
             }
 
-            results.isEmpty() && state.query.trim().length >= 2 -> item(key = "no-results", span = FullWidth) {
+            results.isEmpty() && animeMatches.isEmpty() &&
+                state.query.trim().length >= 2 -> item(key = "no-results", span = FullWidth) {
                 LibraryEmptyState(
                     icon = Icons.Default.TravelExplore,
                     title = stringResource(R.string.er_no_results_for, state.query.trim()),
@@ -340,6 +362,42 @@ fun SearchScreen(
                 val grid = if (showTopResult) results.drop(1) else results
                 itemsIndexed(grid, key = { _, item -> "result:${item.mediaType}:${item.id}" }) { _, item ->
                     ResultCard(item, onClick = { open(item) })
+                }
+                if (animeMatches.isNotEmpty()) {
+                    item(key = "anilist-results-header", span = FullWidth) {
+                        Text(
+                            "Animes · AniList",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                    itemsIndexed(animeMatches, key = { _, anime -> "anilist:${anime.sourceId}" }) { _, anime ->
+                        Column(
+                            modifier = Modifier.fillMaxWidth().clickable { openExtraAnime(anime) },
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            AsyncImage(
+                                model = anime.poster ?: anime.background,
+                                contentDescription = anime.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxWidth().aspectRatio(0.68f)
+                                    .clip(ExpressiveShapes.medium)
+                            )
+                            Text(
+                                anime.title,
+                                style = MaterialTheme.typography.labelLarge,
+                                maxLines = 2,
+                                minLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                listOfNotNull(anime.year?.toString(), "Anime").joinToString(" · "),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 }
                 if (state.isLoadingMore) {
                     item(key = "loading-more", span = FullWidth) {

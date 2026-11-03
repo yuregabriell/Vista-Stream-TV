@@ -55,6 +55,11 @@ class ExtensionRepoClient @Inject constructor(
         )
     }
 
+    /** Read a versioned opt-in preset; never execute any code from it. */
+    suspend fun fetchPreset(url: String): String = withContext(Dispatchers.IO) {
+        get(url)
+    }
+
     private fun get(url: String): String {
         // Raw GitHub files can be CDN-cached. A minute-scoped cache buster makes
         // updates visible without APK rebuild, without requesting on every frame.

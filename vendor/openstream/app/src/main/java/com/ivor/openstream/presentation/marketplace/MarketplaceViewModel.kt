@@ -146,12 +146,35 @@ class MarketplaceViewModel @Inject constructor(
         }
     }
 
+    private val _presetInstalling = MutableStateFlow(false)
+    val presetInstalling: StateFlow<Boolean> = _presetInstalling
+
+    /** The marketplace is available on first launch, but sources are opt-in. */
     fun applyPortuguesePreset() {
-        val count = repository.applyPortuguesePreset()
-        message.value = if (count > 0) {
-            "Padrão português aplicado: $count fontes recomendadas ativas. " +
-                "As restantes fontes instaladas ficaram desativadas e podem ser reativadas."
-        } else "Não foi possível encontrar extensões recomendadas no catálogo."
+        if (_presetInstalling.value) return
+        viewModelScope.launch {
+            _presetInstalling.value = true
+            try {
+                repository.applyPortuguesePreset()
+                    .onSuccess { result ->
+                        // The preset contains direct HTTP and torrent sources. Query every
+                        // installed provider on first search instead of stopping at the first.
+                        setSearchMode(SourceSearchMode.ALL_AT_ONCE)
+                        message.value = "Preset PT-BR: ${result.extensionsInstalled} fontes instaladas, " +
+                            "${result.extensionsRestored} reativadas e " +
+                            "${result.repositoriesAdded} repositórios adicionados." +
+                            if (result.skipped > 0) {
+                                " ${result.skipped} fontes indisponíveis: " +
+                                    result.errors.take(2).joinToString("; ")
+                            } else ""
+                    }
+                    .onFailure {
+                        message.value = "Erro ao instalar preset PT-BR: " + it.message.orEmpty()
+                    }
+            } finally {
+                _presetInstalling.value = false
+            }
+        }
     }
 
     fun install(extension: MarketplaceExtension) {
