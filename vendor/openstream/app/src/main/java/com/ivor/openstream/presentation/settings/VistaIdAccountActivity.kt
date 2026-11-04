@@ -175,8 +175,18 @@ class VistaIdAccountActivity : ComponentActivity() {
             qrStatus?.text = "Ligação cancelada neste dispositivo."
         }
         gap(content, 14)
-        val offline = card(content)
-        offline.addView(text("Sem conta? Podes continuar a usar o VS normalmente.", 14f, muted))
+        val install = card(content)
+        install.addView(text("Ainda não tens conta Vista ID?", 16f, Color.WHITE, true))
+        gap(install, 7)
+        install.addView(text("Cria a tua conta no Vista ID antes de entrares no VistaStream.", 13f, muted))
+        gap(install, 12)
+        button(install, "Baixar Vista ID", false) {
+            runCatching {
+                startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(
+                    "https://github.com/yuregabriell/VistaID/releases/tag/v0.3.0-supabase-preview"
+                )))
+            }.onFailure { Toast.makeText(this, "Não foi possível abrir o navegador.", Toast.LENGTH_LONG).show() }
+        }
     }
     private fun account(content: LinearLayout) {
         val card = card(content)
