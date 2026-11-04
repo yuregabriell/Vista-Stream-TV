@@ -675,7 +675,9 @@ class PlayerViewModel @Inject constructor(
                 if (target != null) {
                     _nextEpisode.value = target
                     // After the list is shown: offline, the next season's request only times out.
-                    warmUpNext(target, seasonNumber, tmdbId)
+                    // Avoid poster/next-season prefetch while the TV decoder is
+                    // using the same limited CPU/network budget for the video.
+                    if (!TvDetect.isTv(context)) warmUpNext(target, seasonNumber, tmdbId)
                 }
             }
 
