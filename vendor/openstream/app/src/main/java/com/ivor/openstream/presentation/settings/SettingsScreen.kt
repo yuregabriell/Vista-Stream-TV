@@ -117,6 +117,7 @@ import com.ivor.openstream.ui.theme.ExpressiveShapes
 fun SettingsScreen(
     onBackClick: () -> Unit,
     onOpenMarketplace: () -> Unit,
+    onOpenUpdate: () -> Unit = {},
     onOpenProfiles: () -> Unit = {},
     onOpenVideoShaders: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
@@ -220,6 +221,18 @@ fun SettingsScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
+                item(key = "app-updates") {
+                    SettingsGroup(title = "Aplicação") {
+                        NavigationRow(
+                            index = 0, count = 1,
+                            icon = Icons.Default.Update,
+                            title = "Procurar atualizações",
+                            supporting = "Consultar e instalar a versão mais recente do VistaStream",
+                            onClick = onOpenUpdate
+                        )
+                    }
+                }
+
                 item(key = "sources") {
                     val sourceRows = if (state.updateCount > 0) 3 else 2
                     SettingsGroup(
@@ -257,12 +270,12 @@ fun SettingsScreen(
                 }
 
                 item(key = "vista-id") {
-                    SettingsGroup(title = "Vista ID · opcional") {
+                    SettingsGroup(title = "Vista ID · conta") {
                         NavigationRow(
                             index = 0, count = 1,
                             icon = Icons.Default.People,
                             title = "Iniciar sessão · Vista ID",
-                            supporting = "Conta na nuvem (Supabase), QR e código temporário. Continuar sem conta é possível.",
+                            supporting = "Gerir conta Vista obrigatória, autenticação e sincronização de perfis.",
                             onClick = {
                                 context.startActivity(Intent(context, VistaIdAccountActivity::class.java))
                             }
