@@ -89,6 +89,10 @@ class VistaCloudAuth(context: Context) {
     }
 
     fun hasSession(): Boolean = load() != null
+
+    /** User identity cached inside the Keystore session, not another network call. */
+    fun localUserId(): String? = load()?.optJSONObject("user")
+        ?.optString("id")?.takeIf { it.isNotBlank() }
     fun logout() {
         // Revoke the current device session when network is available.
         try { request("POST", "/auth/v1/logout", JSONObject(), bearer = token()) }
