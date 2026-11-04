@@ -10,7 +10,7 @@ class CacheBudgetTvTest {
     @Test fun tvHasSmallIndependentImageAndMetadataBudgets() {
         assertEquals(24L * mb, CacheBudget.artworkBudget(250L * mb, tv = true))
         assertEquals(16L * mb, CacheBudget.metadataBudget(50L * mb, tv = true))
-        assertEquals(64L * mb, CacheBudget.TV_P2P_DISK_MAX_BYTES)
+        assertEquals(128L * mb, CacheBudget.TV_P2P_DISK_MAX_BYTES)
         assertEquals(16L * mb, CacheBudget.TV_P2P_MEMORY_MAX_BYTES)
     }
 
