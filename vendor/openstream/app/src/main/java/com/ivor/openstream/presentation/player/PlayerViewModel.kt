@@ -997,9 +997,9 @@ class PlayerViewModel @Inject constructor(
                 }
                 if (TvDetect.isTv(context) && !fullScan && active != null &&
                     !progress.isComplete) {
-                    // First candidate has been handed to Media3. End automatic
-                    // discovery here instead of running the rest during buffering.
-                    // Explicit "Procurar mais" uses fullScan=true and is user-driven.
+                    // Prioritize the actual TV stream while Media3 is buffering.
+                    // Cancels any detached addon workers, not the selected engine.
+                    TvPlaybackSearchGuard.beginPlayback()
                     stopTvBackgroundSourceDiscovery()
                 }
             }
