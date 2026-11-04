@@ -14,6 +14,10 @@ class SourceSearchPolicyTest {
         assertFalse(SourceSearchPolicy.firstPlayableOnlyOnTv(true, false, true))
     }
 
+    @Test fun tvAutomaticFailoverStopsAfterFirstResultToo() {
+        assertTrue(SourceSearchPolicy.firstPlayableOnlyOnTv(true, false, false))
+    }
+
     @Test fun phoneAutomaticSearchDoesNotUseTvPolicy() {
         assertFalse(SourceSearchPolicy.firstPlayableOnlyOnTv(false, true, false))
     }
