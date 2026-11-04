@@ -1,5 +1,6 @@
 package com.ivor.openstream.presentation.player.session
 
+import com.ivor.openstream.data.streaming.TvPlaybackSearchGuard
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -582,6 +583,7 @@ class PlaybackSession @Inject constructor(
     fun stop() = stopInternal(immediateNativeCleanup = false)
 
     private fun stopInternal(immediateNativeCleanup: Boolean) {
+        if (com.ivor.openstream.presentation.tv.TvDetect.isTv(context)) TvPlaybackSearchGuard.endPlayback()
         setSleepTimer(null)
         recordProgress(force = true)
         if (castConnected) {
@@ -1147,9 +1149,15 @@ class PlaybackSession @Inject constructor(
         val trackSelector = DefaultTrackSelector(context).apply {
             parameters = codecPreferences()
         }
+        val television = com.ivor.openstream.presentation.tv.TvDetect.isTv(context)
         val loadControl = DefaultLoadControl.Builder()
-            .setBufferDurationsMs(30_000, 90_000, 2_500, 5_000)
-            .setPrioritizeTimeOverSizeThresholds(true)
+            // TV runs the Media3 buffer, native P2P engine and video decoder in
+            // the same limited RAM. Do not let 90 seconds of buffering compete
+            // with playback; the 128 MiB P2P disk budget is independent.
+            .setBufferDurationsMs(if (television) 15_000 else 30_000,
+                if (television) 45_000 else 90_000, 2_500, 5_000)
+            .setPrioritizeTimeOverSizeThresholds(!television)
+            .apply { if (television) setTargetBufferBytes(24 * 1024 * 1024) }
             .build()
         val basePlayer = ExoPlayer.Builder(context)
             .setLoadControl(loadControl)
@@ -1174,7 +1182,9 @@ class PlaybackSession @Inject constructor(
         // Media3 picks the effect pipeline once, on the first prepare. Where Smooth motion runs the
         // pipeline exists anyway and the shader stage costs one copy pass; elsewhere the pipeline
         // alone makes every video slow to start and stutter, so it is only added for a look in use.
-        shaderStageInstalled = SmoothMotion.isSupported(context) ||
+        shaderStageInstalled =
+            (SmoothMotion.isSupported(context) &&
+                (!television || appSettingsStore.current.smoothMotionEnabled)) ||
             appSettingsStore.current.videoShaders.isEffectActive
         smoothMotion = SmoothMotion.install(
             basePlayer,
