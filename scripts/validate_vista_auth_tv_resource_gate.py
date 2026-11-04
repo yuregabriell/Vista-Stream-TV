@@ -18,6 +18,7 @@ budget=read("data/cache/CacheBudget.kt")
 checks={
     "Auth required before root navigation": "if (!vistaSignedIn)" in main and "VistaSignInGate(" in main,
     "No guest entry in root": "guest" not in read("presentation/auth/VistaSignInGate.kt").lower(),
+    "Account screen does not offer guest access": "Podes continuar a usar o VS normalmente." not in read("presentation/settings/VistaIdAccountActivity.kt"),
     "Profile selection before catalog": "else if (!profileSelectedOnLaunch)" in main and "WhoIsWatchingScreen(" in main,
     "Settings from profile": "onSettings: () -> Unit" in profiles and "onSettings = { accessPage = \"settings\" }" in main,
     "App updater inside settings": "onOpenUpdate" in mobile and "onOpenUpdate" in tv,
