@@ -32,14 +32,19 @@ jobs:
           api=(root/"data/auth/VistaCloudAuth.kt").read_text()
           ui=(root/"presentation/settings/VistaIdAccountActivity.kt").read_text()
           assert all(x in api for x in ("pair_create", "pair_redeem", "code_login", "username_password", "/auth/v1/verify", "AndroidKeyStore"))
-          assert all(x in ui for x in ("Entrar com QR Code", "Entrar com código", "Sem conta", "schedulePoll"))
+          assert all(x in ui for x in ("Entrar com QR Code", "Entrar com código", "Baixar Vista ID", "schedulePoll"))
           assert "sb_secret_" not in api and "service_role" not in api
           print("VistaCloud Auth contract checks passed")
           PY
-      - name: Compile debug APK
+      - name: TV playback and required identity guard
+        run: |
+          python3 scripts/validate_vista_auth_tv_resource_gate.py
+          python3 scripts/validate_tv_low_memory.py
+          python3 scripts/validate_progressive_tv_playback.py
+      - name: Compile debug APK and run JVM unit tests
         working-directory: vendor/openstream
         env:
           GRADLE_OPTS: '-Dorg.gradle.jvmargs=-Xmx5g'
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          ./gradlew :app:assembleDebug :app:testDebugUnitTest --no-daemon --stacktrace

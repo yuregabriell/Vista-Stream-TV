@@ -6,7 +6,7 @@ import com.ivor.openstream.data.settings.SourceSearchMode
 internal object SourceSearchPolicy {
     /** Automatic TV scans stop as soon as a provider returns; manual Find more does not. */
     fun firstPlayableOnlyOnTv(isTv: Boolean, preferLastWorking: Boolean, expanded: Boolean): Boolean =
-        isTv && preferLastWorking && !expanded
+        isTv && !expanded
 
     fun includeAllProviders(mode: SourceSearchMode, expanded: Boolean): Boolean =
         mode == SourceSearchMode.ALL_AT_ONCE || expanded

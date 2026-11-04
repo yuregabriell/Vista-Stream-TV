@@ -168,7 +168,7 @@ fun AppNavigation(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    val bottomNavItems = listOf(Screen.Home, Screen.Search, Screen.WatchLater, Screen.Marketplace, Screen.Downloads, Screen.History)
+    val bottomNavItems = listOf(Screen.Home, Screen.Search, Screen.WatchLater, Screen.Downloads)
     val showBottomBar = currentDestination?.route in bottomNavItems.map { it.route }
     val isCompact = windowSizeClass == WindowWidthSizeClass.Compact
     val isOnPlayer = currentDestination?.route?.startsWith("player/") == true
@@ -304,6 +304,7 @@ fun AppNavigation(
                         },
                         onSettingsClick = { navController.navigate(Screen.Settings.route) },
                         onOpenSources = { navController.navigate(Screen.Marketplace.route) },
+                        onOpenHistory = { navController.navigate(Screen.History.route) },
                         onOpenLiveTv = { navController.navigate(Screen.LiveTv.route) },
                         onUpdateClick = { navController.navigate(Screen.Update.route) },
                         profile = activeProfile,
@@ -421,6 +422,7 @@ fun AppNavigation(
                     SettingsScreen(
                         onBackClick = { navController.popBackStack() },
                         onOpenMarketplace = { navController.navigate(Screen.Marketplace.route) },
+                        onOpenUpdate = { navController.navigate(Screen.Update.route) },
                         onOpenProfiles = { navController.navigate(Screen.Profiles.route) },
                         onOpenVideoShaders = { navController.navigate(Screen.VideoShaders.route) }
                     )
@@ -693,6 +695,11 @@ fun AppNavigation(
                 profilesViewModel.select(profile.id)
                 showProfilePicker = false
                 openTab(Screen.Home)
+            },
+            onSettings = {
+                profilesViewModel.dismissLaunchPicker()
+                showProfilePicker = false
+                navController.navigate(Screen.Settings.route) { launchSingleTop = true }
             },
             onManage = {
                 profilesViewModel.dismissLaunchPicker()

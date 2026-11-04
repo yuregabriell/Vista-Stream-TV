@@ -57,6 +57,7 @@ import androidx.tv.material3.NavigationDrawerItem
 import androidx.tv.material3.Text
 import androidx.tv.material3.rememberDrawerState
 import com.ivor.openstream.presentation.player.PlayerScreen
+import com.ivor.openstream.presentation.update.UpdateScreen
 import com.ivor.openstream.presentation.details.DetailsViewModel
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.runtime.collectAsState
@@ -73,6 +74,7 @@ private object TvRoutes {
     const val EPISODE = "tv_episode/{mediaType}/{animeId}/{season}/{episode}"
     const val PLAYER = "tv_player/{mediaType}/{animeId}/{season}/{episode}?downloadId={downloadId}"
     const val LIVE_PLAYER = "tv_live_player"
+    const val UPDATE = "tv_update"
 
     fun details(mediaType: String, animeId: Int) = "tv_details/$mediaType/$animeId"
     fun episode(mediaType: String, animeId: Int, season: Int, episode: Int) =
@@ -359,8 +361,13 @@ private fun TvAppScaffold(
 
             composable(TvDestination.SETTINGS.route) {
                 TvSettingsScreen(
-                    onOpenExtensions = { go(TvDestination.EXTENSIONS) }
+                    onOpenExtensions = { go(TvDestination.EXTENSIONS) },
+                    onOpenUpdate = { navController.navigate(TvRoutes.UPDATE) { launchSingleTop = true } }
                 )
+            }
+
+            composable(TvRoutes.UPDATE) {
+                UpdateScreen(onBackClick = { navController.popBackStack() })
             }
 
             composable(

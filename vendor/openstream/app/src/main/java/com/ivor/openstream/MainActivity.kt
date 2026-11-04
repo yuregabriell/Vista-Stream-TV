@@ -1,10 +1,25 @@
 package com.ivor.openstream
 
 import android.content.Context
+import android.net.Uri
+import com.ivor.openstream.data.auth.VistaCloudAuth
+import com.ivor.openstream.presentation.auth.VistaSignInGate
+import com.ivor.openstream.presentation.settings.VistaIdAccountActivity
+import com.ivor.openstream.presentation.settings.SettingsScreen
+import com.ivor.openstream.presentation.settings.VideoShaderSettingsScreen
+import com.ivor.openstream.presentation.update.UpdateScreen
+import com.ivor.openstream.presentation.profiles.ProfilesViewModel
+import com.ivor.openstream.presentation.profiles.WhoIsWatchingScreen
+import com.ivor.openstream.presentation.profiles.ManageProfilesScreen
+import com.ivor.openstream.presentation.marketplace.MarketplaceScreen
+import com.ivor.openstream.presentation.tv.TvSettingsScreen
+import com.ivor.openstream.presentation.tv.TvExtensionsScreen
+import androidx.hilt.navigation.compose.hiltViewModel
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -50,6 +65,10 @@ class MainActivity : ComponentActivity() {
 
     private var shortcutRequest by mutableStateOf<ShortcutRequest?>(null)
     private var deepLinkRequest by mutableStateOf<DeepLinkRequest?>(null)
+    private var vistaSignedIn by mutableStateOf(false)
+    private var vistaLocalUserId by mutableStateOf<String?>(null)
+    private var profileSelectedOnLaunch by mutableStateOf(false)
+    private var accessPage by mutableStateOf("profiles")
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLocale.wrap(newBase, AppLocale.savedTag(newBase)))
@@ -57,6 +76,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        VistaCloudAuth(this).let { account ->
+            vistaSignedIn = account.hasSession()
+            vistaLocalUserId = account.localUserId()
+        }
 
         // Mirror the saved theme into AppCompat's night mode so the cold-start window
         // (DayNight theme) matches the Compose theme even with forced light/dark.
@@ -126,7 +149,85 @@ class MainActivity : ComponentActivity() {
                 // Surface is what gives un-styled Text the theme's onBackground color.
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     Box(Modifier.fillMaxSize()) {
-                        if (tvMode) {
+                        if (!vistaSignedIn) {
+                            VistaSignInGate(
+                                onLogin = {
+                                    startActivity(Intent(this@MainActivity, VistaIdAccountActivity::class.java))
+                                },
+                                onGetVistaId = {
+                                    val page = Uri.parse(
+                                        "https://github.com/yuregabriell/VistaID/releases/tag/v0.3.0-supabase-preview"
+                                    )
+                                    runCatching {
+                                        startActivity(Intent(Intent.ACTION_VIEW, page))
+                                    }.onFailure {
+                                        Toast.makeText(
+                                            this@MainActivity,
+                                            "Abre github.com/yuregabriell/VistaID/releases no navegador",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                }
+                            )
+                        } else if (!profileSelectedOnLaunch) {
+                            BackHandler(enabled = accessPage != "profiles") {
+                                accessPage = if (accessPage == "settings" || accessPage == "manage")
+                                    "profiles" else "settings"
+                            }
+                            val profilesModel: ProfilesViewModel = hiltViewModel()
+                            val profiles by profilesModel.profiles.collectAsState()
+                            val active by profilesModel.activeProfile.collectAsState()
+                            when (accessPage) {
+                                "profiles" -> WhoIsWatchingScreen(
+                                    profiles = profiles,
+                                    activeId = active?.id,
+                                    viewModel = profilesModel,
+                                    onSelect = { profile ->
+                                        profilesModel.select(profile.id)
+                                        profileSelectedOnLaunch = true
+                                        accessPage = "profiles"
+                                    },
+                                    onManage = { accessPage = "manage" },
+                                    onSettings = { accessPage = "settings" }
+                                )
+                                "manage" -> ManageProfilesScreen(
+                                    viewModel = profilesModel,
+                                    onBackClick = { accessPage = "profiles" }
+                                )
+                                "settings" -> {
+                                    if (tvMode) {
+                                        TvSettingsScreen(
+                                            onOpenExtensions = { accessPage = "marketplace" },
+                                            onOpenUpdate = { accessPage = "updates" }
+                                        )
+                                    } else {
+                                        SettingsScreen(
+                                            onBackClick = { accessPage = "profiles" },
+                                            onOpenMarketplace = { accessPage = "marketplace" },
+                                            onOpenUpdate = { accessPage = "updates" },
+                                            onOpenProfiles = { accessPage = "manage" },
+                                            onOpenVideoShaders = { accessPage = "shaders" }
+                                        )
+                                    }
+                                }
+                                "updates" -> UpdateScreen(
+                                    onBackClick = { accessPage = "settings" }
+                                )
+                                "marketplace" -> {
+                                    if (tvMode) {
+                                        TvExtensionsScreen()
+                                    } else {
+                                        MarketplaceScreen(
+                                            onBackClick = { accessPage = "settings" },
+                                            onSettingsClick = { accessPage = "settings" }
+                                        )
+                                    }
+                                }
+                                "shaders" -> VideoShaderSettingsScreen(
+                                    onBackClick = { accessPage = "settings" }
+                                )
+                            }
+                        } else if (tvMode) {
                             TvNavigation(
                                 deepLinkRequest = deepLinkRequest,
                                 onDeepLinkHandled = { deepLinkRequest = null }
@@ -140,11 +241,27 @@ class MainActivity : ComponentActivity() {
                                 onDeepLinkHandled = { deepLinkRequest = null }
                             )
                         }
-                        VistaAutoUpdatePrompt()
+                        // Updates are now intentionally opened inside Settings, not
+                        // as a global prompt over the login/profile screens.
                     }
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val account = VistaCloudAuth(this)
+        val updated = account.hasSession()
+        val newId = account.localUserId()
+        if (updated != vistaSignedIn || newId != vistaLocalUserId) {
+            // Different Vista ID accounts must never inherit an already-selected
+            // local profile from a prior account/session.
+            profileSelectedOnLaunch = false
+            accessPage = "profiles"
+        }
+        vistaSignedIn = updated
+        vistaLocalUserId = newId
     }
 
     override fun onStop() {

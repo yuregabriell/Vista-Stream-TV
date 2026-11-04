@@ -1,5 +1,6 @@
 package com.ivor.openstream.presentation.player
 
+import com.ivor.openstream.data.streaming.TvPlaybackSearchGuard
 import com.ivor.openstream.data.local.entity.LOCAL_MEDIA_TYPE
 import com.ivor.openstream.data.local.entity.LocalMediaEntity
 import com.ivor.openstream.data.repository.LocalMediaRepository
@@ -674,7 +675,9 @@ class PlayerViewModel @Inject constructor(
                 if (target != null) {
                     _nextEpisode.value = target
                     // After the list is shown: offline, the next season's request only times out.
-                    warmUpNext(target, seasonNumber, tmdbId)
+                    // Avoid poster/next-season prefetch while the TV decoder is
+                    // using the same limited CPU/network budget for the video.
+                    if (!TvDetect.isTv(context)) warmUpNext(target, seasonNumber, tmdbId)
                 }
             }
 
@@ -781,6 +784,7 @@ class PlayerViewModel @Inject constructor(
         playbackStarted = true
         val server = _activeServer.value
         if (TvDetect.isTv(context)) {
+            TvPlaybackSearchGuard.beginPlayback()
             // Media3 now has its video. Any pending manual/addon source discovery
             // must not continue consuming P2P bandwidth, CPU or memory on a TV.
             stopTvBackgroundSourceDiscovery()
@@ -818,6 +822,7 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun onPlaybackError(error: PlaybackException? = null) {
+        if (TvDetect.isTv(context)) TvPlaybackSearchGuard.endPlayback()
         if (error != null) _playerEvents.tryEmit(
             "Diagnóstico de reprodução: ${error.errorCodeName}"
         )
@@ -880,6 +885,10 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun retryResolution() {
+        if (TvDetect.isTv(context) && TvPlaybackSearchGuard.isPlaying()) {
+            _playerEvents.tryEmit("Interrompe a reprodução antes de procurar outras fontes na TV.")
+            return
+        }
         val identity = currentIdentity ?: return
         failedServerIds.clear()
         automaticFailovers = 0
@@ -929,7 +938,8 @@ class PlayerViewModel @Inject constructor(
             streamingRepository.resolveServers(
                 identity,
                 includeFallbacks,
-                preferLastWorking = !includeFallbacks
+                preferLastWorking = !includeFallbacks,
+                fullScan = fullScan
             ).collect { progress ->
                 // The server the user picked (or last picked for this episode) wins when it shows
                 // up, but only before playback starts: switching later would restart the video.
@@ -987,9 +997,9 @@ class PlayerViewModel @Inject constructor(
                 }
                 if (TvDetect.isTv(context) && !fullScan && active != null &&
                     !progress.isComplete) {
-                    // First candidate has been handed to Media3. End automatic
-                    // discovery here instead of running the rest during buffering.
-                    // Explicit "Procurar mais" uses fullScan=true and is user-driven.
+                    // Prioritize the actual TV stream while Media3 is buffering.
+                    // Cancels any detached addon workers, not the selected engine.
+                    TvPlaybackSearchGuard.beginPlayback()
                     stopTvBackgroundSourceDiscovery()
                 }
             }

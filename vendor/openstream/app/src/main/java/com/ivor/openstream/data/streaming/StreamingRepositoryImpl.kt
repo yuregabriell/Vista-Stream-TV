@@ -1,5 +1,6 @@
 package com.ivor.openstream.data.streaming
 
+import com.ivor.openstream.data.streaming.TvPlaybackSearchGuard
 import android.content.Context
 import android.content.SharedPreferences
 import com.ivor.openstream.presentation.tv.TvDetect
@@ -80,15 +81,21 @@ class StreamingRepositoryImpl @Inject constructor(
     override fun resolveServers(
         identity: MediaIdentity,
         includeFallbacks: Boolean,
-        preferLastWorking: Boolean
+        preferLastWorking: Boolean,
+        fullScan: Boolean
     ): Flow<ServerResolution> = channelFlow {
+        if (TvDetect.isTv(context) && TvPlaybackSearchGuard.isPlaying()) {
+            // Nothing may search or warm torrents while the current TV video plays.
+            send(ServerResolution(servers = emptyList(), isComplete = true))
+            return@channelFlow
+        }
         val installedProviders = withContext(Dispatchers.IO) { providerRegistry.activeProviders() }
         val providerPriorities = installedProviders.associate { it.id to it.priority }
         // Automatic TV discovery races at most two workers at a time, then
         // cancels the rest at the first result; it never runs through all addons
         // while Media3 is buffering. Manual "Procurar mais" remains exhaustive.
         val tvFirstOnly = SourceSearchPolicy.firstPlayableOnlyOnTv(
-            TvDetect.isTv(context), preferLastWorking, includeFallbacks
+            TvDetect.isTv(context), preferLastWorking, fullScan
         )
         val inOrder = appSettings.current.sourceSearchMode == SourceSearchMode.IN_ORDER
         val cacheable = preferLastWorking && !includeFallbacks
@@ -331,6 +338,10 @@ class StreamingRepositoryImpl @Inject constructor(
      * leaving a screen is not the provider's fault.
      */
     private suspend fun runProvider(provider: ExtensionStreamProvider, identity: MediaIdentity): ResolutionEvent.Outcome {
+        if (TvDetect.isTv(context) && TvPlaybackSearchGuard.isPlaying()) {
+            return ResolutionEvent.Outcome(provider,
+                Result.failure(IOException("Playback active on Android TV")))
+        }
         val work = providerScope.async {
             providerSlots.withPermit {
                 try {
@@ -347,6 +358,7 @@ class StreamingRepositoryImpl @Inject constructor(
                 }
             }
         }
+        if (TvDetect.isTv(context)) TvPlaybackSearchGuard.track(work)
         try {
             val result = try {
                 withTimeoutOrNull(PROVIDER_TIMEOUT_MS + PROVIDER_QUEUE_TIMEOUT_MS) { work.await() }
@@ -359,6 +371,7 @@ class StreamingRepositoryImpl @Inject constructor(
             }
             return ResolutionEvent.Outcome(provider, result)
         } finally {
+            if (TvDetect.isTv(context)) TvPlaybackSearchGuard.untrack(work)
             work.cancel()
         }
     }

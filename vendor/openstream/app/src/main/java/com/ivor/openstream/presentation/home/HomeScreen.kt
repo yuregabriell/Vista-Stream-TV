@@ -46,6 +46,8 @@ import com.ivor.openstream.domain.model.Profile
 import com.ivor.openstream.presentation.profiles.ProfileSwitchButton
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material.icons.filled.Storefront
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -116,6 +118,7 @@ fun HomeScreen(
     onOpenDetails: (mediaType: String, id: Int) -> Unit,
     onSettingsClick: () -> Unit,
     onOpenSources: () -> Unit = {},
+    onOpenHistory: () -> Unit = {},
     onOpenLiveTv: () -> Unit = {},
     onUpdateClick: () -> Unit = {},
     reselectTrigger: Long = 0L,
@@ -228,8 +231,11 @@ fun HomeScreen(
                         fontWeight = FontWeight.ExtraBold,
                         modifier = Modifier.weight(1f)
                     )
-                    IconButton(onClick = onSettingsClick) {
-                        Icon(Icons.Default.Settings, contentDescription = "Definições")
+                    IconButton(onClick = onOpenSources) {
+                        Icon(Icons.Default.Storefront, contentDescription = "Plugins")
+                    }
+                    IconButton(onClick = onOpenHistory) {
+                        Icon(Icons.Default.History, contentDescription = "Histórico")
                     }
                     ProfileSwitchButton(
                         profile = profile,
@@ -274,6 +280,8 @@ fun HomeScreen(
                             onModeChange = viewModel::setMode,
                             onOpen = open,
                             onSettingsClick = onSettingsClick,
+                            onOpenSources = onOpenSources,
+                            onOpenHistory = onOpenHistory,
                             onOpenLiveTv = onOpenLiveTv,
                             onUpdateClick = onUpdateClick,
                             castConnected = castStatus.isCasting,
@@ -533,6 +541,8 @@ private fun HeroSection(
     onModeChange: (HomeMode) -> Unit,
     onOpen: (AnimeDto) -> Unit,
     onSettingsClick: () -> Unit,
+    onOpenSources: () -> Unit,
+    onOpenHistory: () -> Unit,
     onOpenLiveTv: () -> Unit,
     onUpdateClick: () -> Unit,
     castConnected: Boolean,
@@ -569,11 +579,11 @@ private fun HeroSection(
             }
             // A kids profile keeps Settings and updates out of reach; leaving takes a hold on the avatar.
             if (profile?.isKids != true) {
-                IconButton(onClick = onUpdateClick) {
-                    Icon(Icons.Default.SystemUpdate, contentDescription = stringResource(R.string.action_check_for_updates))
+                IconButton(onClick = onOpenSources) {
+                    Icon(Icons.Default.Storefront, contentDescription = "Plugins")
                 }
-                IconButton(onClick = onSettingsClick) {
-                    Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.cd_settings))
+                IconButton(onClick = onOpenHistory) {
+                    Icon(Icons.Default.History, contentDescription = "Histórico")
                 }
             }
             ProfileSwitchButton(profile = profile, onSwitch = onSwitchProfile, onKidsTap = onKidsTap)

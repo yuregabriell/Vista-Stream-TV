@@ -18,7 +18,7 @@ object CacheBudget {
     // User downloads are saved separately and intentionally excluded.
     const val TV_ARTWORK_MAX_BYTES = 24L * 1024 * 1024
     const val TV_METADATA_MAX_BYTES = 16L * 1024 * 1024
-    const val TV_P2P_DISK_MAX_BYTES = 64L * 1024 * 1024
+    const val TV_P2P_DISK_MAX_BYTES = 128L * 1024 * 1024
     const val TV_P2P_MEMORY_MAX_BYTES = 16L * 1024 * 1024
 
     fun artworkBudget(wanted: Long, tv: Boolean): Long =

@@ -17,7 +17,7 @@ app = read("OpenStreamApp.kt")
 checks = {
     "TV artwork bound": "TV_ARTWORK_MAX_BYTES = 24L" in budget,
     "TV metadata bound": "TV_METADATA_MAX_BYTES = 16L" in budget,
-    "TV P2P bound": "TV_P2P_DISK_MAX_BYTES = 64L" in budget,
+    "TV P2P bound": "TV_P2P_DISK_MAX_BYTES = 128L" in budget,
     "Native engine uses TV disk bound": "CacheBudget.TV_P2P_DISK_MAX_BYTES" in native,
     "Native engine released after playback": "purgeNativeP2pTemporaryData(app.cacheDir)" in native,
     "Hidden preview cancels jobs": "playerViewModel.cancelSourcePreview()" in preview,
