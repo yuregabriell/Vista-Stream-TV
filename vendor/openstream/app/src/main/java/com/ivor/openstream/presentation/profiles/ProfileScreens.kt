@@ -46,6 +46,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -106,6 +107,7 @@ fun WhoIsWatchingScreen(
     viewModel: ProfilesViewModel,
     onSelect: (Profile) -> Unit,
     onManage: () -> Unit,
+    onSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var pendingProfile by remember { mutableStateOf<Profile?>(null) }
@@ -154,6 +156,16 @@ fun WhoIsWatchingScreen(
                         }
                     )
                 }
+            }
+
+            Button(
+                onClick = onSettings,
+                shape = ExpressiveShapes.medium,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 10.dp)
+            ) {
+                Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Configurações · Conta e atualizações")
             }
             OutlinedButton(onClick = onManage, shape = ExpressiveShapes.medium, modifier = Modifier.padding(bottom = 24.dp)) {
                 Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
