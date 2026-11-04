@@ -507,7 +507,7 @@ private fun settingRows(
                     key = "tv-cache-automatic",
                     title = "Cache otimizado para a TV",
                     subtitle = "Até 24 MB de imagens e 16 MB de metadados. " +
-                        "O motor torrent usa até 64 MB temporários, eliminados " +
+                        "O motor torrent usa até 128 MB temporários em disco, eliminados " +
                         "após parar a reprodução. Os downloads guardados não são apagados."
                 ),
                 SettingRow.Action(
