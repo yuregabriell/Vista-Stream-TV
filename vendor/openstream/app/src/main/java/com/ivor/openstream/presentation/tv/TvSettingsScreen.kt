@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.SignalCellularAlt
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -69,6 +70,7 @@ import com.ivor.openstream.presentation.profiles.ProfilesViewModel
 import com.ivor.openstream.presentation.settings.SettingsViewModel
 
 private enum class SettingsCategory(@StringRes val label: Int, val icon: ImageVector) {
+    APP(R.string.st_title, Icons.Default.SystemUpdate),
     PLAYBACK(R.string.st_playback, Icons.Default.PlayCircle),
     MOBILE_DATA(R.string.st_data_mobile, Icons.Default.SignalCellularAlt),
     DOWNLOADS(R.string.dl_title, Icons.Default.Download),
@@ -135,6 +137,7 @@ private sealed interface SettingRow {
 @Composable
 fun TvSettingsScreen(
     onOpenExtensions: () -> Unit,
+    onOpenUpdate: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
     profilesViewModel: ProfilesViewModel = hiltViewModel(),
@@ -152,7 +155,7 @@ fun TvSettingsScreen(
 
     val providersEnabled by providersViewModel.enabled.collectAsState()
     val rows = settingRows(
-        category, viewModel, profilesViewModel, onOpenExtensions,
+        category, viewModel, profilesViewModel, onOpenExtensions, onOpenUpdate,
         providersEnabled, providersViewModel::setEnabled
     )
     val choice = rows.firstOrNull { it.key == openChoice } as? SettingRow.Choice
@@ -361,11 +364,21 @@ private fun settingRows(
     viewModel: SettingsViewModel,
     profilesViewModel: ProfilesViewModel,
     onOpenExtensions: () -> Unit,
+    onOpenUpdate: () -> Unit,
     providersEnabled: Boolean,
     setProvidersEnabled: (Boolean) -> Unit
 ): List<SettingRow> {
     val s by viewModel.appSettings.collectAsState()
     return when (category) {
+        SettingsCategory.APP -> listOf(
+            SettingRow.Action(
+                key = "app-update",
+                title = "Procurar atualizações",
+                subtitle = "Consultar e instalar uma nova versão do VistaStream",
+                opensPage = true,
+                onClick = onOpenUpdate
+            )
+        )
         SettingsCategory.PLAYBACK -> listOf(
             intChoice(
                 key = "stream-quality",
@@ -547,8 +560,8 @@ private fun settingRows(
             val context = LocalContext.current
             listOf(SettingRow.Action(
                 key = "vista-id-cloud",
-                title = "Vista ID (opcional)",
-                subtitle = "Entrar por senha, código de 30 segundos ou QR. Conta Supabase opcional.",
+                title = "Vista ID · Conta",
+                subtitle = "Gerir conta Vista ID obrigatória, sessões e sincronização.",
                 onClick = { context.startActivity(Intent(context, com.ivor.openstream.presentation.settings.VistaIdAccountActivity::class.java)) }
             ))
         }
