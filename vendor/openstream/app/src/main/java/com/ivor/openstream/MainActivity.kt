@@ -19,6 +19,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -169,6 +170,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         } else if (!profileSelectedOnLaunch) {
+                            BackHandler(enabled = accessPage != "profiles") {
+                                accessPage = if (accessPage == "settings" || accessPage == "manage")
+                                    "profiles" else "settings"
+                            }
                             val profilesModel: ProfilesViewModel = hiltViewModel()
                             val profiles by profilesModel.profiles.collectAsState()
                             val active by profilesModel.activeProfile.collectAsState()
