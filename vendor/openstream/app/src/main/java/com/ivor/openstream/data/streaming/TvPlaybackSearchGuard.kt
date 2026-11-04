@@ -18,7 +18,7 @@ internal object TvPlaybackSearchGuard {
 
     fun beginPlayback() {
         playing.set(true)
-        providerJobs.toList().forEach(Job::cancel)
+        providerJobs.toList().forEach { it.cancel() }
     }
 
     fun endPlayback() {
