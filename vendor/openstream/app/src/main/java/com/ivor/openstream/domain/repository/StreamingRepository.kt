@@ -16,7 +16,8 @@ interface StreamingRepository {
     fun resolveServers(
         identity: MediaIdentity,
         includeFallbacks: Boolean = false,
-        preferLastWorking: Boolean = false
+        preferLastWorking: Boolean = false,
+        fullScan: Boolean = false
     ): Flow<ServerResolution>
     suspend fun getServers(identity: MediaIdentity): List<VideoServer>
     suspend fun refreshServer(server: VideoServer): Result<VideoServer>
