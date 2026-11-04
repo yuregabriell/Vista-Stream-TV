@@ -41,10 +41,10 @@ jobs:
           python3 scripts/validate_vista_auth_tv_resource_gate.py
           python3 scripts/validate_tv_low_memory.py
           python3 scripts/validate_progressive_tv_playback.py
-      - name: Compile debug APK
+      - name: Compile debug APK and run JVM unit tests
         working-directory: vendor/openstream
         env:
           GRADLE_OPTS: '-Dorg.gradle.jvmargs=-Xmx5g'
         run: |
           chmod +x gradlew
-          ./gradlew :app:assembleDebug --no-daemon --stacktrace
+          ./gradlew :app:assembleDebug :app:testDebugUnitTest --no-daemon --stacktrace
